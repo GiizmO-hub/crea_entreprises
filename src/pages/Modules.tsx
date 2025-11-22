@@ -435,35 +435,33 @@ export default function Modules({ onNavigate }: ModulesProps) {
               </div>
             )}
 
-            {/* Toggle et bouton d'accès - Pour les modules option ET core (uniquement super admin) */}
-            {((module.categorie === 'option' && module.disponible) || (module.categorie === 'core' && isSuperAdmin)) && (
+            {/* Toggle et bouton d'accès - Pour TOUS les modules (option, core, admin) - uniquement super admin */}
+            {isSuperAdmin && (
               <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between gap-3">
-                {isSuperAdmin && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleModule(module, !module.active);
-                    }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
-                      module.active
-                        ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
-                        : 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
-                    }`}
-                    title={module.active ? 'Désactiver ce module' : 'Activer ce module'}
-                  >
-                    {module.active ? (
-                      <>
-                        <ToggleRight className="w-5 h-5" />
-                        Désactiver
-                      </>
-                    ) : (
-                      <>
-                        <ToggleLeft className="w-5 h-5" />
-                        Activer
-                      </>
-                    )}
-                  </button>
-                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleModule(module, !module.active);
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
+                    module.active
+                      ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                      : 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
+                  }`}
+                  title={module.active ? 'Désactiver ce module' : 'Activer ce module'}
+                >
+                  {module.active ? (
+                    <>
+                      <ToggleRight className="w-5 h-5" />
+                      Désactiver
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="w-5 h-5" />
+                      Activer
+                    </>
+                  )}
+                </button>
                 
                 {module.active && moduleRoutes[module.id] && (
                   <button
@@ -474,7 +472,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
                         onNavigate(route);
                       }
                     }}
-                    className={isSuperAdmin ? "flex-1 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all" : "w-full py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"}
+                    className="flex-1 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
                   >
                     Accéder
                   </button>
@@ -482,26 +480,8 @@ export default function Modules({ onNavigate }: ModulesProps) {
               </div>
             )}
             
-            {/* Bouton d'accès pour les modules core actifs (clients uniquement, pas super admin) */}
-            {module.active && moduleRoutes[module.id] && module.categorie === 'core' && !isSuperAdmin && (
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const route = moduleRoutes[module.id];
-                    if (route) {
-                      onNavigate(route);
-                    }
-                  }}
-                  className="w-full py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-                >
-                  Accéder au module
-                </button>
-              </div>
-            )}
-            
-            {/* Bouton d'accès pour les autres modules (premium, admin) */}
-            {module.active && moduleRoutes[module.id] && module.categorie !== 'option' && module.categorie !== 'core' && (
+            {/* Bouton d'accès pour les modules actifs (clients uniquement, pas super admin) */}
+            {!isSuperAdmin && module.active && moduleRoutes[module.id] && (
               <div className="mt-4 pt-4 border-t border-white/10">
                 <button
                   onClick={(e) => {
