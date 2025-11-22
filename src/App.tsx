@@ -5,6 +5,7 @@ import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import Entreprises from './pages/Entreprises';
 import Clients from './pages/Clients';
+import Abonnements from './pages/Abonnements';
 import Factures from './pages/Factures';
 import Modules from './pages/Modules';
 import Collaborateurs from './pages/Collaborateurs';
@@ -36,6 +37,8 @@ function AppContent() {
         return <Entreprises onNavigate={setCurrentPage} />;
       case 'clients':
         return <Clients onNavigate={setCurrentPage} />;
+      case 'abonnements':
+        return <Abonnements onNavigate={setCurrentPage} />;
       case 'factures':
         return <Factures onNavigate={setCurrentPage} />;
       case 'comptabilite':

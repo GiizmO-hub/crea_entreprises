@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Package,
+  CreditCard,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -69,6 +70,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
     { id: 'entreprises', label: 'Mon Entreprise', icon: Building2 },
     { id: 'clients', label: 'Clients', icon: Users },
+    { id: 'abonnements', label: 'Abonnements', icon: CreditCard, superAdminOnly: true },
     { id: 'factures', label: 'Facturation', icon: FileText },
     { id: 'comptabilite', label: 'Comptabilité', icon: Calculator },
     { id: 'finance', label: 'Finance', icon: TrendingUp },
