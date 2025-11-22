@@ -1,5 +1,6 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import {
   LayoutDashboard,
   Building2,
@@ -13,7 +14,6 @@ import {
   Menu,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -24,6 +24,27 @@ interface LayoutProps {
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
   const { user, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    checkSuperAdmin();
+  }, [user]);
+
+  const checkSuperAdmin = async () => {
+    if (!user) {
+      setIsSuperAdmin(false);
+      return;
+    }
+
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const role = authUser?.user_metadata?.role;
+      setIsSuperAdmin(role === 'super_admin' || role === 'admin');
+    } catch (error) {
+      console.error('Erreur vérification super admin:', error);
+      setIsSuperAdmin(false);
+    }
+  };
 
   const menuItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
@@ -32,6 +53,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'factures', label: 'Facturation', icon: FileText },
     { id: 'comptabilite', label: 'Comptabilité', icon: Calculator },
     { id: 'finance', label: 'Finance', icon: TrendingUp },
+    { id: 'admin', label: 'Administration', icon: Settings, superAdminOnly: true },
     { id: 'settings', label: 'Paramètres', icon: Settings },
   ];
 
@@ -63,28 +85,30 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
 
           {/* Menu Navigation */}
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentPage === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    onNavigate(item.id);
-                    setSidebarOpen(true);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                    isActive
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                      : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                  }`}
-                  title={sidebarOpen ? '' : item.label}
-                >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  {sidebarOpen && <span className="font-medium">{item.label}</span>}
-                </button>
-              );
-            })}
+            {menuItems
+              .filter((item) => !item.superAdminOnly || isSuperAdmin)
+              .map((item) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      onNavigate(item.id);
+                      setSidebarOpen(true);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                      isActive
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                    }`}
+                    title={sidebarOpen ? '' : item.label}
+                  >
+                    <Icon className="w-5 h-5 flex-shrink-0" />
+                    {sidebarOpen && <span className="font-medium">{item.label}</span>}
+                  </button>
+                );
+              })}
           </nav>
 
           {/* Footer Sidebar */}
