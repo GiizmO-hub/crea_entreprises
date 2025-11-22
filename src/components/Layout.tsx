@@ -44,15 +44,22 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         .eq('id', user.id)
         .single();
 
-      if (error) {
-        console.error('Erreur vérification super admin:', error);
-        setIsSuperAdmin(false);
+      if (!error && utilisateur) {
+        const isAdmin = utilisateur.role === 'super_admin' || utilisateur.role === 'admin';
+        console.log('✅ Rôle vérifié dans utilisateurs:', utilisateur.role, '-> isSuperAdmin:', isAdmin);
+        setIsSuperAdmin(isAdmin);
         return;
       }
 
-      setIsSuperAdmin(utilisateur?.role === 'super_admin' || utilisateur?.role === 'admin');
+      // Fallback: vérifier dans user_metadata si la table utilisateurs n'est pas accessible
+      console.warn('⚠️ Impossible de lire utilisateurs, fallback sur user_metadata:', error);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const role = authUser?.user_metadata?.role;
+      const isAdmin = role === 'super_admin' || role === 'admin';
+      console.log('✅ Rôle vérifié dans user_metadata:', role, '-> isSuperAdmin:', isAdmin);
+      setIsSuperAdmin(isAdmin);
     } catch (error) {
-      console.error('Erreur vérification super admin:', error);
+      console.error('❌ Erreur vérification super admin:', error);
       setIsSuperAdmin(false);
     }
   };
@@ -64,6 +71,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'factures', label: 'Facturation', icon: FileText },
     { id: 'comptabilite', label: 'Comptabilité', icon: Calculator },
     { id: 'finance', label: 'Finance', icon: TrendingUp },
+    { id: 'collaborateurs', label: 'Collaborateurs', icon: Users, superAdminOnly: true },
     { id: 'admin', label: 'Administration', icon: Settings, superAdminOnly: true },
     { id: 'settings', label: 'Paramètres', icon: Settings },
   ];
@@ -101,6 +109,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
               .map((item) => {
                 const Icon = item.icon;
                 const isActive = currentPage === item.id;
+                const isAdminItem = item.superAdminOnly;
                 return (
                   <button
                     key={item.id}
@@ -111,12 +120,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                       isActive
                         ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                        : isAdminItem && isSuperAdmin
+                        ? 'text-yellow-300 hover:bg-yellow-500/10 hover:text-yellow-200 border border-yellow-500/30'
                         : 'text-gray-300 hover:bg-white/5 hover:text-white'
                     }`}
                     title={sidebarOpen ? '' : item.label}
                   >
                     <Icon className="w-5 h-5 flex-shrink-0" />
-                    {sidebarOpen && <span className="font-medium">{item.label}</span>}
+                    {sidebarOpen && (
+                      <span className="font-medium">
+                        {item.label}
+                        {isAdminItem && isSuperAdmin && (
+                          <span className="ml-2 text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded">Admin</span>
+                        )}
+                      </span>
+                    )}
                   </button>
                 );
               })}

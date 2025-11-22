@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Entreprises from './pages/Entreprises';
 import Clients from './pages/Clients';
 import Factures from './pages/Factures';
+import Collaborateurs from './pages/Collaborateurs';
 import Admin from './pages/Admin';
 
 function AppContent() {
@@ -41,6 +42,8 @@ function AppContent() {
         return <div className="p-8 text-white">Module Comptabilité - À venir</div>;
       case 'finance':
         return <div className="p-8 text-white">Module Finance - À venir</div>;
+      case 'collaborateurs':
+        return <Collaborateurs onNavigate={setCurrentPage} />;
       case 'admin':
         return <Admin onNavigate={setCurrentPage} />;
       case 'settings':

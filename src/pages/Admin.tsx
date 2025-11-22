@@ -62,15 +62,22 @@ export default function Admin({ onNavigate: _onNavigate }: AdminProps) {
         .eq('id', user.id)
         .single();
 
-      if (error) {
-        console.error('Erreur vérification super admin:', error);
-        setIsSuperAdmin(false);
+      if (!error && utilisateur) {
+        const isAdmin = utilisateur.role === 'super_admin' || utilisateur.role === 'admin';
+        console.log('✅ Rôle vérifié dans utilisateurs:', utilisateur.role, '-> isSuperAdmin:', isAdmin);
+        setIsSuperAdmin(isAdmin);
         return;
       }
 
-      setIsSuperAdmin(utilisateur?.role === 'super_admin' || utilisateur?.role === 'admin');
+      // Fallback: vérifier dans user_metadata si la table utilisateurs n'est pas accessible
+      console.warn('⚠️ Impossible de lire utilisateurs, fallback sur user_metadata:', error);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const role = authUser?.user_metadata?.role;
+      const isAdmin = role === 'super_admin' || role === 'admin';
+      console.log('✅ Rôle vérifié dans user_metadata:', role, '-> isSuperAdmin:', isAdmin);
+      setIsSuperAdmin(isAdmin);
     } catch (error) {
-      console.error('Erreur vérification super admin:', error);
+      console.error('❌ Erreur vérification super admin:', error);
       setIsSuperAdmin(false);
     }
   };
