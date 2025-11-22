@@ -222,8 +222,9 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
       alert('Le client doit avoir un email pour créer un espace membre');
       return;
     }
-    if (!espaceMembreData.password || espaceMembreData.password.length < 8) {
-      alert('Le mot de passe doit contenir au moins 8 caractères');
+    // Le mot de passe est optionnel - sera généré automatiquement si vide
+    if (espaceMembreData.password && espaceMembreData.password.length > 0 && espaceMembreData.password.length < 8) {
+      alert('Le mot de passe doit contenir au moins 8 caractères s\'il est fourni');
       return;
     }
     if (!espaceMembreData.plan_id) {
@@ -235,7 +236,7 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
       const { data, error } = await supabase.rpc('create_espace_membre_from_client', {
         p_client_id: selectedClientForEspace.id,
         p_entreprise_id: selectedEntreprise,
-        p_password: espaceMembreData.password,
+        p_password: espaceMembreData.password || null, // null si vide pour génération auto
         p_plan_id: espaceMembreData.plan_id,
         p_options_ids: espaceMembreData.options_ids.length > 0 ? espaceMembreData.options_ids : [],
       });
@@ -780,18 +781,22 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Mot de passe pour l'espace membre *
+                  Mot de passe pour l'espace membre
+                  <span className="text-xs text-gray-400 ml-2">(optionnel - généré automatiquement si vide)</span>
                 </label>
                 <input
                   type="password"
                   value={espaceMembreData.password}
                   onChange={(e) => setEspaceMembreData({ ...espaceMembreData, password: e.target.value })}
-                  required
                   minLength={8}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Minimum 8 caractères"
+                  placeholder="Laissez vide pour génération automatique (12 caractères aléatoires)"
                 />
-                <p className="text-xs text-gray-400 mt-1">Le mot de passe sera affiché une seule fois après la création</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {espaceMembreData.password 
+                    ? 'Le mot de passe sera affiché une seule fois après la création'
+                    : 'Un mot de passe sécurisé sera généré automatiquement et affiché une seule fois'}
+                </p>
               </div>
 
               {plans.length > 0 && (
