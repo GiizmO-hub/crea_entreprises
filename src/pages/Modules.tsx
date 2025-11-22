@@ -337,9 +337,17 @@ export default function Modules({ onNavigate }: ModulesProps) {
           if (module.categorie === 'core' && abonnement) {
             // Vérifier si le module core est désactivé dans les fonctionnalités du plan
             const fonctionnalites = abonnement.fonctionnalites || {};
-            active = fonctionnalites[module.code] !== false; // true par défaut, false si explicitement désactivé
+            // Si la clé existe et est false, le module est désactivé
+            // Si la clé n'existe pas ou est true, le module est actif
+            if (module.code in fonctionnalites) {
+              active = fonctionnalites[module.code] === true;
+            } else {
+              // Par défaut, les modules core sont actifs si non spécifiés
+              active = true;
+            }
             source = active ? 'plan' : 'super_admin';
             plan_nom = abonnement.plan_nom;
+            console.log('Module core:', { code: module.code, active, fonctionnalites: fonctionnalites[module.code] });
           }
           // Pour les modules option, vérifier le statut réel dans abonnement_options
           else if (module.categorie === 'option' && abonnement) {
@@ -449,43 +457,49 @@ export default function Modules({ onNavigate }: ModulesProps) {
       return;
     }
 
-    // Pour les modules core, modifier les fonctionnalités du plan dans l'abonnement
-    if (module.categorie === 'core' && abonnement) {
-      try {
-        // Récupérer le plan actuel
-        const { data: planData, error: planError } = await supabase
-          .from('plans_abonnement')
-          .select('fonctionnalites')
-          .eq('id', abonnement.plan_id)
-          .single();
+        // Pour les modules core, modifier les fonctionnalités du plan dans l'abonnement
+        if (module.categorie === 'core' && abonnement) {
+          try {
+            // Récupérer le plan actuel
+            const { data: planData, error: planError } = await supabase
+              .from('plans_abonnement')
+              .select('fonctionnalites')
+              .eq('id', abonnement.plan_id)
+              .single();
 
-        if (planError || !planData) {
-          alert('❌ Erreur: Impossible de récupérer le plan d\'abonnement');
+            if (planError || !planData) {
+              alert('❌ Erreur: Impossible de récupérer le plan d\'abonnement');
+              return;
+            }
+
+            // Mettre à jour les fonctionnalités du plan
+            const fonctionnalites = (planData.fonctionnalites as Record<string, boolean>) || {};
+            // Si on désactive, mettre explicitement à false, sinon mettre à true
+            fonctionnalites[module.code] = activer;
+
+            console.log('Mise à jour fonctionnalités:', { code: module.code, activer, fonctionnalites });
+
+            const { error: updateError } = await supabase
+              .from('plans_abonnement')
+              .update({ fonctionnalites })
+              .eq('id', abonnement.plan_id);
+
+            if (updateError) throw updateError;
+
+            // Attendre un peu pour que la base de données se mette à jour
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Recharger les modules et l'abonnement
+            await loadAbonnement();
+            await loadModules();
+            
+            alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
+          } catch (error: any) {
+            console.error('Erreur toggle module core:', error);
+            alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+          }
           return;
         }
-
-        // Mettre à jour les fonctionnalités du plan
-        const fonctionnalites = (planData.fonctionnalites as Record<string, boolean>) || {};
-        fonctionnalites[module.code] = activer;
-
-        const { error: updateError } = await supabase
-          .from('plans_abonnement')
-          .update({ fonctionnalites })
-          .eq('id', abonnement.plan_id);
-
-        if (updateError) throw updateError;
-
-        // Recharger les modules
-        await loadModules();
-        await loadAbonnement();
-        
-        alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
-      } catch (error: any) {
-        console.error('Erreur toggle module core:', error);
-        alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
-      }
-      return;
-    }
 
     // Pour les autres types de modules (premium, admin), message d'information
     if (module.categorie === 'premium' || module.categorie === 'admin') {
