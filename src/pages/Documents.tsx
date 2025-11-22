@@ -240,11 +240,8 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         // En édition, ne pas modifier ces colonnes si pas de nouveau fichier
         // Mais on doit quand même fournir chemin_fichier
         if (!fileUrl) {
-          // Garder l'ancien chemin_fichier
-          const currentDoc = documents.find(d => d.id === editingId);
-          if (currentDoc) {
-            documentData.chemin_fichier = currentDoc.chemin_fichier;
-          }
+        // Garder l'ancien chemin_fichier - ne pas le modifier en édition
+        // La colonne chemin_fichier sera préservée automatiquement par Supabase
         } else {
           documentData.chemin_fichier = fileUrl;
         }
