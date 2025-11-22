@@ -189,11 +189,14 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
       prenom: client.prenom || '',
       entreprise_nom: client.entreprise_nom || '',
       email: client.email || '',
+      password: '',
       telephone: client.telephone || '',
       adresse: '',
       code_postal: '',
       ville: client.ville || '',
       siret: '',
+      plan_id: '',
+      options_ids: [],
     });
     setShowForm(true);
   };
