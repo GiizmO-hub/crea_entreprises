@@ -208,6 +208,7 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
       }
 
       // Préparer les données du document - TOUTES les colonnes avec valeurs par défaut
+      // Note: La table peut avoir des colonnes "url" et "mime_type" en plus de "chemin_fichier"
       const documentData: Record<string, any> = {
         entreprise_id: selectedEntreprise,
         nom: formData.nom,
@@ -216,6 +217,8 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         type_fichier: 'autre', // Valeur par défaut, sera mise à jour si fichier sélectionné
         taille: 0, // Valeur par défaut, sera mise à jour si fichier sélectionné
         chemin_fichier: '', // Valeur par défaut, sera mise à jour si fichier sélectionné
+        url: '', // Colonne existante dans la table, valeur par défaut
+        mime_type: null, // Colonne existante dans la table, nullable
         tags: formData.tags && formData.tags.length > 0 ? formData.tags : [],
         date_document: formData.date_document,
         date_expiration: formData.date_expiration && formData.date_expiration.trim() ? formData.date_expiration : null,
@@ -228,6 +231,8 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         documentData.type_fichier = getFileType(selectedFile.name);
         documentData.taille = selectedFile.size;
         documentData.chemin_fichier = fileUrl;
+        documentData.url = fileUrl; // Colonne url également requise (NOT NULL)
+        documentData.mime_type = selectedFile.type || null; // Type MIME du fichier
       } else if (!editingId) {
         // Nouveau document sans fichier = erreur
         alert('Veuillez sélectionner un fichier');
@@ -238,8 +243,10 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         if (currentDoc) {
           // Utiliser les valeurs existantes du document
           documentData.chemin_fichier = currentDoc.chemin_fichier || '';
+          documentData.url = (currentDoc as any).url || currentDoc.chemin_fichier || '';
           documentData.type_fichier = currentDoc.type_fichier || 'autre';
           documentData.taille = currentDoc.taille || 0;
+          documentData.mime_type = (currentDoc as any).mime_type || null;
         }
         // Sinon, garder les valeurs par défaut définies ci-dessus
       }
@@ -249,9 +256,10 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         documentData.created_by = user.id;
       }
 
-      // S'assurer que toutes les colonnes obligatoires ont des valeurs non-null
+      // S'assurer que toutes les colonnes obligatoires (NOT NULL) ont des valeurs
       documentData.type_fichier = documentData.type_fichier || 'autre';
       documentData.chemin_fichier = documentData.chemin_fichier || '';
+      documentData.url = documentData.url || documentData.chemin_fichier || ''; // url est NOT NULL
       documentData.taille = documentData.taille || 0;
 
       if (editingId) {
