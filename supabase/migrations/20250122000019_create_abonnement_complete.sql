@@ -62,23 +62,31 @@ BEGIN
     v_plan_montant := p_montant_mensuel;
   END IF;
 
-  -- Récupérer ou créer l'entreprise du client
+  -- Récupérer l'entreprise du client
   SELECT entreprise_id INTO v_entreprise_id
   FROM clients
   WHERE id = p_client_id
   LIMIT 1;
 
-  -- Si aucune entreprise trouvée, utiliser celle fournie ou créer une entrée par défaut
+  -- Si aucune entreprise trouvée dans le client, utiliser celle fournie
   IF v_entreprise_id IS NULL THEN
     IF p_entreprise_id IS NOT NULL THEN
       v_entreprise_id := p_entreprise_id;
     ELSE
-      -- Créer une entreprise par défaut (nécessite que l'utilisateur connecté en ait une)
+      -- Utiliser l'entreprise de l'utilisateur connecté (super admin)
       SELECT id INTO v_entreprise_id
       FROM entreprises
       WHERE user_id = auth.uid()
       LIMIT 1;
     END IF;
+  END IF;
+
+  -- Vérifier qu'on a une entreprise (obligatoire dans le schéma)
+  IF v_entreprise_id IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Aucune entreprise trouvée pour ce client'
+    );
   END IF;
 
   -- Calculer le montant total avec les options
