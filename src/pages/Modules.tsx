@@ -38,6 +38,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
     'factures': 'factures',
     'documents': 'documents',
     'collaborateurs': 'collaborateurs',
+    'gestion-equipe': 'gestion-equipe',
   };
 
   const handleModuleClick = (module: Module) => {
@@ -106,6 +107,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
         
         // Modules Admin
         { id: 'collaborateurs', code: 'collaborateurs', nom: 'Gestion des collaborateurs', description: 'Gérer les collaborateurs et administrateurs', categorie: 'admin' },
+        { id: 'gestion-equipe', code: 'gestion-equipe', nom: 'Gestion d\'Équipe', description: 'Gérer les équipes et les permissions d\'accès aux dossiers', categorie: 'admin' },
       ];
 
       // Charger le statut des modules depuis la table modules_activation

@@ -512,11 +512,40 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (doc: Document) => {
     if (!confirm('Supprimer ce document ?')) return;
 
+    if (!user) {
+      alert('Vous devez être connecté pour supprimer un document');
+      return;
+    }
+
     try {
-      const { error } = await supabase.from('documents').delete().eq('id', id);
+      // Vérifier les permissions
+      const { data: utilisateur } = await supabase
+        .from('utilisateurs')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      const userRole = utilisateur?.role || 'collaborateur';
+
+      // Vérifier les permissions si pas super admin et si un dossier est spécifié
+      if (userRole !== 'super_admin' && doc.folder_id) {
+        const { data: hasAccess } = await supabase
+          .rpc('can_access_folder', {
+            p_folder_id: doc.folder_id,
+            p_user_id: user.id,
+            p_action: 'delete',
+          });
+
+        if (!hasAccess) {
+          alert('Vous n\'avez pas la permission de supprimer des documents dans ce dossier');
+          return;
+        }
+      }
+
+      const { error } = await supabase.from('documents').delete().eq('id', doc.id);
       if (error) throw error;
       await loadDocuments();
     } catch (error) {
