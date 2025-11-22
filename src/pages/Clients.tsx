@@ -247,10 +247,10 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
         // Recharger les clients pour afficher les mises à jour
         loadClients();
         
-        // Afficher les identifiants
+        // Afficher les identifiants (le mot de passe est toujours retourné, même si généré automatiquement)
         setClientCredentials({
-          email: data.email,
-          password: data.password,
+          email: data.email || selectedClientForEspace.email,
+          password: data.password || '⚠️ Mot de passe non disponible - contactez le support',
         });
         setShowEspaceMembreModal(false);
         setShowIdentifiantsModal(true);
