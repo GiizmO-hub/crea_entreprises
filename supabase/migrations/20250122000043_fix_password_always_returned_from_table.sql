@@ -6,6 +6,9 @@
   ou générer un nouveau mot de passe si aucun n'est stocké.
 */
 
+-- Supprimer d'abord la fonction existante pour éviter les conflits
+DROP FUNCTION IF EXISTS create_espace_membre_from_client(uuid, uuid, text, uuid, uuid[]);
+
 CREATE OR REPLACE FUNCTION create_espace_membre_from_client(
   p_client_id uuid,
   p_entreprise_id uuid,
