@@ -120,14 +120,37 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
   };
 
   const loadClients = async () => {
-    if (!user || !selectedEntreprise) return;
+    if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      // Récupérer d'abord les entreprises de l'utilisateur pour filtrer les clients
+      const { data: userEntreprises, error: entrepriseError } = await supabase
+        .from('entreprises')
+        .select('id')
+        .eq('user_id', user.id);
+
+      if (entrepriseError) throw entrepriseError;
+
+      if (!userEntreprises || userEntreprises.length === 0) {
+        setClients([]);
+        setLoading(false);
+        return;
+      }
+
+      const entrepriseIds = userEntreprises.map(e => e.id);
+      
+      let query = supabase
         .from('clients')
         .select('*')
-        .eq('entreprise_id', selectedEntreprise)
+        .in('entreprise_id', entrepriseIds)
         .order('created_at', { ascending: false });
+
+      // Filtrer par entreprise sélectionnée si spécifiée
+      if (selectedEntreprise && entrepriseIds.includes(selectedEntreprise)) {
+        query = query.eq('entreprise_id', selectedEntreprise);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setClients(data || []);
