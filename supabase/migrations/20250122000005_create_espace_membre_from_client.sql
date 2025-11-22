@@ -88,9 +88,64 @@ BEGIN
     v_password_final := p_password;
   END IF;
 
-  -- NOTE: La création d'un utilisateur dans auth.users nécessite l'API Supabase Admin
-  -- Pour l'instant, on génère un UUID qui sera utilisé lors de la création via l'API
+  -- Générer l'UUID pour l'utilisateur
   v_user_id := gen_random_uuid();
+
+  -- Créer l'utilisateur dans auth.users
+  BEGIN
+    INSERT INTO auth.users (
+      id,
+      instance_id,
+      aud,
+      role,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      raw_user_meta_data,
+      raw_app_meta_data,
+      created_at,
+      updated_at,
+      confirmation_token,
+      email_change,
+      email_change_token_new,
+      recovery_token
+    )
+    VALUES (
+      v_user_id,
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated',
+      'authenticated',
+      v_client_email,
+      crypt(v_password_final, gen_salt('bf')),
+      now(),
+      jsonb_build_object(
+        'role', 'client',
+        'nom', v_client_nom,
+        'prenom', v_client_prenom
+      ),
+      jsonb_build_object('provider', 'email', 'providers', ARRAY['email']),
+      now(),
+      now(),
+      '',
+      '',
+      '',
+      ''
+    );
+    
+    RAISE NOTICE 'Utilisateur créé dans auth.users: %', v_user_id;
+    
+  EXCEPTION WHEN unique_violation THEN
+    -- L'email existe déjà, récupérer l'user_id existant
+    SELECT id INTO v_user_id
+    FROM auth.users
+    WHERE email = v_client_email;
+    
+    IF v_user_id IS NULL THEN
+      RAISE EXCEPTION 'Email existe mais utilisateur introuvable: %', v_client_email;
+    END IF;
+    
+    RAISE NOTICE 'Utilisateur existant trouvé: %', v_user_id;
+  END;
 
   -- Créer l'abonnement
   INSERT INTO abonnements (
@@ -177,7 +232,7 @@ BEGIN
     'abonnement_id', v_abonnement_id,
     'email', v_client_email,
     'password', v_password_final,
-    'message', 'Espace membre créé. L''utilisateur doit être créé dans auth.users via l''API Supabase Admin avec cet email et ce mot de passe.'
+    'message', 'Espace membre créé avec succès. L''utilisateur a été créé dans auth.users.'
   );
 
   RETURN v_result;
@@ -191,7 +246,15 @@ END;
 $$;
 
 -- Commentaire sur la fonction
-COMMENT ON FUNCTION create_espace_membre_from_client IS 'Crée un espace membre pour un client existant avec un abonnement et des options. Retourne les identifiants (email + password).';
+COMMENT ON FUNCTION create_espace_membre_from_client IS 'Crée un espace membre pour un client existant avec un abonnement et des options. Crée l''utilisateur dans auth.users et retourne les identifiants (email + password).';
+
+-- Vérifier que l'extension pgcrypto est disponible pour crypt()
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+  END IF;
+END $$;
 
 -- Fonction pour récupérer les identifiants d'un client (email uniquement, pas le mot de passe)
 CREATE OR REPLACE FUNCTION get_client_credentials(p_client_id uuid)

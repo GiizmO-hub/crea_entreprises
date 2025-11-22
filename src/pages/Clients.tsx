@@ -220,6 +220,9 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
       if (error) throw error;
 
       if (data?.success) {
+        // Recharger les clients pour afficher les mises à jour
+        loadClients();
+        
         // Afficher les identifiants
         setClientCredentials({
           email: data.email,
@@ -228,7 +231,7 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
         setShowEspaceMembreModal(false);
         setShowIdentifiantsModal(true);
         setEspaceMembreData({ password: '', plan_id: plans.length > 0 ? plans[0].id : '', options_ids: [] });
-        alert('Espace membre créé avec succès!');
+        setSelectedClientForEspace(null);
       } else {
         alert('Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
