@@ -262,24 +262,46 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
       documentData.url = documentData.url || documentData.chemin_fichier || ''; // url est NOT NULL
       documentData.taille = documentData.taille || 0;
 
+      // S'assurer que toutes les colonnes NOT NULL ont des valeurs
+      documentData.nom = documentData.nom || '';
+      documentData.entreprise_id = documentData.entreprise_id || selectedEntreprise;
+      documentData.categorie = documentData.categorie || 'autre';
+      documentData.statut = documentData.statut || 'actif';
+      documentData.type_fichier = documentData.type_fichier || 'autre';
+      documentData.chemin_fichier = documentData.chemin_fichier || '';
+      documentData.url = documentData.url || documentData.chemin_fichier || '';
+      documentData.date_document = documentData.date_document || new Date().toISOString().split('T')[0];
+      
       if (editingId) {
         const { error } = await supabase
           .from('documents')
           .update(documentData)
           .eq('id', editingId);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Erreur détaillée:', error);
+          throw error;
+        }
       } else {
         if (!selectedFile) {
           alert('Veuillez sélectionner un fichier');
           return;
         }
         
+        // Vérification finale avant insertion
+        if (!documentData.url || documentData.url.trim() === '') {
+          documentData.url = documentData.chemin_fichier || '';
+        }
+        
         const { error } = await supabase
           .from('documents')
           .insert([documentData]);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Erreur détaillée:', error);
+          console.error('Données envoyées:', JSON.stringify(documentData, null, 2));
+          throw error;
+        }
       }
 
       setShowForm(false);
