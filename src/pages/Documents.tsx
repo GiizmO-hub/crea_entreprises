@@ -119,7 +119,6 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategorie, setFilterCategorie] = useState<string>('all');
   const [filterStatut, setFilterStatut] = useState<string>('all');
-  const [filterClient, setFilterClient] = useState<string>('all');
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -815,17 +814,17 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
           
           {/* Liste des dossiers racines */}
           {getRootFolders().map((folder) => (
-            <FolderTree
+            <FolderTreeComponent
               key={folder.id}
               folder={folder}
               folders={folders}
               selectedFolderId={selectedFolderId}
               expandedFolders={expandedFolders}
-              onSelect={(id) => setSelectedFolderId(id)}
+              onSelect={(id: string) => setSelectedFolderId(id)}
               onToggle={toggleFolder}
               onEdit={handleEditFolder}
               onDelete={handleDeleteFolder}
-              onAddSubfolder={(parentId) => {
+              onAddSubfolder={(parentId: string) => {
                 setFolderFormData({
                   nom: '',
                   description: '',
