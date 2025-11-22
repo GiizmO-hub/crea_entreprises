@@ -330,11 +330,19 @@ export default function Modules({ onNavigate }: ModulesProps) {
         let option_nom: string | undefined;
 
         if (isSuperAdmin) {
-          // Super admin voit tout, mais on vérifie quand même le statut réel des options
+          // Super admin voit tout, mais on vérifie le statut réel des modules
           disponible = true;
           
+          // Pour les modules core, vérifier le statut réel dans les fonctionnalités du plan
+          if (module.categorie === 'core' && abonnement) {
+            // Vérifier si le module core est désactivé dans les fonctionnalités du plan
+            const fonctionnalites = abonnement.fonctionnalites || {};
+            active = fonctionnalites[module.code] !== false; // true par défaut, false si explicitement désactivé
+            source = active ? 'plan' : 'super_admin';
+            plan_nom = abonnement.plan_nom;
+          }
           // Pour les modules option, vérifier le statut réel dans abonnement_options
-          if (module.categorie === 'option' && abonnement) {
+          else if (module.categorie === 'option' && abonnement) {
             const optionAbonnement = abonnement.options?.find(
               (opt: any) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
             );
@@ -350,7 +358,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
               source = 'super_admin';
             }
           } else {
-            // Pour les autres modules (core, premium, admin), super admin les voit tous comme actifs
+            // Pour les autres modules (premium, admin), super admin les voit tous comme actifs
             active = true;
             source = 'super_admin';
           }
