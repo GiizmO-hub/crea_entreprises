@@ -170,7 +170,7 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
               adresse: formData.adresse || null,
               code_postal: formData.code_postal || null,
               ville: formData.ville || null,
-              statut: 'active',
+              statut: 'actif',
             })
             .select()
             .single();
