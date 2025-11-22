@@ -67,7 +67,6 @@ export default function Modules({ onNavigate }: ModulesProps) {
 
   useEffect(() => {
     checkSuperAdmin();
-    loadAbonnement();
   }, [user]);
 
   useEffect(() => {
@@ -312,7 +311,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
 
       // Liste des modules disponibles - UNIQUEMENT les modules réellement créés
       const allModules: Omit<Module, 'disponible' | 'active' | 'source' | 'plan_nom' | 'option_nom'>[] = [
-        // Modules Core (inclus dans tous les plans)
+        // Modules Core
         { id: 'dashboard', code: 'dashboard', nom: 'Tableau de bord', description: 'Vue d\'ensemble de votre activité', categorie: 'core' },
         { id: 'clients', code: 'clients', nom: 'Gestion des clients', description: 'Gérer vos clients et leurs informations', categorie: 'core' },
         { id: 'factures', code: 'facturation', nom: 'Facturation', description: 'Créer et gérer vos factures', categorie: 'core' },
@@ -321,76 +320,38 @@ export default function Modules({ onNavigate }: ModulesProps) {
         { id: 'collaborateurs', code: 'collaborateurs', nom: 'Gestion des collaborateurs', description: 'Gérer les collaborateurs et administrateurs', categorie: 'admin' },
       ];
 
+      // Charger le statut des modules depuis la table modules_activation
+      const { data: modulesStatus, error: modulesError } = await supabase.rpc('get_all_modules_status');
+
+      if (modulesError) {
+        console.error('Erreur chargement statut modules:', modulesError);
+      }
+
+      const modulesStatusMap = new Map();
+      if (modulesStatus && Array.isArray(modulesStatus)) {
+        modulesStatus.forEach((mod: any) => {
+          modulesStatusMap.set(mod.code, mod);
+        });
+      }
+
       // Déterminer la disponibilité de chaque module
       const modulesWithStatus: Module[] = allModules.map((module) => {
-        let disponible = false;
+        let disponible = isSuperAdmin; // Super admin voit tout, clients seulement les modules actifs
         let active = false;
-        let source: 'plan' | 'option' | 'super_admin' | undefined;
-        let plan_nom: string | undefined;
-        let option_nom: string | undefined;
+        let source: 'plan' | 'option' | 'super_admin' | undefined = 'super_admin';
+        
+        // Vérifier le statut dans modules_activation
+        const moduleStatus = modulesStatusMap.get(module.code);
+        if (moduleStatus) {
+          active = moduleStatus.actif === true;
+        } else {
+          // Si le module n'existe pas encore dans la table, il est inactif par défaut
+          active = false;
+        }
 
-        if (isSuperAdmin) {
-          // Super admin voit tout, mais on vérifie le statut réel des modules dans le plan
-          disponible = true;
-          
-          // Pour TOUS les modules (core, premium, option), vérifier le statut dans les fonctionnalités du plan
-          if (abonnement) {
-            const fonctionnalites = abonnement.fonctionnalites || {};
-            
-            // Pour les modules core et admin, vérifier dans fonctionnalites
-            if (module.categorie === 'core' || module.categorie === 'admin') {
-              // Si la clé existe et est true, le module est actif
-              // Sinon (clé n'existe pas ou est false), le module est inactif
-              active = fonctionnalites[module.code] === true;
-              source = active ? 'plan' : 'super_admin';
-              plan_nom = abonnement.plan_nom;
-              console.log('Module super admin:', { code: module.code, categorie: module.categorie, active, fonctionnalites: fonctionnalites[module.code], fonctionnalites_complete: fonctionnalites });
-            }
-            // Pour les options, vérifier dans abonnement_options
-            else if (module.categorie === 'option' && abonnement.options) {
-              const optionAbonnement = abonnement.options.find(
-                (opt: any) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
-              );
-              if (optionAbonnement) {
-                // Si l'option est souscrite, utiliser son statut actif/désactivé
-                active = optionAbonnement.actif !== false;
-                source = optionAbonnement.actif !== false ? 'option' : 'super_admin';
-                option_nom = optionAbonnement.nom;
-              } else {
-                // Option n'existe pas encore, inactif par défaut
-                active = false;
-                source = 'super_admin';
-              }
-            } else {
-              // Pour les autres modules (premium), par défaut inactif
-              active = false;
-              source = 'super_admin';
-            }
-          } else {
-            // Pas d'abonnement chargé, super admin voit tout comme disponible mais inactif
-            active = false;
-            source = 'super_admin';
-          }
-        } else if (abonnement) {
-          // Pour les clients, vérifier si le module est activé dans le plan
-          const fonctionnalites = abonnement.fonctionnalites || {};
-          
-          if (module.categorie === 'core' || module.categorie === 'premium' || module.categorie === 'admin') {
-            // Modules core, premium et admin : vérifier dans fonctionnalites
-            disponible = fonctionnalites[module.code] === true;
-            active = disponible;
-            source = disponible ? 'plan' : undefined;
-            plan_nom = disponible ? abonnement.plan_nom : undefined;
-          } else if (module.categorie === 'option') {
-            // Pour les options, vérifier dans abonnement_options
-            const optionSouscrite = abonnement.options?.find(
-              (opt: any) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
-            );
-            disponible = !!optionSouscrite;
-            active = disponible && (optionSouscrite?.actif !== false);
-            source = disponible ? 'option' : undefined;
-            option_nom = disponible ? (optionSouscrite?.nom || '') : undefined;
-          }
+        // Pour les clients, ils ne voient que les modules actifs
+        if (!isSuperAdmin) {
+          disponible = active;
         }
 
         return {
@@ -398,8 +359,6 @@ export default function Modules({ onNavigate }: ModulesProps) {
           disponible,
           active,
           source,
-          plan_nom,
-          option_nom,
         };
       });
 
