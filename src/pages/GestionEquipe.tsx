@@ -778,7 +778,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     };
 
     loadCollaborateursDisponibles();
-  }, [showAjoutMembresForm, equipePourAjoutMembres, selectedEntreprise, collaborateurs]);
+  }, [showAjoutMembresForm, equipePourAjoutMembres, selectedEntreprise, collaborateurs, loadMembresEquipe]);
 
   if (loading) {
     return (
