@@ -330,72 +330,60 @@ export default function Modules({ onNavigate }: ModulesProps) {
         let option_nom: string | undefined;
 
         if (isSuperAdmin) {
-          // Super admin voit tout, mais on vérifie le statut réel des modules
+          // Super admin voit tout, mais on vérifie le statut réel des modules dans le plan
           disponible = true;
           
-          // Pour les modules core, vérifier le statut réel dans les fonctionnalités du plan
-          if (module.categorie === 'core' && abonnement) {
-            // Vérifier si le module core est désactivé dans les fonctionnalités du plan
+          // Pour TOUS les modules (core, premium, option), vérifier le statut dans les fonctionnalités du plan
+          if (abonnement) {
             const fonctionnalites = abonnement.fonctionnalites || {};
+            // Si la clé existe et est true, le module est actif
             // Si la clé existe et est false, le module est désactivé
-            // Si la clé n'existe pas ou est true, le module est actif
+            // Si la clé n'existe pas, le module est disponible mais inactif (pas inclus dans le plan)
             if (module.code in fonctionnalites) {
               active = fonctionnalites[module.code] === true;
             } else {
-              // Par défaut, les modules core sont actifs si non spécifiés
-              active = true;
+              // Par défaut, si le module n'est pas dans le plan, il est disponible mais inactif
+              active = false;
             }
             source = active ? 'plan' : 'super_admin';
             plan_nom = abonnement.plan_nom;
-            console.log('Module core:', { code: module.code, active, fonctionnalites: fonctionnalites[module.code] });
-          }
-          // Pour les modules option, vérifier le statut réel dans abonnement_options
-          else if (module.categorie === 'option' && abonnement) {
-            const optionAbonnement = abonnement.options?.find(
-              (opt: any) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
-            );
             
-            // Si l'option existe dans l'abonnement, utiliser son statut réel
-            if (optionAbonnement !== undefined) {
-              active = optionAbonnement.actif !== false; // Utiliser le statut réel
-              source = optionAbonnement.actif !== false ? 'option' : 'super_admin';
-              option_nom = optionAbonnement.nom;
-            } else {
-              // Option n'existe pas encore dans l'abonnement, considérer comme disponible mais inactive
-              active = false;
-              source = 'super_admin';
+            // Pour les options, vérifier aussi dans abonnement_options
+            if (module.categorie === 'option' && abonnement.options) {
+              const optionAbonnement = abonnement.options.find(
+                (opt: any) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
+              );
+              if (optionAbonnement) {
+                // Si l'option est souscrite, utiliser son statut actif/désactivé
+                active = optionAbonnement.actif !== false;
+                source = optionAbonnement.actif !== false ? 'option' : 'super_admin';
+                option_nom = optionAbonnement.nom;
+              }
             }
           } else {
-            // Pour les autres modules (premium, admin), super admin les voit tous comme actifs
-            active = true;
+            // Pas d'abonnement chargé, super admin voit tout comme disponible mais inactif
+            active = false;
             source = 'super_admin';
           }
         } else if (abonnement) {
-          // Vérifier si le module est inclus dans le plan
-          if (module.categorie === 'core') {
-            disponible = true;
-            active = abonnement.fonctionnalites[module.code] !== false;
-            source = 'plan';
-            plan_nom = abonnement.plan_nom;
-          } else if (module.categorie === 'premium') {
-            disponible = abonnement.fonctionnalites[module.code] === true;
+          // Pour les clients, vérifier si le module est activé dans le plan
+          const fonctionnalites = abonnement.fonctionnalites || {};
+          
+          if (module.categorie === 'core' || module.categorie === 'premium' || module.categorie === 'admin') {
+            // Modules core, premium et admin : vérifier dans fonctionnalites
+            disponible = fonctionnalites[module.code] === true;
             active = disponible;
             source = disponible ? 'plan' : undefined;
             plan_nom = disponible ? abonnement.plan_nom : undefined;
           } else if (module.categorie === 'option') {
-            // Vérifier si l'option est souscrite et son statut actif/désactivé
+            // Pour les options, vérifier dans abonnement_options
             const optionSouscrite = abonnement.options?.find(
               (opt: any) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
             );
             disponible = !!optionSouscrite;
-            // Utiliser le statut réel (actif) de l'option
             active = disponible && (optionSouscrite?.actif !== false);
             source = disponible ? 'option' : undefined;
             option_nom = disponible ? (optionSouscrite?.nom || '') : undefined;
-          } else if (module.categorie === 'admin') {
-            // Modules admin uniquement pour super admin
-            disponible = false;
-            active = false;
           }
         }
 
