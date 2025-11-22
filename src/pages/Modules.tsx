@@ -173,25 +173,29 @@ export default function Modules({ onNavigate }: ModulesProps) {
     }
 
     try {
-      // Utiliser la nouvelle fonction toggle_module_activation
-      const { data, error } = await supabase.rpc('toggle_module_activation', {
-        p_module_code: module.code,
-        p_activer: activer,
-      });
+      // D'abord, créer ou mettre à jour le module dans modules_activation avec ses informations complètes
+      // On utilise INSERT ... ON CONFLICT pour créer ou mettre à jour
+      const { error: insertError } = await supabase
+        .from('modules_activation')
+        .upsert({
+          module_code: module.code,
+          module_nom: module.nom,
+          module_description: module.description,
+          categorie: module.categorie,
+          actif: activer,
+        }, {
+          onConflict: 'module_code'
+        });
 
-      if (error) {
-        console.error('Erreur toggle module:', error);
-        throw error;
+      if (insertError) {
+        console.error('Erreur upsert module:', insertError);
+        throw insertError;
       }
 
-      if (data && !data.success) {
-        alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
-        return;
-      }
+      console.log('Module activé/désactivé:', { code: module.code, nom: module.nom, activer });
 
-      console.log('Module activé/désactivé:', { code: module.code, activer, data });
-
-      // Recharger les modules
+      // Recharger les modules après un court délai
+      await new Promise(resolve => setTimeout(resolve, 200));
       await loadModules();
       
       alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
