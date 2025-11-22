@@ -31,6 +31,7 @@ interface Abonnement {
     id: string;
     nom: string;
     code: string;
+    actif?: boolean;
   }>;
 }
 
@@ -118,9 +119,73 @@ export default function Modules({ onNavigate }: ModulesProps) {
     if (!user) return;
 
     try {
-      // Pour les super admin, on peut charger n'importe quel abonnement ou créer un abonnement fictif
+      // Pour les super admin, charger un abonnement réel s'il existe pour vérifier les statuts d'options
+      // Récupérer d'abord les entreprises de l'utilisateur
+      const { data: entreprises } = await supabase
+        .from('entreprises')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (entreprises && entreprises.length > 0) {
+        // Charger l'abonnement pour récupérer les options (actives ET désactivées)
+        const { data: abonnementData } = await supabase
+          .from('abonnements')
+          .select('id, plan_id, statut')
+          .eq('entreprise_id', entreprises[0].id)
+          .eq('statut', 'actif')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (abonnementData) {
+          // Récupérer le plan
+          const { data: planData } = await supabase
+            .from('plans_abonnement')
+            .select('nom, fonctionnalites')
+            .eq('id', abonnementData.plan_id)
+            .single();
+
+          // Récupérer TOUTES les options (actives ET désactivées) pour super admin
+          const { data: optionsData } = await supabase
+            .from('abonnement_options')
+            .select(`
+              id,
+              actif,
+              options_supplementaires (
+                id,
+                nom,
+                code
+              )
+            `)
+            .eq('abonnement_id', abonnementData.id);
+
+          const options = (optionsData || []).map((opt: any) => {
+            const option = Array.isArray(opt.options_supplementaires) 
+              ? opt.options_supplementaires[0] 
+              : opt.options_supplementaires;
+            return {
+              id: option?.id,
+              nom: option?.nom,
+              code: option?.code || option?.nom?.toLowerCase().replace(/\s+/g, '_'),
+              actif: opt.actif,
+            };
+          }).filter((opt: any) => opt.nom);
+
+          setAbonnement({
+            id: abonnementData.id,
+            plan_id: abonnementData.plan_id,
+            plan_nom: planData?.nom || 'Super Admin',
+            statut: abonnementData.statut,
+            fonctionnalites: (planData?.fonctionnalites as Record<string, boolean>) || {},
+            options: options,
+          });
+          return;
+        }
+      }
+
+      // Si pas d'abonnement trouvé, créer un abonnement fictif
       if (isSuperAdmin) {
-        // Les super admin voient tous les modules
         setAbonnement({
           id: 'super-admin',
           plan_id: 'all',
