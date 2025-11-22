@@ -258,11 +258,25 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       return;
     }
 
+    // Vérifier si on a des lignes ou un montant manuel
+    if (lignes.length > 0) {
+      // Valider que toutes les lignes ont une description
+      const lignesInvalides = lignes.filter(l => !l.description || l.description.trim() === '');
+      if (lignesInvalides.length > 0) {
+        alert('Veuillez remplir la description pour toutes les lignes d\'articles');
+        return;
+      }
+    }
+
     try {
-      const montant_ht = Number(formData.montant_ht) || 0;
-      const taux_tva = Number(formData.taux_tva) || 20;
-      const montant_tva = montant_ht * (taux_tva / 100);
-      const montant_ttc = montant_ht + montant_tva;
+      // Calculer les totaux à partir des lignes si présentes, sinon utiliser les montants du formulaire
+      const totals = lignes.length > 0 
+        ? calculateTotalFromLignes()
+        : {
+            montant_ht: Number(formData.montant_ht) || 0,
+            montant_tva: (Number(formData.montant_ht) || 0) * (Number(formData.taux_tva) || 20) / 100,
+            montant_ttc: (Number(formData.montant_ht) || 0) * (1 + (Number(formData.taux_tva) || 20) / 100),
+          };
 
       const dataToSave = {
         numero: formData.numero || (await generateNumero(formData.type)),
@@ -271,23 +285,68 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         entreprise_id: selectedEntreprise,
         date_emission: formData.date_facturation,
         date_echeance: formData.date_echeance || null,
-        montant_ht,
-        tva: montant_tva,
-        montant_ttc,
+        montant_ht: totals.montant_ht,
+        tva: totals.montant_tva,
+        montant_ttc: totals.montant_ttc,
         statut: formData.statut,
+        notes: formData.notes || null,
         updated_at: new Date().toISOString(),
       };
 
+      let factureId = editingId;
+
       if (editingId) {
-        const { error } = await supabase
+        const { error, data } = await supabase
           .from('factures')
           .update(dataToSave)
-          .eq('id', editingId);
+          .eq('id', editingId)
+          .select()
+          .single();
 
         if (error) throw error;
+        factureId = data?.id || editingId;
       } else {
-        const { error } = await supabase.from('factures').insert([dataToSave]);
+        const { data, error } = await supabase
+          .from('factures')
+          .insert([dataToSave])
+          .select()
+          .single();
+        
         if (error) throw error;
+        factureId = data?.id;
+      }
+
+      // Sauvegarder les lignes si présentes
+      if (factureId && lignes.length > 0) {
+        // Supprimer les anciennes lignes si modification
+        if (editingId) {
+          await supabase.from('facture_lignes').delete().eq('facture_id', factureId);
+        }
+
+        // Préparer les lignes à sauvegarder avec les calculs
+        const lignesToSave = lignes.map((ligne, index) => {
+          const ligneCalculee = calculateLigneTotals(ligne);
+          return {
+            facture_id: factureId,
+            description: ligneCalculee.description,
+            quantite: ligneCalculee.quantite,
+            prix_unitaire_ht: ligneCalculee.prix_unitaire_ht,
+            taux_tva: ligneCalculee.taux_tva,
+            montant_ht: ligneCalculee.montant_ht,
+            tva: ligneCalculee.montant_tva,
+            montant_ttc: ligneCalculee.montant_ttc,
+            ordre: index,
+          };
+        });
+
+        const { error: lignesError } = await supabase
+          .from('facture_lignes')
+          .insert(lignesToSave);
+
+        if (lignesError) throw lignesError;
+      } else if (factureId && lignes.length === 0 && editingId) {
+        // Supprimer les lignes si on modifie et qu'il n'y en a plus
+        await supabase.from('facture_lignes').delete().eq('facture_id', factureId);
       }
 
       setShowForm(false);
@@ -295,9 +354,9 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       resetForm();
       await loadFactures();
       await loadAvoirs();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur sauvegarde facture:', error);
-      alert('Erreur lors de la sauvegarde');
+      alert('Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
