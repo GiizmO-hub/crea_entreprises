@@ -338,15 +338,36 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Supprimer ce client ?')) return;
+    if (!confirm('Supprimer ce client et TOUTES ses données (abonnement, espace membre, utilisateur) ?\n\n⚠️ Cette action est irréversible et libérera l\'email pour une réutilisation.')) return;
 
     try {
-      const { error } = await supabase.from('clients').delete().eq('id', id);
-      if (error) throw error;
+      // Utiliser la fonction RPC pour supprimer complètement le client
+      const { data, error } = await supabase.rpc('delete_client_complete', {
+        p_client_id: id,
+        p_entreprise_id: selectedEntreprise,
+      });
+
+      if (error) {
+        // Si la fonction RPC n'existe pas encore, utiliser la suppression classique
+        if (error.message.includes('Could not find the function')) {
+          console.warn('Fonction delete_client_complete non disponible, suppression classique...');
+          const { error: deleteError } = await supabase.from('clients').delete().eq('id', id);
+          if (deleteError) throw deleteError;
+          alert('⚠️ Client supprimé, mais certaines données peuvent rester (abonnement, utilisateur).\n\nExécutez la migration 20250122000010_delete_client_complete.sql pour une suppression complète.');
+        } else {
+          throw error;
+        }
+      } else if (data?.success) {
+        alert('✅ Client et toutes ses données supprimées avec succès !\n\nL\'email est maintenant libre pour être réutilisé.');
+      } else {
+        alert('⚠️ Erreur: ' + (data?.error || 'Erreur lors de la suppression'));
+        return;
+      }
+
       loadClients();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur suppression:', error);
-      alert('Erreur lors de la suppression');
+      alert(`Erreur lors de la suppression: ${error.message || 'Erreur inconnue'}`);
     }
   };
 
