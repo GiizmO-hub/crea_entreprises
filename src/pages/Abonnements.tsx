@@ -221,37 +221,24 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       // Enrichir avec les informations client et options
       const enrichedAbonnements = await Promise.all(
         (abonnementsData || []).map(async (ab: any) => {
-          // Récupérer les informations client
+          // Récupérer les informations client via entreprise_id
           let clientEmail = '';
           let clientNom = '';
           let clientId: string | null = null;
           
-          // Chercher le client via entreprise_id si client_id n'existe pas
-          if (ab.entreprise_id && !ab.client_id) {
-            const { data: clientData } = await supabase
+          // La table abonnements n'a pas de client_id, on cherche via entreprise_id
+          if (ab.entreprise_id) {
+            // Chercher le premier client de cette entreprise
+            const { data: clientsData } = await supabase
               .from('clients')
               .select('id, email, nom, prenom, entreprise_nom')
               .eq('entreprise_id', ab.entreprise_id)
-              .limit(1)
-              .single();
+              .order('created_at', { ascending: false })
+              .limit(1);
             
-            if (clientData) {
+            if (clientsData && clientsData.length > 0) {
+              const clientData = clientsData[0];
               clientId = clientData.id;
-              clientEmail = clientData.email || '';
-              clientNom = clientData.nom || clientData.prenom || clientData.entreprise_nom || '';
-            }
-          }
-
-          // Si client_id existe directement, l'utiliser
-          if (ab.client_id) {
-            clientId = ab.client_id;
-            const { data: clientData } = await supabase
-              .from('clients')
-              .select('email, nom, prenom, entreprise_nom')
-              .eq('id', ab.client_id)
-              .single();
-            
-            if (clientData) {
               clientEmail = clientData.email || '';
               clientNom = clientData.nom || clientData.prenom || clientData.entreprise_nom || '';
             }
