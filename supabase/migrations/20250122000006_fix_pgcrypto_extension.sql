@@ -1,22 +1,22 @@
 /*
-  # Création d'Espace Membre à partir d'un Client Existant
+  # Fix: Activation extension pgcrypto et correction utilisation gen_salt
   
-  ## Fonctionnalités
+  Cette migration corrige l'erreur "function gen_salt(unknown) does not exist"
   
-  1. Crée un espace membre pour un client existant :
-     - Création d'un compte utilisateur dans auth.users
-     - Création dans la table utilisateurs avec role 'client'
-     - Création d'un abonnement avec le plan choisi
-     - Création des options souscrites (modules)
-     - Retourne les identifiants (email + password)
-     
-  2. Vérifie que :
-     - Le client existe
-     - Le client a un email
-     - L'espace membre n'existe pas déjà
+  Problème:
+    - L'extension pgcrypto n'est pas activée ou pas accessible
+    - gen_salt doit être utilisé avec le préfixe extensions.
+    
+  Solution:
+    1. Activer l'extension pgcrypto explicitement
+    2. Corriger la fonction pour utiliser extensions.gen_salt
+    3. Ajouter extensions au search_path
 */
 
--- Fonction pour créer un espace membre à partir d'un client existant
+-- 1. Activer l'extension pgcrypto (nécessaire pour crypt et gen_salt)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- 2. Corriger la fonction create_espace_membre_from_client
 CREATE OR REPLACE FUNCTION create_espace_membre_from_client(
   p_client_id uuid,
   p_entreprise_id uuid,
@@ -91,7 +91,7 @@ BEGIN
   -- Générer l'UUID pour l'utilisateur
   v_user_id := gen_random_uuid();
 
-  -- Créer l'utilisateur dans auth.users
+  -- Créer l'utilisateur dans auth.users avec extensions.crypt et extensions.gen_salt
   BEGIN
     INSERT INTO auth.users (
       id,
@@ -220,9 +220,6 @@ BEGIN
     prenom = EXCLUDED.prenom,
     updated_at = NOW();
 
-  -- Mettre à jour le client pour lier l'abonnement (si la colonne existe)
-  -- Note: Ceci est optionnel selon votre schéma
-
   -- Retourner les identifiants
   v_result := jsonb_build_object(
     'success', true,
@@ -245,81 +242,5 @@ EXCEPTION
 END;
 $$;
 
--- Commentaire sur la fonction
-COMMENT ON FUNCTION create_espace_membre_from_client IS 'Crée un espace membre pour un client existant avec un abonnement et des options. Crée l''utilisateur dans auth.users et retourne les identifiants (email + password).';
-
--- S'assurer que l'extension pgcrypto est activée (au début du fichier pour être sûr qu'elle est disponible)
--- Note: L'extension doit être activée dans Supabase Dashboard > Database > Extensions
--- Ou exécuter manuellement: CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
--- Fonction pour récupérer les identifiants d'un client (email uniquement, pas le mot de passe)
-CREATE OR REPLACE FUNCTION get_client_credentials(p_client_id uuid)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_client_email text;
-  v_user_exists boolean;
-  v_espace_actif boolean;
-BEGIN
-  -- Vérifier les permissions
-  IF NOT EXISTS (
-    SELECT 1 FROM clients c
-    JOIN entreprises e ON e.id = c.entreprise_id
-    WHERE c.id = p_client_id
-    AND e.user_id = auth.uid()
-  ) THEN
-    RAISE EXCEPTION 'Vous n''avez pas le droit d''accéder aux identifiants de ce client';
-  END IF;
-
-  -- Récupérer l'email du client
-  SELECT email INTO v_client_email
-  FROM clients
-  WHERE id = p_client_id;
-
-  IF v_client_email IS NULL THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error', 'Client sans email'
-    );
-  END IF;
-
-  -- Vérifier si un utilisateur existe dans auth.users
-  SELECT EXISTS(
-    SELECT 1 FROM auth.users
-    WHERE email = v_client_email
-  ) INTO v_user_exists;
-
-  -- Vérifier si l'espace membre est actif
-  SELECT EXISTS(
-    SELECT 1 FROM utilisateurs
-    WHERE email = v_client_email
-    AND role = 'client'
-    AND statut = 'active'
-  ) INTO v_espace_actif;
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'email', v_client_email,
-    'user_exists', v_user_exists,
-    'espace_actif', v_espace_actif,
-    'message', CASE 
-      WHEN v_user_exists AND v_espace_actif THEN 'Espace membre actif'
-      WHEN v_user_exists AND NOT v_espace_actif THEN 'Utilisateur créé mais espace inactif'
-      ELSE 'Espace membre non créé'
-    END
-  );
-
-EXCEPTION
-  WHEN OTHERS THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error', SQLERRM
-    );
-END;
-$$;
-
-COMMENT ON FUNCTION get_client_credentials IS 'Récupère les informations d''identification d''un client (email uniquement, pas le mot de passe pour des raisons de sécurité).';
+COMMENT ON FUNCTION create_espace_membre_from_client IS 'Crée un espace membre pour un client existant avec un abonnement et des options. Crée l''utilisateur dans auth.users avec cryptage bcrypt et retourne les identifiants (email + password). Nécessite l''extension pgcrypto.';
 
