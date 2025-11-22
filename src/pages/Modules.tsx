@@ -336,20 +336,18 @@ export default function Modules({ onNavigate }: ModulesProps) {
           // Pour TOUS les modules (core, premium, option), vérifier le statut dans les fonctionnalités du plan
           if (abonnement) {
             const fonctionnalites = abonnement.fonctionnalites || {};
-            // Si la clé existe et est true, le module est actif
-            // Si la clé existe et est false, le module est désactivé
-            // Si la clé n'existe pas, le module est disponible mais inactif (pas inclus dans le plan)
-            if (module.code in fonctionnalites) {
-              active = fonctionnalites[module.code] === true;
-            } else {
-              // Par défaut, si le module n'est pas dans le plan, il est disponible mais inactif
-              active = false;
-            }
-            source = active ? 'plan' : 'super_admin';
-            plan_nom = abonnement.plan_nom;
             
-            // Pour les options, vérifier aussi dans abonnement_options
-            if (module.categorie === 'option' && abonnement.options) {
+            // Pour les modules core et admin, vérifier dans fonctionnalites
+            if (module.categorie === 'core' || module.categorie === 'admin') {
+              // Si la clé existe et est true, le module est actif
+              // Sinon (clé n'existe pas ou est false), le module est inactif
+              active = fonctionnalites[module.code] === true;
+              source = active ? 'plan' : 'super_admin';
+              plan_nom = abonnement.plan_nom;
+              console.log('Module super admin:', { code: module.code, categorie: module.categorie, active, fonctionnalites: fonctionnalites[module.code], fonctionnalites_complete: fonctionnalites });
+            }
+            // Pour les options, vérifier dans abonnement_options
+            else if (module.categorie === 'option' && abonnement.options) {
               const optionAbonnement = abonnement.options.find(
                 (opt: any) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
               );
@@ -358,7 +356,15 @@ export default function Modules({ onNavigate }: ModulesProps) {
                 active = optionAbonnement.actif !== false;
                 source = optionAbonnement.actif !== false ? 'option' : 'super_admin';
                 option_nom = optionAbonnement.nom;
+              } else {
+                // Option n'existe pas encore, inactif par défaut
+                active = false;
+                source = 'super_admin';
               }
+            } else {
+              // Pour les autres modules (premium), par défaut inactif
+              active = false;
+              source = 'super_admin';
             }
           } else {
             // Pas d'abonnement chargé, super admin voit tout comme disponible mais inactif
@@ -445,8 +451,8 @@ export default function Modules({ onNavigate }: ModulesProps) {
       return;
     }
 
-        // Pour les modules core, modifier les fonctionnalités du plan dans l'abonnement
-        if (module.categorie === 'core' && abonnement) {
+        // Pour les modules core et admin, modifier les fonctionnalités du plan dans l'abonnement
+        if ((module.categorie === 'core' || module.categorie === 'admin') && abonnement) {
           try {
             // Récupérer le plan actuel
             const { data: planData, error: planError } = await supabase
@@ -462,23 +468,41 @@ export default function Modules({ onNavigate }: ModulesProps) {
 
             // Mettre à jour les fonctionnalités du plan
             const fonctionnalites = (planData.fonctionnalites as Record<string, boolean>) || {};
-            // Si on désactive, mettre explicitement à false, sinon mettre à true
-            fonctionnalites[module.code] = activer;
+            
+            // Si on active, mettre à true
+            // Si on désactive, mettre à false (ou supprimer la clé)
+            if (activer) {
+              fonctionnalites[module.code] = true;
+            } else {
+              fonctionnalites[module.code] = false;
+              // Alternative : supprimer la clé pour ne pas l'inclure
+              // delete fonctionnalites[module.code];
+            }
 
-            console.log('Mise à jour fonctionnalités:', { code: module.code, activer, fonctionnalites });
+            console.log('Mise à jour fonctionnalités:', { 
+              code: module.code, 
+              activer, 
+              fonctionnalites_avant: planData.fonctionnalites,
+              fonctionnalites_apres: fonctionnalites 
+            });
 
             const { error: updateError } = await supabase
               .from('plans_abonnement')
               .update({ fonctionnalites })
               .eq('id', abonnement.plan_id);
 
-            if (updateError) throw updateError;
+            if (updateError) {
+              console.error('Erreur update plan:', updateError);
+              throw updateError;
+            }
 
-            // Attendre un peu pour que la base de données se mette à jour
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Attendre que la base de données se mette à jour
+            await new Promise(resolve => setTimeout(resolve, 300));
 
-            // Recharger les modules et l'abonnement
+            // Recharger l'abonnement puis les modules
             await loadAbonnement();
+            // Attendre un peu plus pour être sûr que loadAbonnement est terminé
+            await new Promise(resolve => setTimeout(resolve, 200));
             await loadModules();
             
             alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
