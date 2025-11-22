@@ -55,10 +55,20 @@ export default function Admin({ onNavigate: _onNavigate }: AdminProps) {
     if (!user) return;
 
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      const role = authUser?.user_metadata?.role;
-      
-      setIsSuperAdmin(role === 'super_admin' || role === 'admin');
+      // Vérifier le rôle dans la table utilisateurs (source de vérité)
+      const { data: utilisateur, error } = await supabase
+        .from('utilisateurs')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Erreur vérification super admin:', error);
+        setIsSuperAdmin(false);
+        return;
+      }
+
+      setIsSuperAdmin(utilisateur?.role === 'super_admin' || utilisateur?.role === 'admin');
     } catch (error) {
       console.error('Erreur vérification super admin:', error);
       setIsSuperAdmin(false);
