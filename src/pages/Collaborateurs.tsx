@@ -48,11 +48,14 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
 
   useEffect(() => {
     checkSuperAdmin();
-    if (isSuperAdmin) {
+  }, [user]);
+
+  useEffect(() => {
+    if (isSuperAdmin && user) {
       loadEntreprises();
       loadCollaborateurs();
     }
-  }, [user, isSuperAdmin]);
+  }, [isSuperAdmin, user]);
 
   useEffect(() => {
     if (entreprises.length > 0 && !formData.entreprise_id) {
@@ -61,7 +64,10 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
   }, [entreprises]);
 
   const checkSuperAdmin = async () => {
-    if (!user) return;
+    if (!user) {
+      setIsSuperAdmin(false);
+      return;
+    }
 
     try {
       // Vérifier le rôle dans la table utilisateurs (source de vérité)
@@ -108,6 +114,8 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
   const loadCollaborateurs = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Chargement des collaborateurs...');
+      
       const { data, error } = await supabase
         .from('collaborateurs')
         .select(`
@@ -116,7 +124,18 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur Supabase:', error);
+        // Si la table n'existe pas encore, afficher un message utile
+        if (error.message?.includes('does not exist') || error.code === '42P01') {
+          console.warn('⚠️ Table collaborateurs n\'existe pas encore. Appliquez la migration SQL.');
+          setCollaborateurs([]);
+          return;
+        }
+        throw error;
+      }
+
+      console.log('✅ Collaborateurs chargés:', data?.length || 0);
 
       // Enrichir avec le nom de l'entreprise
       const collaborateursEnriched = (data || []).map((c: any) => ({
@@ -124,9 +143,11 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
         entreprise_nom: c.entreprise?.nom,
       }));
 
-      setCollaborateurs(collaborateursEnriched);
-    } catch (error) {
-      console.error('Erreur chargement collaborateurs:', error);
+      setCollaborateurs(collaborateursEnriched || []);
+    } catch (error: any) {
+      console.error('❌ Erreur chargement collaborateurs:', error);
+      alert('Erreur lors du chargement des collaborateurs: ' + (error.message || 'Erreur inconnue'));
+      setCollaborateurs([]);
     } finally {
       setLoading(false);
     }
@@ -333,10 +354,23 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
         ))}
       </div>
 
-      {collaborateurs.length === 0 && (
-        <div className="text-center py-12">
+      {!loading && collaborateurs.length === 0 && (
+        <div className="text-center py-12 bg-white/5 backdrop-blur-lg rounded-xl border border-white/20">
           <Users className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-          <p className="text-gray-400 text-lg">Aucun collaborateur trouvé</p>
+          <p className="text-gray-400 text-lg mb-2">Aucun collaborateur trouvé</p>
+          <p className="text-gray-500 text-sm mb-4">
+            {isSuperAdmin 
+              ? 'Créez votre premier collaborateur en cliquant sur le bouton "Créer Collaborateur" ci-dessus.'
+              : 'La table collaborateurs n\'existe peut-être pas encore. Vérifiez que la migration SQL a été appliquée.'}
+          </p>
+          {isSuperAdmin && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all"
+            >
+              Créer un Collaborateur
+            </button>
+          )}
         </div>
       )}
 
