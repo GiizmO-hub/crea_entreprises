@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Users, Shield, Plus, X, Building2, Mail, Trash2, Crown, Search, Filter, Grid, List } from 'lucide-react';
+import { Users, Shield, Plus, X, Building2, Mail, Trash2, Crown, Search, Filter, Grid, List, Edit, Ban, CheckCircle } from 'lucide-react';
 
 interface CollaborateursProps {
   onNavigate: (page: string) => void;
@@ -32,6 +32,8 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingCollaborateur, setEditingCollaborateur] = useState<Collaborateur | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterStatut, setFilterStatut] = useState<string>('all');
@@ -214,6 +216,105 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
     } catch (error: any) {
       console.error('Erreur création collaborateur:', error);
       alert('❌ Erreur lors de la création: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
+  const handleEdit = (collaborateur: Collaborateur) => {
+    setEditingCollaborateur(collaborateur);
+    setFormData({
+      email: collaborateur.email,
+      password: '', // Ne pas afficher le mot de passe
+      nom: collaborateur.nom || '',
+      prenom: collaborateur.prenom || '',
+      telephone: collaborateur.telephone || '',
+      role: collaborateur.role as any,
+      entreprise_id: collaborateur.entreprise_id || '',
+      departement: collaborateur.departement || '',
+      poste: collaborateur.poste || '',
+      date_embauche: collaborateur.date_embauche || '',
+      salaire: collaborateur.salaire?.toString() || '',
+    });
+    setShowEditForm(true);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCollaborateur) return;
+
+    try {
+      const { data, error } = await supabase.rpc('update_collaborateur', {
+        p_collaborateur_id: editingCollaborateur.id,
+        p_nom: formData.nom || null,
+        p_prenom: formData.prenom || null,
+        p_telephone: formData.telephone || null,
+        p_role: formData.role || null,
+        p_entreprise_id: formData.entreprise_id || null,
+        p_departement: formData.departement || null,
+        p_poste: formData.poste || null,
+        p_date_embauche: formData.date_embauche || null,
+        p_salaire: formData.salaire ? parseFloat(formData.salaire) : null,
+      });
+
+      if (error) throw error;
+
+      if (data && !data.success) {
+        alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
+        return;
+      }
+
+      alert('✅ Collaborateur modifié avec succès!');
+      setShowEditForm(false);
+      setEditingCollaborateur(null);
+      loadCollaborateurs();
+    } catch (error: any) {
+      console.error('Erreur modification:', error);
+      alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
+  const handleSuspend = async (collaborateurId: string, collaborateurNom: string) => {
+    if (!confirm(`Êtes-vous sûr de vouloir suspendre ${collaborateurNom} ? Il ne pourra plus accéder à l'application.`)) return;
+
+    try {
+      const { data, error } = await supabase.rpc('suspendre_collaborateur', {
+        p_collaborateur_id: collaborateurId,
+      });
+
+      if (error) throw error;
+
+      if (data && !data.success) {
+        alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
+        return;
+      }
+
+      alert('✅ Collaborateur suspendu avec succès');
+      loadCollaborateurs();
+    } catch (error: any) {
+      console.error('Erreur suspension:', error);
+      alert('❌ Erreur lors de la suspension: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
+  const handleActivate = async (collaborateurId: string, collaborateurNom: string) => {
+    if (!confirm(`Êtes-vous sûr de vouloir activer ${collaborateurNom} ? Il pourra à nouveau accéder à l'application.`)) return;
+
+    try {
+      const { data, error } = await supabase.rpc('activer_collaborateur', {
+        p_collaborateur_id: collaborateurId,
+      });
+
+      if (error) throw error;
+
+      if (data && !data.success) {
+        alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
+        return;
+      }
+
+      alert('✅ Collaborateur activé avec succès');
+      loadCollaborateurs();
+    } catch (error: any) {
+      console.error('Erreur activation:', error);
+      alert('❌ Erreur lors de l\'activation: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
@@ -517,8 +618,36 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
 
             <div className="flex gap-2 pt-4 border-t border-white/10">
               <button
+                onClick={() => handleEdit(c)}
+                className="flex-1 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-all flex items-center justify-center gap-2"
+                title="Modifier"
+              >
+                <Edit className="w-4 h-4" />
+                Modifier
+              </button>
+              {c.statut === 'active' ? (
+                <button
+                  onClick={() => handleSuspend(c.id, `${c.prenom || ''} ${c.nom || ''}`.trim() || c.email)}
+                  className="flex-1 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 rounded-lg transition-all flex items-center justify-center gap-2"
+                  title="Suspendre"
+                >
+                  <Ban className="w-4 h-4" />
+                  Suspendre
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleActivate(c.id, `${c.prenom || ''} ${c.nom || ''}`.trim() || c.email)}
+                  className="flex-1 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded-lg transition-all flex items-center justify-center gap-2"
+                  title="Activer"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Activer
+                </button>
+              )}
+              <button
                 onClick={() => handleDelete(c.id)}
                 className="flex-1 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-all flex items-center justify-center gap-2"
+                title="Supprimer"
               >
                 <Trash2 className="w-4 h-4" />
                 Supprimer
@@ -619,13 +748,39 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <button
-                        onClick={() => handleDelete(c.id)}
-                        className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-all flex items-center gap-2 text-sm"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Supprimer
-                      </button>
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => handleEdit(c)}
+                          className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-all flex items-center gap-2 text-sm"
+                          title="Modifier"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        {c.statut === 'active' ? (
+                          <button
+                            onClick={() => handleSuspend(c.id, `${c.prenom || ''} ${c.nom || ''}`.trim() || c.email)}
+                            className="px-3 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 rounded-lg transition-all flex items-center gap-2 text-sm"
+                            title="Suspendre"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleActivate(c.id, `${c.prenom || ''} ${c.nom || ''}`.trim() || c.email)}
+                            className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded-lg transition-all flex items-center gap-2 text-sm"
+                            title="Activer"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-all flex items-center gap-2 text-sm"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -826,6 +981,170 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
                   className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all"
                 >
                   Créer le Collaborateur
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Formulaire Modal - Modifier Collaborateur */}
+      {showEditForm && editingCollaborateur && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-md w-full border border-white/20 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white">Modifier un Collaborateur</h2>
+              <button
+                onClick={() => {
+                  setShowEditForm(false);
+                  setEditingCollaborateur(null);
+                }}
+                className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  disabled
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-gray-400 cursor-not-allowed"
+                />
+                <p className="text-xs text-gray-400 mt-1">L'email ne peut pas être modifié</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Prénom</label>
+                  <input
+                    type="text"
+                    value={formData.prenom}
+                    onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                    placeholder="Jean"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Nom</label>
+                  <input
+                    type="text"
+                    value={formData.nom}
+                    onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                    placeholder="Dupont"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Téléphone</label>
+                <input
+                  type="tel"
+                  value={formData.telephone}
+                  onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  placeholder="+33 6 12 34 56 78"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Rôle *</label>
+                <select
+                  required
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                >
+                  <option value="collaborateur">Collaborateur</option>
+                  <option value="admin">Administrateur</option>
+                  <option value="manager">Manager</option>
+                  <option value="comptable">Comptable</option>
+                  <option value="commercial">Commercial</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Département</label>
+                <input
+                  type="text"
+                  value={formData.departement}
+                  onChange={(e) => setFormData({ ...formData, departement: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  placeholder="Ex: IT, Finance, Ventes..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Poste</label>
+                <input
+                  type="text"
+                  value={formData.poste}
+                  onChange={(e) => setFormData({ ...formData, poste: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  placeholder="Ex: Développeur, Comptable, Commercial..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
+                <select
+                  value={formData.entreprise_id}
+                  onChange={(e) => setFormData({ ...formData, entreprise_id: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                >
+                  <option value="">Aucune entreprise</option>
+                  {entreprises.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.nom}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Date d'embauche</label>
+                  <input
+                    type="date"
+                    value={formData.date_embauche}
+                    onChange={(e) => setFormData({ ...formData, date_embauche: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Salaire (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.salaire}
+                    onChange={(e) => setFormData({ ...formData, salaire: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditForm(false);
+                    setEditingCollaborateur(null);
+                  }}
+                  className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition-all"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+                >
+                  Enregistrer les modifications
                 </button>
               </div>
             </form>
