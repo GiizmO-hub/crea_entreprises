@@ -57,7 +57,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
   }, [user]);
 
   useEffect(() => {
-    if (user && isSuperAdmin) {
+    if (user) {
       loadModules();
     }
   }, [user, isSuperAdmin]);
@@ -335,22 +335,24 @@ export default function Modules({ onNavigate }: ModulesProps) {
         </div>
       )}
 
-      {/* Filtres par catégorie */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setSelectedCategory(cat.id)}
-            className={`px-4 py-2 rounded-lg transition-all ${
-              selectedCategory === cat.id
-                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                : 'bg-white/10 text-gray-300 hover:bg-white/20'
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
+      {/* Filtres par catégorie - Uniquement pour super admin */}
+      {isSuperAdmin && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-4 py-2 rounded-lg transition-all ${
+                selectedCategory === cat.id
+                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Liste des modules */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
