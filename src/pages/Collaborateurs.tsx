@@ -7,22 +7,27 @@ interface CollaborateursProps {
   onNavigate: (page: string) => void;
 }
 
-interface User {
+interface Collaborateur {
   id: string;
+  user_id: string;
   email: string;
   role: string;
   entreprise_id?: string;
   nom?: string;
   prenom?: string;
   telephone?: string;
+  departement?: string;
+  poste?: string;
   statut: string;
+  date_embauche?: string;
+  salaire?: number;
   created_at: string;
   entreprise_nom?: string;
 }
 
 export default function Collaborateurs({ onNavigate: _onNavigate }: CollaborateursProps) {
   const { user } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
+  const [collaborateurs, setCollaborateurs] = useState<Collaborateur[]>([]);
   const [entreprises, setEntreprises] = useState<Array<{ id: string; nom: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -33,15 +38,19 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
     nom: '',
     prenom: '',
     telephone: '',
-    role: 'collaborateur' as 'collaborateur' | 'admin',
+    role: 'collaborateur' as 'collaborateur' | 'admin' | 'manager' | 'comptable' | 'commercial' | 'super_admin',
     entreprise_id: '',
+    departement: '',
+    poste: '',
+    date_embauche: '',
+    salaire: '',
   });
 
   useEffect(() => {
     checkSuperAdmin();
     if (isSuperAdmin) {
       loadEntreprises();
-      loadUsers();
+      loadCollaborateurs();
     }
   }, [user, isSuperAdmin]);
 
@@ -96,29 +105,28 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
     }
   };
 
-  const loadUsers = async () => {
+  const loadCollaborateurs = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('utilisateurs')
+        .from('collaborateurs')
         .select(`
           *,
           entreprise:entreprises(id, nom)
         `)
-        .in('role', ['collaborateur', 'admin'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       // Enrichir avec le nom de l'entreprise
-      const usersEnriched = (data || []).map((u: any) => ({
-        ...u,
-        entreprise_nom: u.entreprise?.nom,
+      const collaborateursEnriched = (data || []).map((c: any) => ({
+        ...c,
+        entreprise_nom: c.entreprise?.nom,
       }));
 
-      setUsers(usersEnriched);
+      setCollaborateurs(collaborateursEnriched);
     } catch (error) {
-      console.error('Erreur chargement utilisateurs:', error);
+      console.error('Erreur chargement collaborateurs:', error);
     } finally {
       setLoading(false);
     }
@@ -128,11 +136,8 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
     e.preventDefault();
 
     try {
-      // Créer l'utilisateur dans auth.users via Supabase Admin API
-      // Note: Cela nécessite l'API Admin qui doit être appelée côté serveur
-      // Pour l'instant, on utilise une fonction RPC si elle existe
-
-      const { error } = await supabase.rpc('create_collaborateur', {
+      // Appeler la fonction RPC qui crée automatiquement dans auth.users, utilisateurs et collaborateurs
+      const { data, error } = await supabase.rpc('create_collaborateur', {
         p_email: formData.email,
         p_password: formData.password,
         p_nom: formData.nom || null,
@@ -140,19 +145,20 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
         p_telephone: formData.telephone || null,
         p_role: formData.role,
         p_entreprise_id: formData.entreprise_id || null,
+        p_departement: formData.departement || null,
+        p_poste: formData.poste || null,
+        p_date_embauche: formData.date_embauche || null,
+        p_salaire: formData.salaire ? parseFloat(formData.salaire) : null,
       });
 
       if (error) {
-        if (error.message.includes('does not exist')) {
-          alert(
-            '⚠️ Création de collaborateur nécessite l\'API Supabase Admin\n\n' +
-              'Pour créer un collaborateur:\n' +
-              '1. Utilisez la page Administration\n' +
-              '2. Ou créez une fonction RPC create_collaborateur dans Supabase'
-          );
-          return;
-        }
         throw error;
+      }
+
+      // Vérifier le résultat
+      if (data && !data.success) {
+        alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
+        return;
       }
 
       alert('✅ Collaborateur créé avec succès!');
@@ -165,24 +171,35 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
         telephone: '',
         role: 'collaborateur',
         entreprise_id: formData.entreprise_id,
+        departement: '',
+        poste: '',
+        date_embauche: '',
+        salaire: '',
       });
-      loadUsers();
+      loadCollaborateurs();
     } catch (error: any) {
       console.error('Erreur création collaborateur:', error);
       alert('❌ Erreur lors de la création: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
-  const handleDelete = async (userId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return;
+  const handleDelete = async (collaborateurId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce collaborateur ? Cette action supprimera également son compte utilisateur.')) return;
 
     try {
-      const { error } = await supabase.from('utilisateurs').delete().eq('id', userId);
+      const { data, error } = await supabase.rpc('delete_collaborateur_complete', {
+        p_collaborateur_id: collaborateurId,
+      });
 
       if (error) throw error;
 
-      alert('✅ Utilisateur supprimé avec succès');
-      loadUsers();
+      if (data && !data.success) {
+        alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
+        return;
+      }
+
+      alert('✅ Collaborateur supprimé avec succès');
+      loadCollaborateurs();
     } catch (error: any) {
       console.error('Erreur suppression:', error);
       alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
@@ -227,9 +244,9 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
 
       {/* Liste des collaborateurs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {users.map((u) => (
+        {collaborateurs.map((c) => (
           <div
-            key={u.id}
+            key={c.id}
             className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-all"
           >
             <div className="flex items-start justify-between mb-4">
@@ -239,52 +256,73 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-lg">
-                    {u.prenom} {u.nom}
+                    {c.prenom} {c.nom}
                   </h3>
-                  <p className="text-sm text-gray-400">{u.email}</p>
+                  <p className="text-sm text-gray-400">{c.email}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {u.role === 'admin' && <Crown className="w-5 h-5 text-yellow-400" />}
+                {(c.role === 'admin' || c.role === 'super_admin') && <Crown className="w-5 h-5 text-yellow-400" />}
                 <span
                   className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    u.role === 'admin'
+                    c.role === 'admin' || c.role === 'super_admin'
                       ? 'bg-yellow-500/20 text-yellow-300'
+                      : c.role === 'manager'
+                      ? 'bg-purple-500/20 text-purple-300'
+                      : c.role === 'comptable'
+                      ? 'bg-green-500/20 text-green-300'
+                      : c.role === 'commercial'
+                      ? 'bg-orange-500/20 text-orange-300'
                       : 'bg-blue-500/20 text-blue-300'
                   }`}
                 >
-                  {u.role === 'admin' ? 'Admin' : 'Collaborateur'}
+                  {c.role}
                 </span>
               </div>
             </div>
 
             <div className="space-y-2 mb-4">
-              {u.telephone && (
-                <div className="flex items-center gap-2 text-gray-300 text-sm">
-                  <Mail className="w-4 h-4" />
-                  {u.telephone}
+              {c.poste && (
+                <div className="text-gray-300 text-sm font-medium">
+                  {c.poste}
                 </div>
               )}
-              {u.entreprise_nom && (
+              {c.departement && (
+                <div className="text-gray-400 text-xs">
+                  Département: {c.departement}
+                </div>
+              )}
+              {c.telephone && (
+                <div className="flex items-center gap-2 text-gray-300 text-sm">
+                  <Mail className="w-4 h-4" />
+                  {c.telephone}
+                </div>
+              )}
+              {c.entreprise_nom && (
                 <div className="flex items-center gap-2 text-gray-300 text-sm">
                   <Building2 className="w-4 h-4" />
-                  {u.entreprise_nom}
+                  {c.entreprise_nom}
+                </div>
+              )}
+              {c.salaire && (
+                <div className="text-gray-300 text-sm">
+                  Salaire: {c.salaire.toFixed(2)}€
                 </div>
               )}
               <div
                 className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                  u.statut === 'active'
+                  c.statut === 'active'
                     ? 'bg-green-500/20 text-green-300'
                     : 'bg-red-500/20 text-red-300'
                 }`}
               >
-                {u.statut === 'active' ? 'Actif' : 'Suspendu'}
+                {c.statut === 'active' ? 'Actif' : c.statut === 'suspendue' ? 'Suspendu' : 'Inactif'}
               </div>
             </div>
 
             <div className="flex gap-2 pt-4 border-t border-white/10">
               <button
-                onClick={() => handleDelete(u.id)}
+                onClick={() => handleDelete(c.id)}
                 className="flex-1 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-all flex items-center justify-center gap-2"
               >
                 <Trash2 className="w-4 h-4" />
@@ -295,7 +333,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
         ))}
       </div>
 
-      {users.length === 0 && (
+      {collaborateurs.length === 0 && (
         <div className="text-center py-12">
           <Users className="w-16 h-16 text-gray-500 mx-auto mb-4" />
           <p className="text-gray-400 text-lg">Aucun collaborateur trouvé</p>
@@ -381,12 +419,61 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
                 <select
                   required
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'collaborateur' | 'admin' })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
                 >
                   <option value="collaborateur">Collaborateur</option>
                   <option value="admin">Administrateur</option>
+                  <option value="manager">Manager</option>
+                  <option value="comptable">Comptable</option>
+                  <option value="commercial">Commercial</option>
+                  <option value="super_admin">Super Admin</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Département</label>
+                <input
+                  type="text"
+                  value={formData.departement}
+                  onChange={(e) => setFormData({ ...formData, departement: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  placeholder="Ex: IT, Finance, Ventes..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Poste</label>
+                <input
+                  type="text"
+                  value={formData.poste}
+                  onChange={(e) => setFormData({ ...formData, poste: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  placeholder="Ex: Développeur, Comptable, Commercial..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Date d'embauche</label>
+                  <input
+                    type="date"
+                    value={formData.date_embauche}
+                    onChange={(e) => setFormData({ ...formData, date_embauche: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Salaire (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.salaire}
+                    onChange={(e) => setFormData({ ...formData, salaire: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
 
               <div>
@@ -405,10 +492,9 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
                 </select>
               </div>
 
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-                <p className="text-xs text-yellow-300">
-                  ⚠️ La création de collaborateur nécessite l'API Supabase Admin. 
-                  Si cette fonctionnalité n'est pas disponible, utilisez la page Administration pour créer des collaborateurs manuellement.
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <p className="text-xs text-blue-300">
+                  ✅ La création est automatique : compte auth.users, utilisateurs et collaborateurs seront créés en une seule opération.
                 </p>
               </div>
 
