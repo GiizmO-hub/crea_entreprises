@@ -45,21 +45,11 @@ export default function Modules({ onNavigate }: ModulesProps) {
   const [activeTab, setActiveTab] = useState<string>('modules');
   const [modulesTab, setModulesTab] = useState<'all' | 'active' | 'inactive'>('all');
 
-  // Mapping des modules vers les routes
+  // Mapping des modules vers les routes (uniquement les modules créés)
   const moduleRoutes: Record<string, string> = {
     'dashboard': 'dashboard',
     'clients': 'clients',
     'factures': 'factures',
-    'comptabilite': 'comptabilite',
-    'salaries': 'salaries',
-    'automatisations': 'automatisations',
-    'administration': 'administration',
-    'api': 'api',
-    'integration_bancaire': 'integration_bancaire',
-    'comptabilite_avancee': 'comptabilite_avancee',
-    'signature_electronique': 'signature_electronique',
-    'support_prioritaire': 'support_prioritaire',
-    'support_dedie': 'support_dedie',
     'collaborateurs': 'collaborateurs',
   };
 
