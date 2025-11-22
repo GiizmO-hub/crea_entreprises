@@ -238,14 +238,16 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     }
   };
 
-  const loadCollaborateurs = async () => {
-    if (!selectedEntreprise) return;
+  const loadCollaborateurs = async (entrepriseId?: string) => {
+    const entrepriseToUse = entrepriseId || selectedEntreprise;
+    if (!entrepriseToUse) return;
 
     try {
       const { data, error } = await supabase
         .from('collaborateurs')
-        .select('id, user_id, email, role, nom, prenom, poste, statut')
+        .select('id, user_id, email, role, nom, prenom, poste, statut, entreprise_id')
         .eq('statut', 'active')
+        .eq('entreprise_id', entrepriseToUse)
         .order('nom');
 
       if (error) throw error;
@@ -1200,15 +1202,25 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                 <select
                   value={formData.responsable_id}
                   onChange={(e) => setFormData({ ...formData, responsable_id: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={!formData.entreprise_id}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="">Aucun responsable</option>
-                  {collaborateurs.map((collab) => (
-                    <option key={collab.id} value={collab.id}>
-                      {collab.nom} {collab.prenom} ({collab.email})
-                    </option>
-                  ))}
+                  {formData.entreprise_id ? (
+                    collaborateurs
+                      .filter((collab) => collab.entreprise_id === formData.entreprise_id)
+                      .map((collab) => (
+                        <option key={collab.id} value={collab.id}>
+                          {collab.prenom} {collab.nom} ({collab.email})
+                        </option>
+                      ))
+                  ) : (
+                    <option value="" disabled>Sélectionnez d'abord une entreprise</option>
+                  )}
                 </select>
+                {!formData.entreprise_id && (
+                  <p className="text-xs text-gray-400 mt-1">Veuillez d'abord sélectionner une entreprise</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1252,6 +1264,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                     setShowEquipeForm(false);
                     setEditingEquipeId(null);
                     setFormData({
+                      entreprise_id: selectedEntreprise || '',
                       nom: '',
                       description: '',
                       responsable_id: '',
