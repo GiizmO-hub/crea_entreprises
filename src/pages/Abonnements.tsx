@@ -354,10 +354,25 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
     }
   };
 
-  const handleEdit = (abonnement: Abonnement) => {
+  const handleEdit = async (abonnement: Abonnement) => {
+    // Récupérer le client_id via entreprise_id pour l'édition
+    let clientIdForEdit = '';
+    if (abonnement.entreprise_id) {
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('entreprise_id', abonnement.entreprise_id)
+        .limit(1)
+        .maybeSingle();
+      
+      if (clientData) {
+        clientIdForEdit = clientData.id;
+      }
+    }
+
     setEditingAbonnement(abonnement);
     setFormData({
-      client_id: abonnement.client_id || '',
+      client_id: clientIdForEdit || abonnement.client_id || '',
       plan_id: abonnement.plan_id,
       mode_paiement: abonnement.mode_paiement as 'mensuel' | 'annuel',
       date_debut: abonnement.date_debut,
