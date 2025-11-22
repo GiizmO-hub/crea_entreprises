@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS collaborateurs (
   entreprise_id uuid REFERENCES entreprises(id) ON DELETE SET NULL,
   departement text,
   poste text,
-  statut text DEFAULT 'active' CHECK (statut IN ('active', 'suspendue', 'inactif')) DEFAULT 'active',
+  statut text DEFAULT 'active' CHECK (statut IN ('active', 'suspendue', 'inactif')),
   date_embauche date,
   salaire numeric(10, 2),
   created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
