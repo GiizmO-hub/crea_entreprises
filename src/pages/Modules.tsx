@@ -34,13 +34,44 @@ interface Abonnement {
   }>;
 }
 
-export default function Modules({ onNavigate: _onNavigate }: ModulesProps) {
+export default function Modules({ onNavigate }: ModulesProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [abonnement, setAbonnement] = useState<Abonnement | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<string>('modules');
+
+  // Mapping des modules vers les routes
+  const moduleRoutes: Record<string, string> = {
+    'dashboard': 'dashboard',
+    'clients': 'clients',
+    'factures': 'factures',
+    'comptabilite': 'comptabilite',
+    'salaries': 'salaries',
+    'automatisations': 'automatisations',
+    'administration': 'administration',
+    'api': 'api',
+    'integration_bancaire': 'integration_bancaire',
+    'comptabilite_avancee': 'comptabilite_avancee',
+    'signature_electronique': 'signature_electronique',
+    'support_prioritaire': 'support_prioritaire',
+    'support_dedie': 'support_dedie',
+    'collaborateurs': 'collaborateurs',
+  };
+
+  const handleModuleClick = (module: Module) => {
+    if (!module.active && !isSuperAdmin) return;
+    
+    const route = moduleRoutes[module.id];
+    if (route) {
+      onNavigate(route);
+    }
+  };
+
+  // Obtenir les modules actifs pour les onglets
+  const activeModules = modules.filter((m) => m.active || (isSuperAdmin && m.categorie === 'admin'));
 
   useEffect(() => {
     checkSuperAdmin();
@@ -297,6 +328,49 @@ export default function Modules({ onNavigate: _onNavigate }: ModulesProps) {
         </p>
       </div>
 
+      {/* Onglets pour modules actifs */}
+      {activeModules.length > 0 && (
+        <div className="mb-6 bg-white/10 backdrop-blur-lg rounded-xl p-2 border border-white/20">
+          <div className="flex flex-wrap gap-2 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('modules')}
+              className={`px-4 py-2 rounded-lg transition-all whitespace-nowrap ${
+                activeTab === 'modules'
+                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
+              }`}
+            >
+              Tous les modules
+            </button>
+            {activeModules.map((module) => {
+              const route = moduleRoutes[module.id];
+              return (
+                <button
+                  key={module.id}
+                  onClick={() => {
+                    setActiveTab(module.id);
+                    if (route) {
+                      onNavigate(route);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg transition-all whitespace-nowrap flex items-center gap-2 ${
+                    activeTab === module.id
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                      : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                  }`}
+                >
+                  <Package className="w-4 h-4" />
+                  {module.nom}
+                  {module.categorie === 'admin' && isSuperAdmin && (
+                    <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded">Admin</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Filtres par catégorie */}
       <div className="mb-6 flex flex-wrap gap-2">
         {categories.map((cat) => (
@@ -319,12 +393,13 @@ export default function Modules({ onNavigate: _onNavigate }: ModulesProps) {
         {filteredModules.map((module) => (
           <div
             key={module.id}
-            className={`bg-white/10 backdrop-blur-lg rounded-xl p-6 border transition-all ${
+            onClick={() => handleModuleClick(module)}
+            className={`bg-white/10 backdrop-blur-lg rounded-xl p-6 border transition-all cursor-pointer ${
               module.active
-                ? 'border-green-500/50 hover:border-green-500'
+                ? 'border-green-500/50 hover:border-green-500 hover:scale-105'
                 : module.disponible
-                ? 'border-blue-500/50 hover:border-blue-500'
-                : 'border-gray-500/50 opacity-60'
+                ? 'border-blue-500/50 hover:border-blue-500 hover:scale-105'
+                : 'border-gray-500/50 opacity-60 cursor-not-allowed'
             }`}
           >
             <div className="flex items-start justify-between mb-4">
@@ -399,6 +474,22 @@ export default function Modules({ onNavigate: _onNavigate }: ModulesProps) {
               </div>
             )}
 
+            {module.active && moduleRoutes[module.id] && (
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const route = moduleRoutes[module.id];
+                    if (route) {
+                      onNavigate(route);
+                    }
+                  }}
+                  className="w-full py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+                >
+                  Accéder au module
+                </button>
+              </div>
+            )}
             {!module.disponible && (
               <div className="mt-4 pt-4 border-t border-white/10">
                 <p className="text-xs text-gray-500">
