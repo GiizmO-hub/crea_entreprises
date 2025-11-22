@@ -210,5 +210,5 @@ $$;
 
 -- 3. Commentaires pour documentation
 COMMENT ON FUNCTION toggle_module_option IS 'Activer/désactiver une option pour un abonnement (super_admin peut modifier tous, utilisateurs peuvent modifier les leurs)';
-COMMENT ON FUNCTION get_user_active_modules IS 'Obtenir les modules actifs d\'un utilisateur selon son abonnement et options';
+COMMENT ON FUNCTION get_user_active_modules IS 'Obtenir les modules actifs d''un utilisateur selon son abonnement et options';
 
