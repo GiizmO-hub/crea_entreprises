@@ -11,6 +11,7 @@ import {
   Download,
   Upload,
   Folder,
+  FolderPlus,
   Tag,
   Calendar,
   Image as ImageIcon,
@@ -19,6 +20,10 @@ import {
   Archive,
   CheckCircle2,
   AlertCircle,
+  ChevronRight,
+  ChevronDown,
+  Users,
+  Plus,
 } from 'lucide-react';
 
 interface Document {
@@ -37,6 +42,41 @@ interface Document {
   updated_at: string;
   entreprise_id: string;
   created_by?: string;
+  folder_id?: string;
+  client_id?: string;
+  client?: {
+    id: string;
+    nom?: string;
+    prenom?: string;
+    entreprise_nom?: string;
+  };
+}
+
+interface DocumentFolder {
+  id: string;
+  nom: string;
+  description?: string;
+  entreprise_id: string;
+  client_id?: string;
+  parent_id?: string;
+  couleur?: string;
+  ordre?: number;
+  created_at: string;
+  updated_at: string;
+  client?: {
+    id: string;
+    nom?: string;
+    prenom?: string;
+    entreprise_nom?: string;
+  };
+}
+
+interface Client {
+  id: string;
+  nom?: string;
+  prenom?: string;
+  entreprise_nom?: string;
+  email?: string;
 }
 
 interface DocumentsProps {
@@ -65,14 +105,21 @@ const TYPES_FICHIER = [
 export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
   const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [folders, setFolders] = useState<DocumentFolder[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [entreprises, setEntreprises] = useState<Array<{ id: string; nom: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [showFolderForm, setShowFolderForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategorie, setFilterCategorie] = useState<string>('all');
   const [filterStatut, setFilterStatut] = useState<string>('all');
+  const [filterClient, setFilterClient] = useState<string>('all');
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -85,6 +132,15 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
     statut: 'actif',
     tags: [] as string[],
     tagInput: '',
+    client_id: '',
+    folder_id: '',
+  });
+  const [folderFormData, setFolderFormData] = useState({
+    nom: '',
+    description: '',
+    client_id: '',
+    parent_id: '',
+    couleur: '#3B82F6',
   });
 
   useEffect(() => {
@@ -119,15 +175,65 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
     }
   };
 
-  const loadDocuments = async () => {
+  const loadClients = async () => {
     if (!selectedEntreprise) return;
 
     try {
       const { data, error } = await supabase
-        .from('documents')
-        .select('*')
+        .from('clients')
+        .select('id, nom, prenom, entreprise_nom, email')
         .eq('entreprise_id', selectedEntreprise)
-        .order('created_at', { ascending: false });
+        .order('nom');
+
+      if (error) throw error;
+      setClients(data || []);
+    } catch (error) {
+      console.error('Erreur chargement clients:', error);
+    }
+  };
+
+  const loadFolders = async () => {
+    if (!selectedEntreprise) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('document_folders')
+        .select(`
+          *,
+          client:clients(id, nom, prenom, entreprise_nom)
+        `)
+        .eq('entreprise_id', selectedEntreprise)
+        .order('ordre, nom');
+
+      if (error) throw error;
+      setFolders(data || []);
+    } catch (error) {
+      console.error('Erreur chargement dossiers:', error);
+    }
+  };
+
+  const loadDocuments = async () => {
+    if (!selectedEntreprise) return;
+
+    try {
+      let query = supabase
+        .from('documents')
+        .select(`
+          *,
+          client:clients(id, nom, prenom, entreprise_nom)
+        `)
+        .eq('entreprise_id', selectedEntreprise);
+
+      // Filtrer par dossier sélectionné
+      if (selectedFolderId) {
+        query = query.eq('folder_id', selectedFolderId);
+      } else if (selectedFolderId === null) {
+        // Si selectedFolderId est explicitement null, afficher seulement les documents sans dossier
+        query = query.is('folder_id', null);
+      }
+      // Si selectedFolderId est undefined, afficher tous les documents
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setDocuments(data || []);
@@ -223,6 +329,8 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         date_document: formData.date_document,
         date_expiration: formData.date_expiration && formData.date_expiration.trim() ? formData.date_expiration : null,
         statut: formData.statut || 'actif',
+        folder_id: formData.folder_id || selectedFolderId || null,
+        client_id: formData.client_id || null,
       };
 
       // Gestion du fichier
@@ -327,6 +435,8 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
       statut: document.statut,
       tags: document.tags || [],
       tagInput: '',
+      client_id: document.client_id || '',
+      folder_id: document.folder_id || '',
     });
     setSelectedFile(null);
     setShowForm(true);
@@ -429,9 +539,150 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
       statut: 'actif',
       tags: [],
       tagInput: '',
+      client_id: '',
+      folder_id: selectedFolderId || '',
     });
     setSelectedFile(null);
     setEditingId(null);
+  };
+
+  const handleSubmitFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEntreprise || !folderFormData.nom) {
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    try {
+      const folderData: Record<string, any> = {
+        entreprise_id: selectedEntreprise,
+        nom: folderFormData.nom,
+        description: folderFormData.description || null,
+        client_id: folderFormData.client_id || null,
+        parent_id: folderFormData.parent_id || null,
+        couleur: folderFormData.couleur || '#3B82F6',
+        created_by: user?.id || null,
+      };
+
+      if (editingFolderId) {
+        const { error } = await supabase
+          .from('document_folders')
+          .update(folderData)
+          .eq('id', editingFolderId);
+
+        if (error) throw error;
+      } else {
+        // Obtenir le dernier ordre pour le placer à la fin
+        const { data: lastFolder } = await supabase
+          .from('document_folders')
+          .select('ordre')
+          .eq('entreprise_id', selectedEntreprise)
+          .eq('parent_id', folderFormData.parent_id || null)
+          .order('ordre', { ascending: false })
+          .limit(1)
+          .single();
+
+        folderData.ordre = lastFolder?.ordre ? lastFolder.ordre + 1 : 0;
+
+        const { error } = await supabase
+          .from('document_folders')
+          .insert([folderData]);
+
+        if (error) throw error;
+      }
+
+      setShowFolderForm(false);
+      setEditingFolderId(null);
+      setFolderFormData({
+        nom: '',
+        description: '',
+        client_id: '',
+        parent_id: selectedFolderId || '',
+        couleur: '#3B82F6',
+      });
+      await loadFolders();
+    } catch (error: any) {
+      console.error('Erreur sauvegarde dossier:', error);
+      alert('Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
+  const handleEditFolder = (folder: DocumentFolder) => {
+    setEditingFolderId(folder.id);
+    setFolderFormData({
+      nom: folder.nom,
+      description: folder.description || '',
+      client_id: folder.client_id || '',
+      parent_id: folder.parent_id || '',
+      couleur: folder.couleur || '#3B82F6',
+    });
+    setShowFolderForm(true);
+  };
+
+  const handleDeleteFolder = async (id: string) => {
+    if (!confirm('Supprimer ce dossier et tous ses sous-dossiers ? Les documents ne seront pas supprimés mais seront déplacés sans dossier.')) return;
+
+    try {
+      // Mettre à jour les documents pour les retirer du dossier
+      await supabase
+        .from('documents')
+        .update({ folder_id: null })
+        .eq('folder_id', id);
+
+      // Supprimer le dossier (les sous-dossiers seront supprimés via CASCADE)
+      const { error } = await supabase
+        .from('document_folders')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      if (selectedFolderId === id) {
+        setSelectedFolderId(null);
+      }
+
+      await loadFolders();
+      await loadDocuments();
+    } catch (error) {
+      console.error('Erreur suppression dossier:', error);
+      alert('Erreur lors de la suppression');
+    }
+  };
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  };
+
+  const getRootFolders = () => {
+    return folders.filter((f) => !f.parent_id);
+  };
+
+  const getChildFolders = (parentId: string) => {
+    return folders.filter((f) => f.parent_id === parentId);
+  };
+
+  const getFolderPath = (folder: DocumentFolder): string => {
+    const path: string[] = [];
+    let currentFolder: DocumentFolder | undefined = folder;
+
+    while (currentFolder) {
+      path.unshift(currentFolder.nom);
+      if (currentFolder.parent_id) {
+        currentFolder = folders.find((f) => f.id === currentFolder!.parent_id);
+      } else {
+        break;
+      }
+    }
+
+    return path.join(' / ');
   };
 
   const filteredDocuments = documents.filter((doc) => {
@@ -483,16 +734,35 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
           <h1 className="text-3xl font-bold text-white mb-2">Gestion de Documents</h1>
           <p className="text-gray-300">Gérez tous vos documents d'entreprise</p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowUploadForm(true);
-          }}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-        >
-          <Upload className="w-5 h-5" />
-          Ajouter un document
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setFolderFormData({
+                nom: '',
+                description: '',
+                client_id: '',
+                parent_id: selectedFolderId || '',
+                couleur: '#3B82F6',
+              });
+              setEditingFolderId(null);
+              setShowFolderForm(true);
+            }}
+            className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition-all border border-white/20"
+          >
+            <FolderPlus className="w-5 h-5" />
+            Nouveau dossier
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setShowUploadForm(true);
+            }}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+          >
+            <Upload className="w-5 h-5" />
+            Ajouter un document
+          </button>
+        </div>
       </div>
 
       {/* Sélection Entreprise */}
@@ -511,6 +781,66 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
           </select>
         </div>
       )}
+
+      {/* Navigation Dossiers */}
+      <div className="mb-6 bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Folder className="w-5 h-5" />
+            Dossiers
+          </h2>
+          {selectedFolderId && (
+            <button
+              onClick={() => setSelectedFolderId(null)}
+              className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
+            >
+              <X className="w-4 h-4" />
+              Voir tous les documents
+            </button>
+          )}
+        </div>
+        <div className="space-y-1 max-h-64 overflow-y-auto">
+          {/* Tous les documents */}
+          <button
+            onClick={() => setSelectedFolderId(null)}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-left ${
+              selectedFolderId === null
+                ? 'bg-blue-500/30 text-white'
+                : 'text-gray-300 hover:bg-white/5'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span className="text-sm font-medium">Tous les documents</span>
+          </button>
+          
+          {/* Liste des dossiers racines */}
+          {getRootFolders().map((folder) => (
+            <FolderTree
+              key={folder.id}
+              folder={folder}
+              folders={folders}
+              selectedFolderId={selectedFolderId}
+              expandedFolders={expandedFolders}
+              onSelect={(id) => setSelectedFolderId(id)}
+              onToggle={toggleFolder}
+              onEdit={handleEditFolder}
+              onDelete={handleDeleteFolder}
+              onAddSubfolder={(parentId) => {
+                setFolderFormData({
+                  nom: '',
+                  description: '',
+                  client_id: '',
+                  parent_id: parentId,
+                  couleur: '#3B82F6',
+                });
+                setEditingFolderId(null);
+                setShowFolderForm(true);
+              }}
+              getFolderPath={getFolderPath}
+            />
+          ))}
+        </div>
+      </div>
 
       {/* Recherche et Filtres */}
       <div className="mb-6 space-y-4">
@@ -770,6 +1100,44 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Description du document..."
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Client
+                  </label>
+                  <select
+                    value={formData.client_id}
+                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Aucun client</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.nom} {client.prenom} {client.entreprise_nom ? `(${client.entreprise_nom})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Dossier
+                  </label>
+                  <select
+                    value={formData.folder_id}
+                    onChange={(e) => setFormData({ ...formData, folder_id: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Aucun dossier</option>
+                    {folders.map((folder) => (
+                      <option key={folder.id} value={folder.id}>
+                        {getFolderPath(folder)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
