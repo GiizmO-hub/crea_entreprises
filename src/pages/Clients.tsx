@@ -237,7 +237,35 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
       }
     } catch (error: any) {
       console.error('Erreur création espace membre:', error);
-      alert(`Erreur: ${error.message || 'Erreur lors de la création de l\'espace membre'}`);
+      
+      // Détecter automatiquement l'erreur et suggérer la solution
+      const errorMessage = error?.message || error?.toString() || '';
+      
+      if (errorMessage.includes('mode_paiement') || errorMessage.includes('abonnements') && errorMessage.includes('does not exist')) {
+        const sqlFix = `-- Correction rapide
+ALTER TABLE abonnements 
+ADD COLUMN IF NOT EXISTS mode_paiement text DEFAULT 'mensuel' CHECK (mode_paiement IN ('mensuel', 'annuel'));`;
+        
+        alert(
+          `🔧 Erreur détectée: Table ou colonne "abonnements.mode_paiement" manquante\n\n` +
+          `📋 SOLUTION:\n` +
+          `1. Ouvrez Supabase SQL Editor\n` +
+          `2. Exécutez la migration:\n` +
+          `   supabase/migrations/20250122000008_fix_abonnements_mode_paiement.sql\n\n` +
+          `💡 Correction rapide (copiez dans SQL Editor):\n\n` +
+          sqlFix
+        );
+      } else if (errorMessage.includes('gen_salt')) {
+        alert(
+          `🔧 Erreur détectée: Extension pgcrypto non activée\n\n` +
+          `📋 SOLUTION:\n` +
+          `Exécutez dans Supabase SQL Editor:\n\n` +
+          `CREATE EXTENSION IF NOT EXISTS pgcrypto;`
+        );
+      } else {
+        alert(`Erreur: ${error.message || 'Erreur lors de la création de l\'espace membre'}\n\n` +
+              `💡 Vérifiez que toutes les migrations sont appliquées dans Supabase SQL Editor.`);
+      }
     }
   };
 
