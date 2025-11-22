@@ -247,10 +247,19 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
         // Recharger les clients pour afficher les mises à jour
         loadClients();
         
-        // Afficher les identifiants (le mot de passe est toujours retourné, même si généré automatiquement)
+        // Debug: afficher les données retournées
+        console.log('📧 Données retournées par create_espace_membre_from_client:', data);
+        
+        // Vérifier que le mot de passe est bien retourné
+        if (!data.password) {
+          console.error('❌ ERREUR: Le mot de passe n\'est pas retourné par la fonction SQL');
+          console.log('Données complètes:', JSON.stringify(data, null, 2));
+        }
+        
+        // Afficher les identifiants (le mot de passe est maintenant TOUJOURS retourné)
         setClientCredentials({
           email: data.email || selectedClientForEspace.email,
-          password: data.password || '⚠️ Mot de passe non disponible - contactez le support',
+          password: data.password || '⚠️ ERREUR: Mot de passe non retourné - Veuillez réessayer ou contacter le support',
         });
         setShowEspaceMembreModal(false);
         setShowIdentifiantsModal(true);
