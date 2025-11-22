@@ -28,23 +28,31 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
+  const [plans, setPlans] = useState<Array<{ id: string; nom: string; prix_mensuel: number }>>([]);
+  const [options, setOptions] = useState<Array<{ id: string; nom: string; prix_mensuel: number }>>([]);
+  const [createEspaceMembre, setCreateEspaceMembre] = useState(false);
   const [formData, setFormData] = useState({
     entreprise_id: '',
     nom: '',
     prenom: '',
     entreprise_nom: '',
     email: '',
+    password: '',
     telephone: '',
     adresse: '',
     code_postal: '',
     ville: '',
     siret: '',
+    plan_id: '',
+    options_ids: [] as string[],
   });
 
   useEffect(() => {
     if (user) {
       loadEntreprises();
       loadClients();
+      loadPlans();
+      loadOptions();
     }
   }, [user]);
 
@@ -68,6 +76,39 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
       setEntreprises(data || []);
     } catch (error) {
       console.error('Erreur chargement entreprises:', error);
+    }
+  };
+
+  const loadPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('plans_abonnement')
+        .select('id, nom, prix_mensuel')
+        .eq('actif', true)
+        .order('ordre');
+
+      if (error) throw error;
+      setPlans(data || []);
+      if (data && data.length > 0) {
+        setFormData((prev) => ({ ...prev, plan_id: data[0].id }));
+      }
+    } catch (error) {
+      console.error('Erreur chargement plans:', error);
+    }
+  };
+
+  const loadOptions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('options_supplementaires')
+        .select('id, nom, prix_mensuel')
+        .eq('actif', true)
+        .order('nom');
+
+      if (error) throw error;
+      setOptions(data || []);
+    } catch (error) {
+      console.error('Erreur chargement options:', error);
     }
   };
 
@@ -182,8 +223,12 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
       code_postal: '',
       ville: '',
       siret: '',
+      plan_id: plans.length > 0 ? plans[0].id : '',
+      options_ids: [],
+      password: '',
     });
     setEditingId(null);
+    setCreateEspaceMembre(false);
   };
 
   const filteredClients = clients.filter((client) => {
@@ -480,6 +525,107 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
                   placeholder="12345678901234"
                 />
               </div>
+
+              {/* Section Création Espace Membre */}
+              {!editingId && (
+                <>
+                  <div className="border-t border-white/10 pt-6 mt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <input
+                        type="checkbox"
+                        id="createEspaceMembre"
+                        checked={createEspaceMembre}
+                        onChange={(e) => setCreateEspaceMembre(e.target.checked)}
+                        className="w-5 h-5 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                      />
+                      <label htmlFor="createEspaceMembre" className="text-lg font-semibold text-white">
+                        Créer un espace membre avec abonnement
+                      </label>
+                    </div>
+                    {createEspaceMembre && (
+                      <div className="space-y-4 bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Mot de passe pour l'espace membre *
+                          </label>
+                          <input
+                            type="password"
+                            value={formData.password}
+                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                            required={createEspaceMembre}
+                            minLength={8}
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Minimum 8 caractères"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Le mot de passe sera envoyé au client</p>
+                        </div>
+
+                        {plans.length > 0 && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                              Plan d'abonnement *
+                            </label>
+                            <select
+                              value={formData.plan_id}
+                              onChange={(e) => setFormData({ ...formData, plan_id: e.target.value })}
+                              required={createEspaceMembre}
+                              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {plans.map((plan) => (
+                                <option key={plan.id} value={plan.id}>
+                                  {plan.nom} - {plan.prix_mensuel}€/mois
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {options.length > 0 && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                              Options/Modules supplémentaires
+                            </label>
+                            <div className="space-y-2 max-h-48 overflow-y-auto bg-white/5 rounded-lg p-3 border border-white/10">
+                              {options.map((option) => (
+                                <div key={option.id} className="flex items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    id={`option-${option.id}`}
+                                    checked={formData.options_ids.includes(option.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setFormData({
+                                          ...formData,
+                                          options_ids: [...formData.options_ids, option.id],
+                                        });
+                                      } else {
+                                        setFormData({
+                                          ...formData,
+                                          options_ids: formData.options_ids.filter((id) => id !== option.id),
+                                        });
+                                      }
+                                    }}
+                                    className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                                  />
+                                  <label htmlFor={`option-${option.id}`} className="text-sm text-gray-300 cursor-pointer flex-1">
+                                    <span className="font-medium">{option.nom}</span>
+                                    {option.prix_mensuel > 0 && (
+                                      <span className="text-gray-400 ml-2">(+{option.prix_mensuel}€/mois)</span>
+                                    )}
+                                  </label>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Les options sont des modules additionnels disponibles pour le client
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
               <div className="flex gap-4 pt-4">
                 <button
