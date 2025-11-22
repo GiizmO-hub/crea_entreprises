@@ -255,6 +255,20 @@ ADD COLUMN IF NOT EXISTS mode_paiement text DEFAULT 'mensuel' CHECK (mode_paieme
           `💡 Correction rapide (copiez dans SQL Editor):\n\n` +
           sqlFix
         );
+      } else if (errorMessage.includes('date_activation')) {
+        const sqlFix = `-- Correction rapide: Ajouter date_activation
+ALTER TABLE abonnement_options 
+ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
+        
+        alert(
+          `🔧 Erreur détectée: Colonne "date_activation" manquante dans "abonnement_options"\n\n` +
+          `📋 SOLUTION:\n` +
+          `1. Ouvrez Supabase SQL Editor\n` +
+          `2. Exécutez la migration:\n` +
+          `   supabase/migrations/20250122000008_fix_abonnements_mode_paiement.sql\n\n` +
+          `💡 Correction rapide (copiez dans SQL Editor):\n\n` +
+          sqlFix
+        );
       } else if (errorMessage.includes('gen_salt')) {
         alert(
           `🔧 Erreur détectée: Extension pgcrypto non activée\n\n` +

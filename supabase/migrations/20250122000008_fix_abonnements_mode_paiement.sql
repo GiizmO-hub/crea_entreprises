@@ -117,6 +117,24 @@ CREATE TABLE IF NOT EXISTS abonnement_options (
   UNIQUE(abonnement_id, option_id)
 );
 
+-- Ajouter la colonne date_activation si elle n'existe pas
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'abonnement_options' 
+    AND column_name = 'date_activation'
+  ) THEN
+    ALTER TABLE abonnement_options 
+    ADD COLUMN date_activation date DEFAULT CURRENT_DATE;
+    
+    RAISE NOTICE 'Colonne date_activation ajoutée à la table abonnement_options';
+  ELSE
+    RAISE NOTICE 'Colonne date_activation existe déjà';
+  END IF;
+END $$;
+
 -- 7. Créer les index pour abonnement_options
 CREATE INDEX IF NOT EXISTS idx_abonnement_options_abonnement_id ON abonnement_options(abonnement_id);
 CREATE INDEX IF NOT EXISTS idx_abonnement_options_option_id ON abonnement_options(option_id);

@@ -1098,6 +1098,8 @@ CREATE TABLE IF NOT EXISTS abonnement_options (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   abonnement_id uuid REFERENCES abonnements(id) ON DELETE CASCADE NOT NULL,
   option_id uuid REFERENCES options_supplementaires(id) ON DELETE RESTRICT NOT NULL,
+  date_activation date DEFAULT CURRENT_DATE,
+  date_desactivation date,
   actif boolean DEFAULT true,
   created_at timestamptz DEFAULT now(),
   UNIQUE(abonnement_id, option_id)
