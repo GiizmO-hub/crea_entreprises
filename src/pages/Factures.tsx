@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, FileText, Edit, Trash2, Search, Building2, X, Receipt, CreditCard, ArrowLeftRight, CheckCircle2, Clock, Download, Minus } from 'lucide-react';
+import { Plus, FileText, Edit, Trash2, Search, Building2, X, Receipt, CreditCard, ArrowLeftRight, CheckCircle2, Clock, Download, Minus, AlertTriangle, Send } from 'lucide-react';
 import { generatePDF } from '../lib/pdfGenerator';
 
 interface Facture {
@@ -36,6 +36,18 @@ interface FactureLigne {
   ordre: number;
 }
 
+interface RelanceMRA {
+  id?: string;
+  facture_id: string;
+  numero_relance: string;
+  date_relance: string;
+  type_relance: 'premiere' | 'deuxieme' | 'mise_en_demeure' | 'injonction_de_payer';
+  montant_due: number;
+  frais_recouvrement: number;
+  statut: string;
+  notes?: string;
+}
+
 interface FacturesProps {
   onNavigate: (page: string) => void;
 }
@@ -50,6 +62,9 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
   const [showForm, setShowForm] = useState(false);
   const [showAvoirForm, setShowAvoirForm] = useState(false);
   const [facturePourAvoir, setFacturePourAvoir] = useState<Facture | null>(null);
+  const [showMRAForm, setShowMRAForm] = useState(false);
+  const [facturePourMRA, setFacturePourMRA] = useState<Facture | null>(null);
+  const [relances, setRelances] = useState<RelanceMRA[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all'); // 'all', 'facture', 'proforma', 'avoir'
@@ -88,6 +103,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       loadClients(selectedEntreprise);
       loadFactures();
       loadAvoirs();
+      loadRelances();
     }
   }, [selectedEntreprise]);
 
@@ -196,6 +212,147 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       setAvoirs(avoirsEnrichies);
     } catch (error) {
       console.error('Erreur chargement avoirs:', error);
+    }
+  };
+
+  const loadRelances = async () => {
+    if (!selectedEntreprise) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('relances_mra')
+        .select('*')
+        .eq('entreprise_id', selectedEntreprise)
+        .order('date_relance', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      setRelances(data || []);
+    } catch (error) {
+      console.error('Erreur chargement relances:', error);
+    }
+  };
+
+  const isFactureEnRetard = (facture: Facture): boolean => {
+    if (facture.statut === 'payee' || facture.statut === 'annulee') return false;
+    
+    if (facture.date_echeance) {
+      const dateEcheance = new Date(facture.date_echeance);
+      const aujourdhui = new Date();
+      aujourdhui.setHours(0, 0, 0, 0);
+      dateEcheance.setHours(0, 0, 0, 0);
+      return dateEcheance < aujourdhui;
+    }
+    
+    // Si pas de date d'échéance mais facture envoyée depuis plus de 30 jours
+    if (facture.statut === 'envoyee' || facture.statut === 'en_attente') {
+      const dateEmission = new Date(facture.date_facturation || facture.date_emission || facture.created_at);
+      const joursEcoules = (new Date().getTime() - dateEmission.getTime()) / (1000 * 60 * 60 * 24);
+      return joursEcoules > 30;
+    }
+    
+    return false;
+  };
+
+  const getRelancesForFacture = (factureId: string): RelanceMRA[] => {
+    return relances.filter(r => r.facture_id === factureId);
+  };
+
+  const getNextRelanceType = (factureId: string): 'premiere' | 'deuxieme' | 'mise_en_demeure' | 'injonction_de_payer' => {
+    const factureRelances = getRelancesForFacture(factureId);
+    
+    if (factureRelances.length === 0) return 'premiere';
+    if (factureRelances.some(r => r.type_relance === 'premiere' && !factureRelances.some(r2 => r2.type_relance === 'deuxieme'))) {
+      return 'deuxieme';
+    }
+    if (factureRelances.some(r => r.type_relance === 'deuxieme' && !factureRelances.some(r2 => r2.type_relance === 'mise_en_demeure'))) {
+      return 'mise_en_demeure';
+    }
+    return 'injonction_de_payer';
+  };
+
+  const generateNumeroRelance = async (type: 'premiere' | 'deuxieme' | 'mise_en_demeure' | 'injonction_de_payer' = 'premiere'): Promise<string> => {
+    if (!selectedEntreprise) return 'MRA-001';
+
+    const prefixes: Record<string, string> = {
+      'premiere': 'MRA-1',
+      'deuxieme': 'MRA-2',
+      'mise_en_demeure': 'MRA-MDE',
+      'injonction_de_payer': 'MRA-IJP',
+    };
+    const prefix = prefixes[type] || 'MRA';
+
+    try {
+      const { data } = await supabase
+        .from('relances_mra')
+        .select('numero_relance')
+        .eq('entreprise_id', selectedEntreprise)
+        .ilike('numero_relance', `${prefix}-%`)
+        .order('numero_relance', { ascending: false })
+        .limit(1);
+
+      if (data && data.length > 0) {
+        const lastNum = parseInt(data[0].numero_relance?.split('-').pop() || '0');
+        return `${prefix}-${String(lastNum + 1).padStart(3, '0')}`;
+      }
+      return `${prefix}-001`;
+    } catch (error) {
+      console.error('Erreur génération numéro relance:', error);
+      return `${prefix}-001`;
+    }
+  };
+
+  const handleCreateMRA = (facture: Facture) => {
+    setFacturePourMRA(facture);
+    setShowMRAForm(true);
+  };
+
+  const handleSubmitMRA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEntreprise || !facturePourMRA) {
+      alert('Veuillez sélectionner une facture');
+      return;
+    }
+
+    try {
+      const nextType = getNextRelanceType(facturePourMRA.id);
+      const numeroRelance = await generateNumeroRelance(nextType);
+      
+      // Calculer les jours de retard
+      const dateEcheance = facturePourMRA.date_echeance ? new Date(facturePourMRA.date_echeance) : null;
+      const aujourdhui = new Date();
+      const joursRetard = dateEcheance ? Math.max(0, Math.floor((aujourdhui.getTime() - dateEcheance.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+      
+      // Frais de recouvrement selon le type de relance (exemple)
+      const fraisRecouvrement: Record<string, number> = {
+        'premiere': 0,
+        'deuxieme': 40,
+        'mise_en_demeure': 80,
+        'injonction_de_payer': 150,
+      };
+
+      const { error } = await supabase.from('relances_mra').insert([{
+        facture_id: facturePourMRA.id,
+        entreprise_id: selectedEntreprise,
+        client_id: facturePourMRA.client_id,
+        numero_relance: numeroRelance,
+        date_relance: new Date().toISOString().split('T')[0],
+        type_relance: nextType,
+        montant_due: facturePourMRA.montant_ttc,
+        frais_recouvrement: fraisRecouvrement[nextType] || 0,
+        statut: 'envoyee',
+        notes: `Relance ${nextType} - Jours de retard: ${joursRetard}`,
+      }]);
+
+      if (error) throw error;
+
+      await loadRelances();
+      setShowMRAForm(false);
+      setFacturePourMRA(null);
+      alert(`✅ Relance ${nextType} créée avec succès!`);
+    } catch (error: any) {
+      console.error('Erreur création relance:', error);
+      alert('❌ Erreur lors de la création de la relance: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
@@ -681,6 +838,8 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
     return matchesSearch && matchesType;
   });
 
+  const facturesEnRetard = factures.filter(f => isFactureEnRetard(f));
+
   const calculateMontantTTC = () => {
     const ht = Number(formData.montant_ht) || 0;
     const tva = ht * (Number(formData.taux_tva) / 100);
@@ -733,8 +892,25 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         </button>
       </div>
       
+      {/* Section Factures en retard */}
+      {facturesEnRetard.length > 0 && (
+        <div className="mb-6 bg-red-500/20 border border-red-500/30 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-400" />
+              <h3 className="text-lg font-bold text-white">
+                Factures en retard ({facturesEnRetard.length})
+              </h3>
+            </div>
+          </div>
+          <div className="text-sm text-gray-300">
+            {facturesEnRetard.length} facture{facturesEnRetard.length > 1 ? 's' : ''} nécessite{facturesEnRetard.length > 1 ? 'nt' : ''} une relance MRA
+          </div>
+        </div>
+      )}
+
       {/* Filtres par type */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-6 flex-wrap">
         <button
           onClick={() => setFilterType('all')}
           className={`px-4 py-2 rounded-lg font-medium transition-all ${
@@ -896,6 +1072,16 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
                           title="Marquer comme payé"
                         >
                           <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {/* Bouton MRA pour factures en retard */}
+                      {!isAvoir && isFactureEnRetard(doc as Facture) && (
+                        <button
+                          onClick={() => handleCreateMRA(doc as Facture)}
+                          className="px-3 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg transition-all text-xs font-medium"
+                          title="Créer une relance MRA"
+                        >
+                          <Send className="w-4 h-4" />
                         </button>
                       )}
                     </div>
@@ -1402,6 +1588,114 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
                     setShowAvoirForm(false);
                     setFacturePourAvoir(null);
                     resetForm();
+                  }}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Formulaire Modal MRA */}
+      {showMRAForm && facturePourMRA && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/20">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white">
+                Créer une relance MRA pour {facturePourMRA.numero}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowMRAForm(false);
+                  setFacturePourMRA(null);
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitMRA} className="space-y-4">
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 mb-4">
+                <p className="text-sm text-orange-300 mb-2">
+                  <strong>Facture:</strong> {facturePourMRA.numero}
+                </p>
+                <p className="text-sm text-orange-300 mb-2">
+                  <strong>Montant dû:</strong> {facturePourMRA.montant_ttc.toFixed(2)}€ TTC
+                </p>
+                {facturePourMRA.date_echeance && (
+                  <p className="text-sm text-orange-300">
+                    <strong>Date d'échéance:</strong> {new Date(facturePourMRA.date_echeance).toLocaleDateString('fr-FR')}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Type de relance *
+                </label>
+                <select
+                  value={getNextRelanceType(facturePourMRA.id)}
+                  disabled
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-not-allowed"
+                >
+                  <option value="premiere">1ère relance</option>
+                  <option value="deuxieme">2ème relance</option>
+                  <option value="mise_en_demeure">Mise en demeure</option>
+                  <option value="injonction_de_payer">Injonction de payer</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Le type de relance est déterminé automatiquement selon les relances déjà envoyées
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Date de relance *
+                </label>
+                <input
+                  type="date"
+                  value={new Date().toISOString().split('T')[0]}
+                  disabled
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Montant dû (€) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={facturePourMRA.montant_ttc.toFixed(2)}
+                  disabled
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-not-allowed"
+                />
+              </div>
+
+              <div className="bg-orange-500/10 rounded-lg p-4 border border-orange-500/30">
+                <div className="flex items-center justify-between text-lg font-semibold text-white">
+                  <span>Total à recouvrer:</span>
+                  <span className="text-orange-400">{facturePourMRA.montant_ttc.toFixed(2)}€</span>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg font-semibold hover:from-orange-700 hover:to-red-700 transition-all"
+                >
+                  Créer la relance MRA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMRAForm(false);
+                    setFacturePourMRA(null);
                   }}
                   className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
                 >
