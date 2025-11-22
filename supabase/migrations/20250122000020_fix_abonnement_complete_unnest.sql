@@ -1,14 +1,11 @@
 /*
-  # Fonction RPC : Création complète d'un abonnement sur mesure
+  # Fix: Correction erreur "set-returning functions are not allowed in WHERE"
   
-  Crée un abonnement avec :
-  - Client
-  - Plan
-  - Options sélectionnées
-  - Prix personnalisé
-  - Dates de début/fin
+  Le problème: Utilisation de unnest() dans une clause WHERE qui cause une erreur SQL
+  Solution: Remplacer la requête par une boucle FOR pour insérer les options une par une
 */
 
+-- Recréer la fonction create_abonnement_complete avec la correction
 CREATE OR REPLACE FUNCTION create_abonnement_complete(
   p_client_id uuid,
   p_plan_id uuid,
@@ -31,6 +28,7 @@ DECLARE
   v_total_montant numeric;
   v_entreprise_id uuid;
   v_result jsonb;
+  i integer;
 BEGIN
   -- Vérifier que le client existe
   IF NOT EXISTS (SELECT 1 FROM clients WHERE id = p_client_id) THEN
@@ -91,16 +89,16 @@ BEGIN
 
   -- Calculer le montant total avec les options
   -- Vérifier d'abord si des options sont fournies
+  v_total_montant := v_plan_montant;
+  
   IF p_options_ids IS NOT NULL AND array_length(p_options_ids, 1) > 0 THEN
     SELECT COALESCE(SUM(prix_mensuel), 0) INTO v_total_montant
     FROM options_supplementaires
     WHERE id = ANY(p_options_ids)
       AND actif = true;
-  ELSE
-    v_total_montant := 0;
+    
+    v_total_montant := v_plan_montant + COALESCE((SELECT SUM(prix_mensuel) FROM options_supplementaires WHERE id = ANY(p_options_ids) AND actif = true), 0);
   END IF;
-
-  v_total_montant := v_plan_montant + v_total_montant;
 
   -- Créer l'abonnement
   INSERT INTO abonnements (
@@ -123,9 +121,8 @@ BEGIN
   )
   RETURNING id INTO v_abonnement_id;
 
-  -- Ajouter les options si fournies
+  -- Ajouter les options si fournies (en utilisant une boucle pour éviter l'erreur unnest)
   IF p_options_ids IS NOT NULL AND array_length(p_options_ids, 1) > 0 THEN
-    -- Insérer chaque option une par une pour éviter l'erreur unnest dans WHERE
     FOR i IN 1..array_length(p_options_ids, 1) LOOP
       -- Vérifier que l'option existe et est active
       IF EXISTS (
@@ -159,5 +156,5 @@ EXCEPTION
 END;
 $$;
 
-COMMENT ON FUNCTION create_abonnement_complete IS 'Créer un abonnement complet avec plan, options et prix personnalisé';
+COMMENT ON FUNCTION create_abonnement_complete IS 'Créer un abonnement complet avec plan, options et prix personnalisé (version corrigée)';
 
