@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { CreditCard, Plus, X, Calendar, DollarSign, Package, CheckCircle, AlertCircle, Edit, Trash2, Search, Filter } from 'lucide-react';
+import { CreditCard, Plus, X, DollarSign, Package, CheckCircle, AlertCircle, Edit, Search, Filter } from 'lucide-react';
 
 interface AbonnementsProps {
   onNavigate: (page: string) => void;
@@ -319,8 +319,6 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       const montantPlan = formData.prix_sur_mesure 
         ? formData.prix_personnalise 
         : (formData.mode_paiement === 'mensuel' ? plan.prix_mensuel : plan.prix_annuel / 12);
-
-      const montantTotal = montantPlan + montantOptions;
 
       // Utiliser la fonction RPC pour créer l'abonnement complet
       const { data: result, error: rpcError } = await supabase
