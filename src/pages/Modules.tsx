@@ -56,10 +56,10 @@ export default function Modules({ onNavigate }: ModulesProps) {
   }, [user]);
 
   useEffect(() => {
-    if (user && (isSuperAdmin || abonnement)) {
+    if (user && isSuperAdmin) {
       loadModules();
     }
-  }, [user, isSuperAdmin, abonnement]);
+  }, [user, isSuperAdmin]);
 
   const checkSuperAdmin = async () => {
     if (!user) {
@@ -445,10 +445,8 @@ export default function Modules({ onNavigate }: ModulesProps) {
         <h1 className="text-3xl font-bold text-white mb-2">Modules</h1>
         <p className="text-gray-300">
           {isSuperAdmin
-            ? 'Tous les modules sont disponibles (Super Admin)'
-            : abonnement
-            ? `Plan actuel: ${abonnement.plan_nom}`
-            : 'Aucun abonnement actif'}
+            ? 'Gérez l\'activation et la désactivation des modules'
+            : 'Modules disponibles selon votre configuration'}
         </p>
       </div>
 
