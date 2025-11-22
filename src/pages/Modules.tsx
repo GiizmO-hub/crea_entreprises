@@ -141,12 +141,58 @@ export default function Modules({ onNavigate }: ModulesProps) {
 
       if (!client) return;
 
-      const { data: abonnementData, error: abonnementError } = await supabase
+      // Essayer d'abord avec client_id, puis user_id, puis via entreprise
+      let abonnementData = null;
+      let abonnementError = null;
+
+      // Essayer avec client_id si existe
+      const { data: dataClientId, error: errorClientId } = await supabase
         .from('abonnements')
         .select('id, plan_id, statut')
-        .eq('user_id', user.id)
+        .eq('client_id', user.id)
         .eq('statut', 'actif')
-        .single();
+        .maybeSingle();
+
+      if (!errorClientId && dataClientId) {
+        abonnementData = dataClientId;
+      } else {
+        // Essayer avec user_id
+        const { data: dataUserId, error: errorUserId } = await supabase
+          .from('abonnements')
+          .select('id, plan_id, statut')
+          .eq('user_id', user.id)
+          .eq('statut', 'actif')
+          .maybeSingle();
+
+        if (!errorUserId && dataUserId) {
+          abonnementData = dataUserId;
+        } else {
+          // Essayer via entreprise
+          const { data: entreprises } = await supabase
+            .from('entreprises')
+            .select('id')
+            .eq('user_id', user.id)
+            .limit(1);
+
+          if (entreprises && entreprises.length > 0) {
+            const { data: dataEntreprise, error: errorEntreprise } = await supabase
+              .from('abonnements')
+              .select('id, plan_id, statut')
+              .eq('entreprise_id', entreprises[0].id)
+              .eq('statut', 'actif')
+              .maybeSingle();
+
+            if (!errorEntreprise && dataEntreprise) {
+              abonnementData = dataEntreprise;
+              abonnementError = null;
+            } else {
+              abonnementError = errorEntreprise;
+            }
+          } else {
+            abonnementError = errorUserId || errorClientId;
+          }
+        }
+      }
 
       if (abonnementError || !abonnementData) {
         console.log('Aucun abonnement actif trouvé');

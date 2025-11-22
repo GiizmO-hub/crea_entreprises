@@ -26,24 +26,46 @@ BEGIN
   SELECT is_super_admin() INTO v_is_super_admin;
   
   -- Récupérer l'abonnement actif de l'utilisateur
-  IF v_is_super_admin THEN
-    -- Super admin peut activer/désactiver pour tous les utilisateurs
-    -- Utiliser le user_id fourni ou auth.uid()
-    SELECT id INTO v_abonnement_id
-    FROM abonnements
-    WHERE user_id = COALESCE(p_user_id, auth.uid())
-      AND statut = 'actif'
-    ORDER BY created_at DESC
-    LIMIT 1;
-  ELSE
-    -- Utilisateur normal ne peut modifier que son propre abonnement
-    SELECT id INTO v_abonnement_id
-    FROM abonnements
-    WHERE user_id = auth.uid()
-      AND statut = 'actif'
-    ORDER BY created_at DESC
-    LIMIT 1;
-  END IF;
+  -- La table abonnements peut avoir user_id, client_id, ou être liée via entreprise_id
+  -- On essaie toutes les possibilités pour compatibilité
+  
+  -- Pour super admin ou utilisateur normal, chercher l'abonnement de toutes les façons possibles
+  SELECT id INTO v_abonnement_id
+  FROM abonnements
+  WHERE statut = 'actif'
+    AND (
+      -- Si colonne client_id existe et correspond
+      EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'abonnements' AND column_name = 'client_id'
+      )
+      AND client_id = COALESCE(
+        CASE WHEN v_is_super_admin THEN p_user_id ELSE auth.uid() END,
+        auth.uid()
+      )
+      OR
+      -- Si colonne user_id existe et correspond
+      EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'abonnements' AND column_name = 'user_id'
+      )
+      AND user_id = COALESCE(
+        CASE WHEN v_is_super_admin THEN p_user_id ELSE auth.uid() END,
+        auth.uid()
+      )
+      OR
+      -- Via entreprise_id (structure de base)
+      EXISTS (
+        SELECT 1 FROM entreprises 
+        WHERE entreprises.id = abonnements.entreprise_id 
+        AND entreprises.user_id = COALESCE(
+          CASE WHEN v_is_super_admin THEN p_user_id ELSE auth.uid() END,
+          auth.uid()
+        )
+      )
+    )
+  ORDER BY created_at DESC
+  LIMIT 1;
 
   IF v_abonnement_id IS NULL THEN
     RETURN jsonb_build_object(
@@ -159,6 +181,7 @@ BEGIN
   END IF;
 
   -- Récupérer l'abonnement actif
+  -- Vérifier quelle colonne existe (user_id ou client_id)
   SELECT 
     ab.id,
     pa.fonctionnalites,
@@ -166,7 +189,7 @@ BEGIN
   INTO v_abonnement_id, v_plan_fonctionnalites, v_plan_nom
   FROM abonnements ab
   JOIN plans_abonnement pa ON pa.id = ab.plan_id
-  WHERE ab.user_id = COALESCE(p_user_id, auth.uid())
+  WHERE (ab.client_id = COALESCE(p_user_id, auth.uid()) OR ab.user_id = COALESCE(p_user_id, auth.uid()))
     AND ab.statut = 'actif'
   ORDER BY ab.created_at DESC
   LIMIT 1;
