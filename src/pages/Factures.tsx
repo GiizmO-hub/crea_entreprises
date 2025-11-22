@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, FileText, Edit, Trash2, Search, Building2, Eye, X } from 'lucide-react';
+import { Plus, FileText, Edit, Trash2, Search, Building2, Eye, X, Receipt, CreditCard, ArrowLeftRight } from 'lucide-react';
 
 interface Facture {
   id: string;
   numero: string;
+  type?: string;
   client_id: string;
   entreprise_id: string;
-  date_facturation: string;
+  date_facturation?: string;
+  date_emission?: string;
   date_echeance?: string;
   montant_ht: number;
-  montant_tva: number;
+  montant_tva?: number;
+  taux_tva?: number;
   montant_ttc: number;
   statut: string;
   created_at: string;
   client_nom?: string;
   entreprise_nom?: string;
+  facture_id?: string; // Pour les avoirs liés
 }
 
 interface FacturesProps {
@@ -26,15 +30,20 @@ interface FacturesProps {
 export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
   const { user } = useAuth();
   const [factures, setFactures] = useState<Facture[]>([]);
+  const [avoirs, setAvoirs] = useState<Facture[]>([]);
   const [entreprises, setEntreprises] = useState<Array<{ id: string; nom: string }>>([]);
   const [clients, setClients] = useState<Array<{ id: string; nom?: string; entreprise_nom?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showAvoirForm, setShowAvoirForm] = useState(false);
+  const [facturePourAvoir, setFacturePourAvoir] = useState<Facture | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<string>('all'); // 'all', 'facture', 'proforma', 'avoir'
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
   const [formData, setFormData] = useState({
     numero: '',
+    type: 'facture' as 'facture' | 'proforma',
     client_id: '',
     entreprise_id: '',
     date_facturation: new Date().toISOString().split('T')[0],
@@ -42,6 +51,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
     montant_ht: 0,
     taux_tva: 20,
     statut: 'brouillon',
+    motif: '',
   });
 
   useEffect(() => {
@@ -62,6 +72,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
     if (selectedEntreprise) {
       loadClients(selectedEntreprise);
       loadFactures();
+      loadAvoirs();
     }
   }, [selectedEntreprise]);
 
@@ -103,6 +114,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         .from('factures')
         .select('*')
         .eq('entreprise_id', selectedEntreprise)
+        .in('type', ['facture', 'proforma'])
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -120,6 +132,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
           return {
             ...facture,
             client_nom: client?.entreprise_nom || `${client?.prenom || ''} ${client?.nom || ''}`.trim() || 'Client',
+            type: facture.type || 'facture',
           };
         })
       );
@@ -132,25 +145,68 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
     }
   };
 
-  const generateNumero = async () => {
-    if (!selectedEntreprise) return 'FACT-001';
+  const loadAvoirs = async () => {
+    if (!selectedEntreprise) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('avoirs')
+        .select('*')
+        .eq('entreprise_id', selectedEntreprise)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      // Enrichir avec les noms des clients
+      const avoirsEnrichies = await Promise.all(
+        (data || []).map(async (avoir) => {
+          const { data: client } = await supabase
+            .from('clients')
+            .select('nom, prenom, entreprise_nom')
+            .eq('id', avoir.client_id)
+            .single();
+
+          return {
+            ...avoir,
+            client_nom: client?.entreprise_nom || `${client?.prenom || ''} ${client?.nom || ''}`.trim() || 'Client',
+            type: 'avoir',
+            date_facturation: avoir.date_emission,
+            montant_tva: avoir.tva || 0,
+            taux_tva: avoir.montant_ht ? ((avoir.tva || 0) / avoir.montant_ht) * 100 : 20,
+          };
+        })
+      );
+
+      setAvoirs(avoirsEnrichies);
+    } catch (error) {
+      console.error('Erreur chargement avoirs:', error);
+    }
+  };
+
+  const generateNumero = async (type: 'facture' | 'proforma' | 'avoir' = 'facture') => {
+    if (!selectedEntreprise) return type === 'proforma' ? 'PROFORMA-001' : type === 'avoir' ? 'AVOIR-001' : 'FACT-001';
+
+    const prefix = type === 'proforma' ? 'PROFORMA' : type === 'avoir' ? 'AVOIR' : 'FACT';
+    const table = type === 'avoir' ? 'avoirs' : 'factures';
 
     try {
       const { data } = await supabase
-        .from('factures')
+        .from(table)
         .select('numero')
         .eq('entreprise_id', selectedEntreprise)
+        .ilike('numero', `${prefix}-%`)
         .order('numero', { ascending: false })
         .limit(1);
 
       if (data && data.length > 0) {
         const lastNum = parseInt(data[0].numero?.split('-')[1] || '0');
-        return `FACT-${String(lastNum + 1).padStart(3, '0')}`;
+        return `${prefix}-${String(lastNum + 1).padStart(3, '0')}`;
       }
-      return 'FACT-001';
+      return `${prefix}-001`;
     } catch (error) {
       console.error('Erreur génération numéro:', error);
-      return 'FACT-001';
+      return `${prefix}-001`;
     }
   };
 
@@ -168,14 +224,14 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       const montant_ttc = montant_ht + montant_tva;
 
       const dataToSave = {
-        numero: formData.numero || (await generateNumero()),
+        numero: formData.numero || (await generateNumero(formData.type)),
+        type: formData.type,
         client_id: formData.client_id,
         entreprise_id: selectedEntreprise,
-        date_facturation: formData.date_facturation,
+        date_emission: formData.date_facturation,
         date_echeance: formData.date_echeance || null,
         montant_ht,
-        taux_tva,
-        montant_tva,
+        tva: montant_tva,
         montant_ttc,
         statut: formData.statut,
         updated_at: new Date().toISOString(),
@@ -196,7 +252,8 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       setShowForm(false);
       setEditingId(null);
       resetForm();
-      loadFactures();
+      await loadFactures();
+      await loadAvoirs();
     } catch (error) {
       console.error('Erreur sauvegarde facture:', error);
       alert('Erreur lors de la sauvegarde');
@@ -207,15 +264,75 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
     setEditingId(facture.id);
     setFormData({
       numero: facture.numero,
+      type: (facture.type || 'facture') as 'facture' | 'proforma',
       client_id: facture.client_id,
       entreprise_id: facture.entreprise_id,
-      date_facturation: facture.date_facturation.split('T')[0],
+      date_facturation: (facture.date_facturation || facture.date_emission || facture.created_at).split('T')[0],
       date_echeance: facture.date_echeance?.split('T')[0] || '',
       montant_ht: facture.montant_ht,
-      taux_tva: facture.montant_tva / facture.montant_ht * 100 || 20,
+      taux_tva: facture.taux_tva || (facture.montant_tva ? (facture.montant_tva / facture.montant_ht) * 100 : 20),
       statut: facture.statut,
+      motif: '',
     });
     setShowForm(true);
+  };
+
+  const handleCreateAvoir = (facture: Facture) => {
+    setFacturePourAvoir(facture);
+    setFormData({
+      numero: '',
+      type: 'facture' as 'facture' | 'proforma',
+      client_id: facture.client_id,
+      entreprise_id: facture.entreprise_id,
+      date_facturation: new Date().toISOString().split('T')[0],
+      date_echeance: '',
+      montant_ht: facture.montant_ht,
+      taux_tva: facture.taux_tva || 20,
+      statut: 'valide',
+      motif: '',
+    });
+    setShowAvoirForm(true);
+  };
+
+  const handleSubmitAvoir = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEntreprise || !facturePourAvoir || !formData.client_id) {
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    try {
+      const montant_ht = Number(formData.montant_ht) || 0;
+      const taux_tva = Number(formData.taux_tva) || 20;
+      const montant_tva = montant_ht * (taux_tva / 100);
+      const montant_ttc = montant_ht + montant_tva;
+
+      const numeroAvoir = formData.numero || (await generateNumero('avoir'));
+
+      const { error } = await supabase.from('avoirs').insert([{
+        numero: numeroAvoir,
+        entreprise_id: selectedEntreprise,
+        client_id: facturePourAvoir.client_id,
+        facture_id: facturePourAvoir.id,
+        date_emission: formData.date_facturation,
+        montant_ht,
+        tva: montant_tva,
+        montant_ttc,
+        motif: formData.motif || 'Avoir sur facture',
+        statut: 'valide',
+      }]);
+
+      if (error) throw error;
+
+      setShowAvoirForm(false);
+      setFacturePourAvoir(null);
+      resetForm();
+      await loadAvoirs();
+      alert('✅ Avoir créé avec succès!');
+    } catch (error: any) {
+      console.error('Erreur création avoir:', error);
+      alert('❌ Erreur lors de la création de l\'avoir: ' + (error.message || 'Erreur inconnue'));
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -234,6 +351,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
   const resetForm = () => {
     setFormData({
       numero: '',
+      type: 'facture' as 'facture' | 'proforma',
       client_id: '',
       entreprise_id: selectedEntreprise,
       date_facturation: new Date().toISOString().split('T')[0],
@@ -241,17 +359,30 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       montant_ht: 0,
       taux_tva: 20,
       statut: 'brouillon',
+      motif: '',
     });
     setEditingId(null);
   };
 
-  const filteredFactures = factures.filter((facture) => {
+  const allDocuments: Array<Facture & { docType: string; date_emission?: string }> = [
+    ...factures.map(f => ({ ...f, docType: 'facture' })),
+    ...avoirs.map(a => ({ ...a, docType: 'avoir', date_facturation: a.date_facturation || (a as any).date_emission || new Date().toISOString() }))
+  ];
+
+  const filteredDocuments = allDocuments.filter((doc) => {
     const search = searchTerm.toLowerCase();
-    return (
-      facture.numero.toLowerCase().includes(search) ||
-      facture.client_nom?.toLowerCase().includes(search) ||
-      facture.statut.toLowerCase().includes(search)
+    const matchesSearch = (
+      doc.numero.toLowerCase().includes(search) ||
+      doc.client_nom?.toLowerCase().includes(search) ||
+      doc.statut.toLowerCase().includes(search)
     );
+    
+    const matchesType = filterType === 'all' || 
+      (filterType === 'facture' && doc.docType === 'facture' && doc.type === 'facture') ||
+      (filterType === 'proforma' && doc.docType === 'facture' && doc.type === 'proforma') ||
+      (filterType === 'avoir' && doc.docType === 'avoir');
+    
+    return matchesSearch && matchesType;
   });
 
   const calculateMontantTTC = () => {
@@ -295,14 +426,58 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         <button
           onClick={async () => {
             resetForm();
-            const numero = await generateNumero();
-            setFormData((prev) => ({ ...prev, numero }));
+            const numero = await generateNumero('facture');
+            setFormData((prev) => ({ ...prev, numero, type: 'facture' }));
             setShowForm(true);
           }}
           className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
         >
           <Plus className="w-5 h-5" />
           Nouvelle facture
+        </button>
+      </div>
+      
+      {/* Filtres par type */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setFilterType('all')}
+          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+            filterType === 'all'
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+              : 'bg-white/10 text-gray-300 hover:bg-white/15'
+          }`}
+        >
+          Tous
+        </button>
+        <button
+          onClick={() => setFilterType('facture')}
+          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+            filterType === 'facture'
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+              : 'bg-white/10 text-gray-300 hover:bg-white/15'
+          }`}
+        >
+          Factures
+        </button>
+        <button
+          onClick={() => setFilterType('proforma')}
+          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+            filterType === 'proforma'
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+              : 'bg-white/10 text-gray-300 hover:bg-white/15'
+          }`}
+        >
+          Proforma
+        </button>
+        <button
+          onClick={() => setFilterType('avoir')}
+          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+            filterType === 'avoir'
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+              : 'bg-white/10 text-gray-300 hover:bg-white/15'
+          }`}
+        >
+          Avoirs
         </button>
       </div>
 
@@ -338,77 +513,105 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         />
       </div>
 
-      {/* Liste des factures */}
+      {/* Liste des documents */}
       <div className="space-y-4">
-        {filteredFactures.map((facture) => (
-          <div
-            key={facture.id}
-            className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-all"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4 flex-1">
-                <div className="p-3 bg-purple-500/20 rounded-lg">
-                  <FileText className="w-6 h-6 text-purple-400" />
+        {filteredDocuments.map((doc) => {
+          const isAvoir = doc.docType === 'avoir';
+          const isProforma = doc.type === 'proforma';
+          const Icon = isAvoir ? CreditCard : isProforma ? Receipt : FileText;
+          const iconColor = isAvoir ? 'text-orange-400' : isProforma ? 'text-yellow-400' : 'text-purple-400';
+          const bgColor = isAvoir ? 'bg-orange-500/20' : isProforma ? 'bg-yellow-500/20' : 'bg-purple-500/20';
+
+          return (
+            <div
+              key={doc.id}
+              className={`bg-white/10 backdrop-blur-lg rounded-xl p-6 border ${
+                isAvoir ? 'border-orange-500/30' : isProforma ? 'border-yellow-500/30' : 'border-white/20'
+              } hover:bg-white/15 transition-all`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className={`p-3 ${bgColor} rounded-lg`}>
+                    <Icon className={`w-6 h-6 ${iconColor}`} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-4 mb-2">
+                      <h3 className="text-lg font-bold text-white">{doc.numero}</h3>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          isAvoir
+                            ? 'bg-orange-500/20 text-orange-400'
+                            : isProforma
+                            ? 'bg-yellow-500/20 text-yellow-400'
+                            : doc.statut === 'payee'
+                            ? 'bg-green-500/20 text-green-400'
+                            : doc.statut === 'envoyee' || doc.statut === 'valide'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : 'bg-gray-500/20 text-gray-400'
+                        }`}
+                      >
+                        {isAvoir ? 'Avoir' : isProforma ? 'Proforma' : doc.statut}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-300 mb-1">Client: {doc.client_nom}</p>
+                    <div className="flex items-center gap-4 text-sm text-gray-400">
+                      <span>Date: {new Date(doc.date_facturation || (doc as any).date_emission || doc.created_at).toLocaleDateString('fr-FR')}</span>
+                      {doc.date_echeance && (
+                        <span>Échéance: {new Date(doc.date_echeance).toLocaleDateString('fr-FR')}</span>
+                      )}
+                      {isAvoir && doc.facture_id && (
+                        <span className="text-xs text-orange-400">Sur facture: {doc.numero?.replace('AVOIR', 'FACT')}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-2xl font-bold mb-1 ${isAvoir ? 'text-orange-400' : 'text-white'}`}>
+                      {isAvoir ? '-' : ''}{doc.montant_ttc.toFixed(2)}€
+                    </div>
+                    <div className="text-sm text-gray-400">TTC</div>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-4 mb-2">
-                    <h3 className="text-lg font-bold text-white">{facture.numero}</h3>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        facture.statut === 'payee'
-                          ? 'bg-green-500/20 text-green-400'
-                          : facture.statut === 'envoyee'
-                          ? 'bg-blue-500/20 text-blue-400'
-                          : 'bg-gray-500/20 text-gray-400'
-                      }`}
+                <div className="flex items-center gap-2 ml-4">
+                  {!isAvoir && (
+                    <button
+                      onClick={() => handleCreateAvoir(doc as Facture)}
+                      className="px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg transition-all"
+                      title="Créer un avoir"
                     >
-                      {facture.statut}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-300 mb-1">Client: {facture.client_nom}</p>
-                  <div className="flex items-center gap-4 text-sm text-gray-400">
-                    <span>Date: {new Date(facture.date_facturation).toLocaleDateString('fr-FR')}</span>
-                    {facture.date_echeance && (
-                      <span>Échéance: {new Date(facture.date_echeance).toLocaleDateString('fr-FR')}</span>
-                    )}
-                  </div>
+                      <ArrowLeftRight className="w-4 h-4" />
+                    </button>
+                  )}
+                  {!isAvoir && (
+                    <button
+                      onClick={() => handleEdit(doc as Facture)}
+                      className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all"
+                      title="Modifier"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {}}
+                    className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all"
+                    title="Voir / Télécharger PDF"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(doc.id)}
+                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"
+                    title="Supprimer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-white mb-1">
-                    {facture.montant_ttc.toFixed(2)}€
-                  </div>
-                  <div className="text-sm text-gray-400">TTC</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 ml-4">
-                <button
-                  onClick={() => handleEdit(facture)}
-                  className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all"
-                  title="Modifier"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {}}
-                  className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all"
-                  title="Voir / Télécharger PDF"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(facture.id)}
-                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"
-                  title="Supprimer"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {filteredFactures.length === 0 && (
+      {filteredDocuments.length === 0 && (
         <div className="text-center py-12 bg-white/10 backdrop-blur-lg rounded-xl border border-white/20">
           <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400 mb-4">
@@ -418,8 +621,8 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
             <button
               onClick={async () => {
                 resetForm();
-                const numero = await generateNumero();
-                setFormData((prev) => ({ ...prev, numero }));
+                const numero = await generateNumero('facture');
+                setFormData((prev) => ({ ...prev, numero, type: 'facture' }));
                 setShowForm(true);
               }}
               className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
@@ -453,6 +656,24 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Type *
+                  </label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => {
+                      const newType = e.target.value as 'facture' | 'proforma';
+                      setFormData({ ...formData, type: newType, numero: '' });
+                    }}
+                    required
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="facture">Facture</option>
+                    <option value="proforma">Proforma</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Numéro *
                   </label>
                   <input
@@ -461,26 +682,26 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
                     onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
                     required
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="FACT-001"
+                    placeholder={formData.type === 'proforma' ? 'PROFORMA-001' : 'FACT-001'}
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Statut *
-                  </label>
-                  <select
-                    value={formData.statut}
-                    onChange={(e) => setFormData({ ...formData, statut: e.target.value })}
-                    required
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="brouillon">Brouillon</option>
-                    <option value="envoyee">Envoyée</option>
-                    <option value="payee">Payée</option>
-                    <option value="annulee">Annulée</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Statut *
+                </label>
+                <select
+                  value={formData.statut}
+                  onChange={(e) => setFormData({ ...formData, statut: e.target.value })}
+                  required
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="brouillon">Brouillon</option>
+                  <option value="envoyee">Envoyée</option>
+                  <option value="payee">Payée</option>
+                  <option value="annulee">Annulée</option>
+                </select>
               </div>
 
               <div>
@@ -581,6 +802,140 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
                   type="button"
                   onClick={() => {
                     setShowForm(false);
+                    resetForm();
+                  }}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Formulaire Modal Avoir */}
+      {showAvoirForm && facturePourAvoir && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/20">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white">
+                Créer un avoir sur {facturePourAvoir.numero}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAvoirForm(false);
+                  setFacturePourAvoir(null);
+                  resetForm();
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitAvoir} className="space-y-4">
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 mb-4">
+                <p className="text-sm text-orange-300">
+                  <strong>Facture:</strong> {facturePourAvoir.numero} - Montant TTC: {facturePourAvoir.montant_ttc.toFixed(2)}€
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Numéro de l'avoir *
+                </label>
+                <input
+                  type="text"
+                  value={formData.numero}
+                  onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                  required
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="AVOIR-001"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Date d'émission *
+                </label>
+                <input
+                  type="date"
+                  value={formData.date_facturation}
+                  onChange={(e) => setFormData({ ...formData, date_facturation: e.target.value })}
+                  required
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Motif de l'avoir
+                </label>
+                <textarea
+                  value={formData.motif}
+                  onChange={(e) => setFormData({ ...formData, motif: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  rows={3}
+                  placeholder="Raison de l'avoir (ex: Retour produit, Erreur de facturation...)"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Montant HT (€) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.montant_ht}
+                    onChange={(e) => setFormData({ ...formData, montant_ht: Number(e.target.value) })}
+                    required
+                    min="0"
+                    max={facturePourAvoir.montant_ht}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    placeholder="0.00"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Max: {facturePourAvoir.montant_ht.toFixed(2)}€</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Taux TVA (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formData.taux_tva}
+                    onChange={(e) => setFormData({ ...formData, taux_tva: Number(e.target.value) })}
+                    min="0"
+                    max="100"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    placeholder="20"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-orange-500/10 rounded-lg p-4 border border-orange-500/30">
+                <div className="flex items-center justify-between text-lg font-semibold text-white">
+                  <span>Montant TTC de l'avoir:</span>
+                  <span className="text-orange-400">-{calculateMontantTTC()}€</span>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg font-semibold hover:from-orange-700 hover:to-red-700 transition-all"
+                >
+                  Créer l'avoir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAvoirForm(false);
+                    setFacturePourAvoir(null);
                     resetForm();
                   }}
                   className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
