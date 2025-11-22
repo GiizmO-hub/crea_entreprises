@@ -207,27 +207,61 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         setUploading(false);
       }
 
-      const documentData: any = {
+      // Préparer les données du document - seulement les colonnes qui existent vraiment
+      const documentData: Record<string, any> = {
         entreprise_id: selectedEntreprise,
         nom: formData.nom,
-        description: formData.description || null,
-        categorie: formData.categorie,
-        type_fichier: selectedFile ? getFileType(selectedFile.name) : (editingId ? undefined : 'autre'),
-        taille: selectedFile ? selectedFile.size : (editingId ? undefined : 0),
-        chemin_fichier: fileUrl || (editingId ? undefined : ''),
-        tags: formData.tags,
-        date_document: formData.date_document,
-        date_expiration: formData.date_expiration || null,
-        statut: formData.statut,
-        created_by: user?.id,
       };
 
-      // Nettoyer les valeurs undefined pour éviter les erreurs
-      Object.keys(documentData).forEach(key => {
-        if (documentData[key] === undefined) {
-          delete documentData[key];
+      // Ajouter description seulement si elle n'est pas vide
+      if (formData.description && formData.description.trim()) {
+        documentData.description = formData.description.trim();
+      }
+
+      // Ajouter toutes les autres colonnes obligatoires
+      documentData.categorie = formData.categorie || 'autre';
+      documentData.statut = formData.statut || 'actif';
+      documentData.date_document = formData.date_document;
+
+      // Colonnes conditionnelles
+      if (formData.date_expiration && formData.date_expiration.trim()) {
+        documentData.date_expiration = formData.date_expiration;
+      }
+
+      if (formData.tags && formData.tags.length > 0) {
+        documentData.tags = formData.tags;
+      }
+
+      if (selectedFile) {
+        documentData.type_fichier = getFileType(selectedFile.name);
+        documentData.taille = selectedFile.size;
+        documentData.chemin_fichier = fileUrl;
+      } else if (editingId) {
+        // En édition, ne pas modifier ces colonnes si pas de nouveau fichier
+        // Mais on doit quand même fournir chemin_fichier
+        if (!fileUrl) {
+          // Garder l'ancien chemin_fichier
+          const currentDoc = documents.find(d => d.id === editingId);
+          if (currentDoc) {
+            documentData.chemin_fichier = currentDoc.chemin_fichier;
+          }
+        } else {
+          documentData.chemin_fichier = fileUrl;
         }
-      });
+      } else {
+        // Nouveau document, pas de fichier = erreur
+        if (!selectedFile) {
+          alert('Veuillez sélectionner un fichier');
+          return;
+        }
+        documentData.type_fichier = getFileType(selectedFile.name);
+        documentData.taille = selectedFile.size;
+        documentData.chemin_fichier = fileUrl || '';
+      }
+
+      if (user?.id) {
+        documentData.created_by = user.id;
+      }
 
       if (editingId) {
         const { error } = await supabase
