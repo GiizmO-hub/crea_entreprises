@@ -27,10 +27,12 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   const { user, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [activeModules, setActiveModules] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     checkSuperAdmin();
-  }, [user]);
+    loadActiveModules();
+  }, [user, isSuperAdmin]);
 
   const checkSuperAdmin = async () => {
     if (!user) {
@@ -63,6 +65,63 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     } catch (error) {
       console.error('❌ Erreur vérification super admin:', error);
       setIsSuperAdmin(false);
+    }
+  };
+
+  const loadActiveModules = async () => {
+    if (!user) {
+      setActiveModules(new Set());
+      return;
+    }
+
+    try {
+      // Pour les super admins, tous les modules sont visibles
+      if (isSuperAdmin) {
+        // Super admin voit tout, on met tous les modules comme actifs
+        setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'settings']));
+        return;
+      }
+
+      // Pour les clients, charger uniquement les modules actifs depuis modules_activation
+      const { data: modulesStatus, error } = await supabase.rpc('get_all_modules_status');
+
+      if (error) {
+        console.error('Erreur chargement modules actifs:', error);
+        // En cas d'erreur, on affiche tous les modules par défaut (comportement de fallback)
+        setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'settings']));
+        return;
+      }
+
+      // Filtrer uniquement les modules actifs
+      const activeModulesSet = new Set<string>();
+      if (modulesStatus && Array.isArray(modulesStatus)) {
+        modulesStatus.forEach((mod: any) => {
+          if (mod.actif === true) {
+            // Mapper les codes de modules aux IDs du menu
+            const moduleCodeToMenuId: Record<string, string> = {
+              'dashboard': 'dashboard',
+              'clients': 'clients',
+              'facturation': 'factures',
+              'collaborateurs': 'collaborateurs',
+            };
+            const menuId = moduleCodeToMenuId[mod.code];
+            if (menuId) {
+              activeModulesSet.add(menuId);
+            }
+          }
+        });
+      }
+
+      // Toujours afficher certains modules de base (dashboard, entreprises, settings)
+      activeModulesSet.add('dashboard');
+      activeModulesSet.add('entreprises');
+      activeModulesSet.add('settings');
+
+      setActiveModules(activeModulesSet);
+    } catch (error) {
+      console.error('Erreur chargement modules actifs:', error);
+      // En cas d'erreur, afficher tous les modules par défaut
+      setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'settings']));
     }
   };
 
@@ -107,7 +166,23 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           {/* Menu Navigation */}
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {menuItems
-              .filter((item) => !item.superAdminOnly || isSuperAdmin)
+              .filter((item) => {
+                // Filtrer les éléments admin uniquement
+                if (item.superAdminOnly && !isSuperAdmin) {
+                  return false;
+                }
+                // Pour les clients, vérifier si le module est actif
+                if (!isSuperAdmin && !item.superAdminOnly) {
+                  // Les modules de base (dashboard, entreprises, settings) sont toujours visibles
+                  if (item.id === 'dashboard' || item.id === 'entreprises' || item.id === 'settings') {
+                    return true;
+                  }
+                  // Vérifier si le module est actif
+                  return activeModules.has(item.id);
+                }
+                // Super admin voit tout
+                return true;
+              })
               .map((item) => {
                 const Icon = item.icon;
                 const isActive = currentPage === item.id;
