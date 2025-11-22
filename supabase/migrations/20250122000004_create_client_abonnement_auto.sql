@@ -307,3 +307,4 @@ $$;
 -- Commentaire sur la fonction
 COMMENT ON FUNCTION user_has_module_access IS 'Vérifie si un utilisateur a accès à un module selon son plan d''abonnement et ses options souscrites.';
 
+

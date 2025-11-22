@@ -1179,3 +1179,4 @@ CREATE TRIGGER update_produits_updated_at BEFORE UPDATE ON produits
 CREATE TRIGGER update_abonnements_updated_at BEFORE UPDATE ON abonnements
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+

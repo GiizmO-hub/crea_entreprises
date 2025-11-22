@@ -242,3 +242,4 @@ Après avoir configuré Supabase :
 
 **💡 Astuce:** Gardez vos clés Supabase dans un endroit sûr ! Vous en aurez besoin pour Vercel aussi.
 
+

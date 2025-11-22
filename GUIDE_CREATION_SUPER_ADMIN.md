@@ -166,3 +166,4 @@ Une fois le Super Admin créé :
 
 **Besoin d'aide ?** Consultez le fichier `GUIDE_SUPABASE.md` pour plus d'informations sur la configuration Supabase.
 
+

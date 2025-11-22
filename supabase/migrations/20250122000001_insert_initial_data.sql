@@ -109,3 +109,4 @@ INSERT INTO options_supplementaires (code, nom, description, prix_mensuel, prix_
   ('reporting_avance', 'Reporting avancé', 'Tableaux de bord personnalisables et rapports détaillés', 14.90, 149.00)
 ON CONFLICT (code) DO NOTHING;
 
+
