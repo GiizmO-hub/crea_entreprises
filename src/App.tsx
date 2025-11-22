@@ -6,7 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Entreprises from './pages/Entreprises';
 import Clients from './pages/Clients';
 import Factures from './pages/Factures';
-import Collaborateurs from './pages/Collaborateurs';
+import Modules from './pages/Modules';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -42,7 +42,7 @@ function AppContent() {
       case 'finance':
         return <div className="p-8 text-white">Module Finance - À venir</div>;
       case 'modules':
-        return <Collaborateurs onNavigate={setCurrentPage} />;
+        return <Modules onNavigate={setCurrentPage} />;
       case 'settings':
         return <div className="p-8 text-white">Paramètres - À venir</div>;
       default:
