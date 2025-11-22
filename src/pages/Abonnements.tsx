@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { CreditCard, Plus, X, DollarSign, Package, CheckCircle, AlertCircle, Edit, Search, Filter, ExternalLink, Copy, Check, Mail } from 'lucide-react';
+import { CreditCard, Plus, X, DollarSign, Package, CheckCircle, AlertCircle, Edit, Search, Filter, ExternalLink, Copy, Check, Mail, Trash2 } from 'lucide-react';
 
 interface AbonnementsProps {
   onNavigate: (page: string) => void;
@@ -284,6 +284,12 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
   const handleCreateAbonnement = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Si on est en mode édition, utiliser handleUpdateAbonnement
+    if (editingAbonnement) {
+      await handleUpdateAbonnement(e);
+      return;
+    }
+
     if (!formData.client_id || !formData.plan_id) {
       alert('❌ Veuillez sélectionner un client et un plan');
       return;
@@ -351,6 +357,120 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
     } catch (error: any) {
       console.error('Erreur création abonnement:', error);
       alert('❌ Erreur lors de la création: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
+  const handleUpdateAbonnement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAbonnement || !user) return;
+
+    try {
+      // Calculer le montant total
+      const plan = plans.find(p => p.id === formData.plan_id);
+      if (!plan) {
+        throw new Error('Plan non trouvé');
+      }
+
+      const montantPlan = formData.prix_sur_mesure 
+        ? formData.prix_personnalise 
+        : (formData.mode_paiement === 'mensuel' ? plan.prix_mensuel : plan.prix_annuel / 12);
+
+      const montantOptions = formData.options_selected
+        .map(optId => {
+          const opt = options.find(o => o.id === optId);
+          return opt ? opt.prix_mensuel : 0;
+        })
+        .reduce((sum, prix) => sum + prix, 0);
+
+      const montantTotal = montantPlan + montantOptions;
+
+      // Mettre à jour l'abonnement
+      const { error: updateError } = await supabase
+        .from('abonnements')
+        .update({
+          plan_id: formData.plan_id,
+          mode_paiement: formData.mode_paiement,
+          date_debut: formData.date_debut,
+          date_fin: formData.date_fin || null,
+          montant_mensuel: montantTotal,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingAbonnement.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Mettre à jour les options de l'abonnement
+      // Supprimer les anciennes options
+      const { error: deleteOptionsError } = await supabase
+        .from('abonnement_options')
+        .delete()
+        .eq('abonnement_id', editingAbonnement.id);
+
+      if (deleteOptionsError) {
+        console.error('Erreur suppression options:', deleteOptionsError);
+      }
+
+      // Ajouter les nouvelles options
+      if (formData.options_selected.length > 0) {
+        const optionsToInsert = formData.options_selected.map(optionId => ({
+          abonnement_id: editingAbonnement.id,
+          option_id: optionId,
+          actif: true,
+          date_activation: new Date().toISOString().split('T')[0],
+        }));
+
+        const { error: insertOptionsError } = await supabase
+          .from('abonnement_options')
+          .insert(optionsToInsert);
+
+        if (insertOptionsError) {
+          console.error('Erreur insertion options:', insertOptionsError);
+        }
+      }
+
+      alert('✅ Abonnement modifié avec succès!');
+      setShowForm(false);
+      resetForm();
+      await loadAbonnements();
+    } catch (error: any) {
+      console.error('Erreur modification abonnement:', error);
+      alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
+  const handleDeleteAbonnement = async (abonnementId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cet abonnement ? Cette action est irréversible.')) {
+      return;
+    }
+
+    try {
+      // Supprimer d'abord les options de l'abonnement
+      const { error: deleteOptionsError } = await supabase
+        .from('abonnement_options')
+        .delete()
+        .eq('abonnement_id', abonnementId);
+
+      if (deleteOptionsError) {
+        console.error('Erreur suppression options:', deleteOptionsError);
+      }
+
+      // Supprimer l'abonnement
+      const { error: deleteError } = await supabase
+        .from('abonnements')
+        .delete()
+        .eq('id', abonnementId);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      alert('✅ Abonnement supprimé avec succès!');
+      await loadAbonnements();
+    } catch (error: any) {
+      console.error('Erreur suppression abonnement:', error);
+      alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
@@ -706,6 +826,13 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                       title="Modifier"
                     >
                       <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteAbonnement(abonnement.id)}
+                      className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-all"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </>
                 )}
