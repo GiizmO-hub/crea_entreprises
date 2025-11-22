@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "db:check": "node scripts/auto-apply-migration.js check",
-    "db:fix": "node scripts/apply-fixes-via-rpc.js all",
+    "db:fix": "node scripts/auto-apply-direct-sql.js",
+    "db:fix-rpc": "node scripts/apply-fixes-via-rpc.js all",
     "db:fix-date": "node scripts/apply-fixes-via-rpc.js fix-date-activation",
     "db:fix-mode": "node scripts/apply-fixes-via-rpc.js fix-mode-paiement",
     "db:migrate": "node scripts/auto-apply-migration.js"
