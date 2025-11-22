@@ -130,12 +130,21 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
 
       if (error) {
         console.error('❌ Erreur Supabase:', error);
-        // Si la table n'existe pas encore, afficher un message utile
+        
+        // Gestion spécifique des erreurs
         if (error.message?.includes('does not exist') || error.code === '42P01') {
           console.warn('⚠️ Table collaborateurs n\'existe pas encore. Appliquez la migration SQL.');
           setCollaborateurs([]);
           return;
         }
+        
+        if (error.message?.includes('permission denied') || error.code === '42501') {
+          console.error('❌ Erreur de permissions RLS. Appliquez la migration de correction.');
+          alert('Erreur de permissions. Veuillez appliquer la migration SQL de correction des permissions RLS.');
+          setCollaborateurs([]);
+          return;
+        }
+        
         throw error;
       }
 
