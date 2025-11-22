@@ -238,11 +238,14 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
       nom: entreprise.nom,
       forme_juridique: entreprise.forme_juridique,
       siret: entreprise.siret || '',
-      email: '',
+      email: entreprise.email || '',
       telephone: entreprise.telephone || '',
       adresse: '',
       code_postal: '',
       ville: entreprise.ville || '',
+      capital: 0,
+      rcs: '',
+      site_web: '',
     });
     setShowForm(true);
   };
