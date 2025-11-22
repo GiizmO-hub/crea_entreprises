@@ -232,29 +232,17 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         documentData.tags = formData.tags;
       }
 
-      if (selectedFile) {
+      if (selectedFile && fileUrl) {
+        // Fichier sélectionné et uploadé
         documentData.type_fichier = getFileType(selectedFile.name);
         documentData.taille = selectedFile.size;
         documentData.chemin_fichier = fileUrl;
-      } else if (editingId) {
-        // En édition, ne pas modifier ces colonnes si pas de nouveau fichier
-        // Mais on doit quand même fournir chemin_fichier
-        if (!fileUrl) {
-        // Garder l'ancien chemin_fichier - ne pas le modifier en édition
-        // La colonne chemin_fichier sera préservée automatiquement par Supabase
-        } else {
-          documentData.chemin_fichier = fileUrl;
-        }
-      } else {
-        // Nouveau document, pas de fichier = erreur
-        if (!selectedFile) {
-          alert('Veuillez sélectionner un fichier');
-          return;
-        }
-        documentData.type_fichier = getFileType(selectedFile.name);
-        documentData.taille = selectedFile.size;
-        documentData.chemin_fichier = fileUrl || '';
+      } else if (!editingId) {
+        // Nouveau document sans fichier = erreur
+        alert('Veuillez sélectionner un fichier');
+        return;
       }
+      // En édition sans nouveau fichier, ne pas modifier chemin_fichier, type_fichier, taille
 
       if (user?.id) {
         documentData.created_by = user.id;
