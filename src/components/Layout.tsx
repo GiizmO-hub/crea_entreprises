@@ -72,7 +72,6 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'comptabilite', label: 'Comptabilité', icon: Calculator },
     { id: 'finance', label: 'Finance', icon: TrendingUp },
     { id: 'collaborateurs', label: 'Collaborateurs', icon: Users, superAdminOnly: true },
-    { id: 'admin', label: 'Administration', icon: Settings, superAdminOnly: true },
     { id: 'settings', label: 'Paramètres', icon: Settings },
   ];
 

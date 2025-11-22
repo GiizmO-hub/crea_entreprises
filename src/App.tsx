@@ -7,7 +7,6 @@ import Entreprises from './pages/Entreprises';
 import Clients from './pages/Clients';
 import Factures from './pages/Factures';
 import Collaborateurs from './pages/Collaborateurs';
-import Admin from './pages/Admin';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -44,8 +43,6 @@ function AppContent() {
         return <div className="p-8 text-white">Module Finance - À venir</div>;
       case 'collaborateurs':
         return <Collaborateurs onNavigate={setCurrentPage} />;
-      case 'admin':
-        return <Admin onNavigate={setCurrentPage} />;
       case 'settings':
         return <div className="p-8 text-white">Paramètres - À venir</div>;
       default:
