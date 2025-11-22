@@ -405,7 +405,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
       {/* En-tête */}
       <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Collaborateurs</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Modules</h1>
           <p className="text-gray-300">Gestion des collaborateurs et administrateurs</p>
         </div>
         <button

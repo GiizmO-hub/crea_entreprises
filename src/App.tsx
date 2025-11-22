@@ -41,7 +41,7 @@ function AppContent() {
         return <div className="p-8 text-white">Module Comptabilité - À venir</div>;
       case 'finance':
         return <div className="p-8 text-white">Module Finance - À venir</div>;
-      case 'collaborateurs':
+      case 'modules':
         return <Collaborateurs onNavigate={setCurrentPage} />;
       case 'settings':
         return <div className="p-8 text-white">Paramètres - À venir</div>;

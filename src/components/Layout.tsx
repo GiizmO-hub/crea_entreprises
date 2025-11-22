@@ -13,6 +13,7 @@ import {
   User as UserIcon,
   Menu,
   X,
+  Package,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -71,7 +72,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'factures', label: 'Facturation', icon: FileText },
     { id: 'comptabilite', label: 'Comptabilité', icon: Calculator },
     { id: 'finance', label: 'Finance', icon: TrendingUp },
-    { id: 'collaborateurs', label: 'Collaborateurs', icon: Users, superAdminOnly: true },
+    { id: 'modules', label: 'Modules', icon: Package, superAdminOnly: true },
     { id: 'settings', label: 'Paramètres', icon: Settings },
   ];
 
