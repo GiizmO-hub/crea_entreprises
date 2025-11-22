@@ -442,8 +442,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
   };
 
   // Fonctions pour gérer les membres d'équipe (à utiliser dans l'interface si nécessaire)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleAddMember = async (equipeId: string, collaborateurId: string) => {
+  const _handleAddMember = async (equipeId: string, collaborateurId: string) => {
     try {
       const { error } = await supabase
         .from('collaborateurs_equipes')
@@ -462,8 +461,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleRemoveMember = async (equipeId: string, collaborateurId: string) => {
+  const _handleRemoveMember = async (equipeId: string, collaborateurId: string) => {
     try {
       const { error } = await supabase
         .from('collaborateurs_equipes')
