@@ -207,20 +207,27 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         setUploading(false);
       }
 
-      const documentData = {
+      const documentData: any = {
         entreprise_id: selectedEntreprise,
         nom: formData.nom,
         description: formData.description || null,
         categorie: formData.categorie,
-        type_fichier: selectedFile ? getFileType(selectedFile.name) : 'autre',
-        taille: selectedFile ? selectedFile.size : 0,
-        chemin_fichier: fileUrl,
+        type_fichier: selectedFile ? getFileType(selectedFile.name) : (editingId ? undefined : 'autre'),
+        taille: selectedFile ? selectedFile.size : (editingId ? undefined : 0),
+        chemin_fichier: fileUrl || (editingId ? undefined : ''),
         tags: formData.tags,
         date_document: formData.date_document,
         date_expiration: formData.date_expiration || null,
         statut: formData.statut,
         created_by: user?.id,
       };
+
+      // Nettoyer les valeurs undefined pour éviter les erreurs
+      Object.keys(documentData).forEach(key => {
+        if (documentData[key] === undefined) {
+          delete documentData[key];
+        }
+      });
 
       if (editingId) {
         const { error } = await supabase
