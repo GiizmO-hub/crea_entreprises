@@ -219,8 +219,27 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
           // Récupérer les informations client
           let clientEmail = '';
           let clientNom = '';
+          let clientId: string | null = null;
           
+          // Chercher le client via entreprise_id si client_id n'existe pas
+          if (ab.entreprise_id && !ab.client_id) {
+            const { data: clientData } = await supabase
+              .from('clients')
+              .select('id, email, nom, prenom, entreprise_nom')
+              .eq('entreprise_id', ab.entreprise_id)
+              .limit(1)
+              .single();
+            
+            if (clientData) {
+              clientId = clientData.id;
+              clientEmail = clientData.email || '';
+              clientNom = clientData.nom || clientData.prenom || clientData.entreprise_nom || '';
+            }
+          }
+
+          // Si client_id existe directement, l'utiliser
           if (ab.client_id) {
+            clientId = ab.client_id;
             const { data: clientData } = await supabase
               .from('clients')
               .select('email, nom, prenom, entreprise_nom')
