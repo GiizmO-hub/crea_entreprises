@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Layout from './components/Layout';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
+import Entreprises from './pages/Entreprises';
+import Clients from './pages/Clients';
+import Factures from './pages/Factures';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -26,15 +30,27 @@ function AppContent() {
     switch (currentPage) {
       case 'dashboard':
         return <Dashboard onNavigate={setCurrentPage} />;
+      case 'entreprises':
+        return <Entreprises onNavigate={setCurrentPage} />;
+      case 'clients':
+        return <Clients onNavigate={setCurrentPage} />;
+      case 'factures':
+        return <Factures onNavigate={setCurrentPage} />;
+      case 'comptabilite':
+        return <div className="p-8 text-white">Module Comptabilité - À venir</div>;
+      case 'finance':
+        return <div className="p-8 text-white">Module Finance - À venir</div>;
+      case 'settings':
+        return <div className="p-8 text-white">Paramètres - À venir</div>;
       default:
         return <Dashboard onNavigate={setCurrentPage} />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900">
+    <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
       {renderPage()}
-    </div>
+    </Layout>
   );
 }
 
