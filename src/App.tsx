@@ -9,6 +9,7 @@ import Abonnements from './pages/Abonnements';
 import Factures from './pages/Factures';
 import Modules from './pages/Modules';
 import Collaborateurs from './pages/Collaborateurs';
+import Documents from './pages/Documents';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -47,10 +48,12 @@ function AppContent() {
         return <div className="p-8 text-white">Module Finance - À venir</div>;
       case 'modules':
         return <Modules onNavigate={setCurrentPage} />;
-      case 'collaborateurs':
-        return <Collaborateurs onNavigate={setCurrentPage} />;
-      case 'settings':
-        return <div className="p-8 text-white">Paramètres - À venir</div>;
+          case 'collaborateurs':
+            return <Collaborateurs onNavigate={setCurrentPage} />;
+          case 'documents':
+            return <Documents onNavigate={setCurrentPage} />;
+          case 'settings':
+            return <div className="p-8 text-white">Paramètres - À venir</div>;
       default:
         return <Dashboard onNavigate={setCurrentPage} />;
     }

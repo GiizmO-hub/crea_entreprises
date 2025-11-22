@@ -36,6 +36,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
     'dashboard': 'dashboard',
     'clients': 'clients',
     'factures': 'factures',
+    'documents': 'documents',
     'collaborateurs': 'collaborateurs',
   };
 
@@ -101,6 +102,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
         { id: 'dashboard', code: 'dashboard', nom: 'Tableau de bord', description: 'Vue d\'ensemble de votre activité', categorie: 'core' },
         { id: 'clients', code: 'clients', nom: 'Gestion des clients', description: 'Gérer vos clients et leurs informations', categorie: 'core' },
         { id: 'factures', code: 'facturation', nom: 'Facturation', description: 'Créer et gérer vos factures', categorie: 'core' },
+        { id: 'documents', code: 'documents', nom: 'Gestion de documents', description: 'Gérer tous vos documents d\'entreprise', categorie: 'core' },
         
         // Modules Admin
         { id: 'collaborateurs', code: 'collaborateurs', nom: 'Gestion des collaborateurs', description: 'Gérer les collaborateurs et administrateurs', categorie: 'admin' },

@@ -15,6 +15,7 @@ import {
   X,
   Package,
   CreditCard,
+  FolderOpen,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -126,15 +127,16 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   };
 
   const menuItems = [
-    { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
-    { id: 'entreprises', label: 'Mon Entreprise', icon: Building2 },
-    { id: 'clients', label: 'Clients', icon: Users },
-    { id: 'abonnements', label: 'Abonnements', icon: CreditCard, superAdminOnly: true },
-    { id: 'factures', label: 'Facturation', icon: FileText },
-    { id: 'comptabilite', label: 'Comptabilité', icon: Calculator },
-    { id: 'finance', label: 'Finance', icon: TrendingUp },
-    { id: 'modules', label: 'Modules', icon: Package, superAdminOnly: true },
-    { id: 'settings', label: 'Paramètres', icon: Settings },
+    { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, moduleCode: 'dashboard' },
+    { id: 'entreprises', label: 'Mon Entreprise', icon: Building2, moduleCode: 'entreprises' },
+    { id: 'clients', label: 'Clients', icon: Users, moduleCode: 'clients' },
+    { id: 'abonnements', label: 'Abonnements', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
+    { id: 'factures', label: 'Facturation', icon: FileText, moduleCode: 'facturation' },
+    { id: 'documents', label: 'Documents', icon: FolderOpen, moduleCode: 'documents' },
+    { id: 'comptabilite', label: 'Comptabilité', icon: Calculator, moduleCode: 'comptabilite' },
+    { id: 'finance', label: 'Finance', icon: TrendingUp, moduleCode: 'finance' },
+    { id: 'modules', label: 'Modules', icon: Package, superAdminOnly: true, moduleCode: 'modules' },
+    { id: 'settings', label: 'Paramètres', icon: Settings, moduleCode: 'settings' },
   ];
 
   const handleSignOut = async () => {
