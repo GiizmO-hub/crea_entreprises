@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Users, Shield, Plus, X, Building2, Mail, Trash2, Crown } from 'lucide-react';
+import { Users, Shield, Plus, X, Building2, Mail, Trash2, Crown, Search, Filter, Grid, List } from 'lucide-react';
 
 interface CollaborateursProps {
   onNavigate: (page: string) => void;
@@ -32,6 +32,10 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterRole, setFilterRole] = useState<string>('all');
+  const [filterStatut, setFilterStatut] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -247,9 +251,49 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
     );
   }
 
+  // Filtrer les collaborateurs
+  const filteredCollaborateurs = collaborateurs.filter((c) => {
+    const matchesSearch = searchTerm === '' || 
+      `${c.prenom} ${c.nom}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.poste?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.departement?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesRole = filterRole === 'all' || c.role === filterRole;
+    const matchesStatut = filterStatut === 'all' || c.statut === filterStatut;
+    
+    return matchesSearch && matchesRole && matchesStatut;
+  });
+
+  // Statistiques
+  const stats = {
+    total: collaborateurs.length,
+    actifs: collaborateurs.filter(c => c.statut === 'active').length,
+    parRole: {
+      collaborateur: collaborateurs.filter(c => c.role === 'collaborateur').length,
+      admin: collaborateurs.filter(c => c.role === 'admin' || c.role === 'super_admin').length,
+      manager: collaborateurs.filter(c => c.role === 'manager').length,
+      comptable: collaborateurs.filter(c => c.role === 'comptable').length,
+      commercial: collaborateurs.filter(c => c.role === 'commercial').length,
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, string> = {
+      'super_admin': 'Super Admin',
+      'admin': 'Admin',
+      'collaborateur': 'Collaborateur',
+      'manager': 'Manager',
+      'comptable': 'Comptable',
+      'commercial': 'Commercial'
+    };
+    return labels[role] || role;
+  };
+
   return (
     <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
+      {/* En-tête */}
+      <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Collaborateurs</h1>
           <p className="text-gray-300">Gestion des collaborateurs et administrateurs</p>
@@ -263,9 +307,130 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
         </button>
       </div>
 
-      {/* Liste des collaborateurs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {collaborateurs.map((c) => (
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Total</p>
+              <p className="text-3xl font-bold text-white">{stats.total}</p>
+            </div>
+            <Users className="w-8 h-8 text-blue-400" />
+          </div>
+        </div>
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Actifs</p>
+              <p className="text-3xl font-bold text-green-400">{stats.actifs}</p>
+            </div>
+            <Shield className="w-8 h-8 text-green-400" />
+          </div>
+        </div>
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Admins</p>
+              <p className="text-3xl font-bold text-yellow-400">{stats.parRole.admin}</p>
+            </div>
+            <Crown className="w-8 h-8 text-yellow-400" />
+          </div>
+        </div>
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Collaborateurs</p>
+              <p className="text-3xl font-bold text-blue-400">{stats.parRole.collaborateur}</p>
+            </div>
+            <Users className="w-8 h-8 text-blue-400" />
+          </div>
+        </div>
+      </div>
+
+      {/* Recherche et Filtres */}
+      <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Recherche */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher par nom, email, poste, département..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+            />
+          </div>
+          
+          {/* Filtre Rôle */}
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <select
+              value={filterRole}
+              onChange={(e) => setFilterRole(e.target.value)}
+              className="pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+            >
+              <option value="all">Tous les rôles</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="admin">Admin</option>
+              <option value="collaborateur">Collaborateur</option>
+              <option value="manager">Manager</option>
+              <option value="comptable">Comptable</option>
+              <option value="commercial">Commercial</option>
+            </select>
+          </div>
+
+          {/* Filtre Statut */}
+          <div className="relative">
+            <select
+              value={filterStatut}
+              onChange={(e) => setFilterStatut(e.target.value)}
+              className="pl-4 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+            >
+              <option value="all">Tous les statuts</option>
+              <option value="active">Actif</option>
+              <option value="suspendue">Suspendu</option>
+              <option value="inactif">Inactif</option>
+            </select>
+          </div>
+
+          {/* Mode d'affichage */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === 'grid' 
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10'
+              }`}
+            >
+              <Grid className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === 'list' 
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10'
+              }`}
+            >
+              <List className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        
+        {/* Résultats de recherche */}
+        {searchTerm && (
+          <div className="mt-3 text-sm text-gray-400">
+            {filteredCollaborateurs.length} résultat(s) trouvé(s) pour "{searchTerm}"
+          </div>
+        )}
+      </div>
+
+      {/* Liste des collaborateurs - Vue Grille */}
+      {viewMode === 'grid' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredCollaborateurs.map((c) => (
           <div
             key={c.id}
             className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-all"
@@ -297,7 +462,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
                       : 'bg-blue-500/20 text-blue-300'
                   }`}
                 >
-                  {c.role}
+                  {getRoleLabel(c.role)}
                 </span>
               </div>
             </div>
@@ -351,8 +516,115 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
               </button>
             </div>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {/* Liste des collaborateurs - Vue Liste */}
+      {viewMode === 'list' && (
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-white/5 border-b border-white/10">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Collaborateur</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Rôle</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Poste</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Entreprise</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Contact</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Statut</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {filteredCollaborateurs.map((c) => (
+                  <tr key={c.id} className="hover:bg-white/5 transition-all">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-500/20 rounded-lg">
+                          <Users className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-white">
+                            {c.prenom} {c.nom}
+                          </div>
+                          <div className="text-sm text-gray-400">{c.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        {(c.role === 'admin' || c.role === 'super_admin') && <Crown className="w-4 h-4 text-yellow-400" />}
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            c.role === 'admin' || c.role === 'super_admin'
+                              ? 'bg-yellow-500/20 text-yellow-300'
+                              : c.role === 'manager'
+                              ? 'bg-purple-500/20 text-purple-300'
+                              : c.role === 'comptable'
+                              ? 'bg-green-500/20 text-green-300'
+                              : c.role === 'commercial'
+                              ? 'bg-orange-500/20 text-orange-300'
+                              : 'bg-blue-500/20 text-blue-300'
+                          }`}
+                        >
+                          {getRoleLabel(c.role)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-white">{c.poste || '-'}</div>
+                      {c.departement && (
+                        <div className="text-xs text-gray-400">{c.departement}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {c.entreprise_nom ? (
+                        <div className="flex items-center gap-2 text-sm text-white">
+                          <Building2 className="w-4 h-4 text-gray-400" />
+                          {c.entreprise_nom}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {c.telephone ? (
+                        <div className="flex items-center gap-2 text-sm text-white">
+                          <Mail className="w-4 h-4 text-gray-400" />
+                          {c.telephone}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          c.statut === 'active'
+                            ? 'bg-green-500/20 text-green-300'
+                            : 'bg-red-500/20 text-red-300'
+                        }`}
+                      >
+                        {c.statut === 'active' ? 'Actif' : c.statut === 'suspendue' ? 'Suspendu' : 'Inactif'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        onClick={() => handleDelete(c.id)}
+                        className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-all flex items-center gap-2 text-sm"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Supprimer
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {!loading && collaborateurs.length === 0 && (
         <div className="text-center py-12 bg-white/5 backdrop-blur-lg rounded-xl border border-white/20">
