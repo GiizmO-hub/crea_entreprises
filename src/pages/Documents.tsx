@@ -207,31 +207,19 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         setUploading(false);
       }
 
-      // Préparer les données du document - seulement les colonnes qui existent vraiment
+      // Préparer les données du document - TOUTES les colonnes nécessaires
       const documentData: Record<string, any> = {
         entreprise_id: selectedEntreprise,
         nom: formData.nom,
+        description: formData.description && formData.description.trim() ? formData.description.trim() : null,
+        categorie: formData.categorie || 'autre',
+        statut: formData.statut || 'actif',
+        date_document: formData.date_document,
+        date_expiration: formData.date_expiration && formData.date_expiration.trim() ? formData.date_expiration : null,
+        tags: formData.tags && formData.tags.length > 0 ? formData.tags : [],
       };
 
-      // Ajouter description seulement si elle n'est pas vide
-      if (formData.description && formData.description.trim()) {
-        documentData.description = formData.description.trim();
-      }
-
-      // Ajouter toutes les autres colonnes obligatoires
-      documentData.categorie = formData.categorie || 'autre';
-      documentData.statut = formData.statut || 'actif';
-      documentData.date_document = formData.date_document;
-
-      // Colonnes conditionnelles
-      if (formData.date_expiration && formData.date_expiration.trim()) {
-        documentData.date_expiration = formData.date_expiration;
-      }
-
-      if (formData.tags && formData.tags.length > 0) {
-        documentData.tags = formData.tags;
-      }
-
+      // Gestion du fichier
       if (selectedFile && fileUrl) {
         // Fichier sélectionné et uploadé
         documentData.type_fichier = getFileType(selectedFile.name);
@@ -241,8 +229,26 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         // Nouveau document sans fichier = erreur
         alert('Veuillez sélectionner un fichier');
         return;
+      } else {
+        // En édition sans nouveau fichier, utiliser les valeurs existantes
+        const currentDoc = documents.find(d => d.id === editingId);
+        if (currentDoc) {
+          // Ne pas modifier chemin_fichier, type_fichier, taille si pas de nouveau fichier
+          documentData.chemin_fichier = currentDoc.chemin_fichier;
+          documentData.type_fichier = currentDoc.type_fichier;
+          documentData.taille = currentDoc.taille;
+        } else {
+          // Valeurs par défaut si document non trouvé
+          documentData.type_fichier = 'autre';
+          documentData.taille = 0;
+          documentData.chemin_fichier = '';
+        }
       }
-      // En édition sans nouveau fichier, ne pas modifier chemin_fichier, type_fichier, taille
+
+      // S'assurer que created_by est défini
+      if (user?.id) {
+        documentData.created_by = user.id;
+      }
 
       if (user?.id) {
         documentData.created_by = user.id;
