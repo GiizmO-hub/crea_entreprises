@@ -160,24 +160,70 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
       };
 
       if (editingId) {
+        // Mode édition : pas de création d'espace membre
         const { error } = await supabase
           .from('clients')
           .update(dataToSave)
           .eq('id', editingId);
 
         if (error) throw error;
+        alert('Client modifié avec succès!');
       } else {
-        const { error } = await supabase.from('clients').insert([dataToSave]);
-        if (error) throw error;
+        // Mode création : vérifier si on doit créer un espace membre
+        if (createEspaceMembre) {
+          // Validation des champs requis pour l'espace membre
+          if (!formData.email) {
+            alert('L\'email est requis pour créer un espace membre');
+            return;
+          }
+          if (!formData.password || formData.password.length < 8) {
+            alert('Le mot de passe doit contenir au moins 8 caractères');
+            return;
+          }
+          if (!formData.plan_id) {
+            alert('Veuillez sélectionner un plan d\'abonnement');
+            return;
+          }
+
+          // Créer le client avec espace membre et abonnement
+          const { data: rpcData, error: rpcError } = await supabase.rpc('create_client_with_abonnement', {
+            p_entreprise_id: selectedEntreprise,
+            p_nom: formData.nom || null,
+            p_prenom: formData.prenom || null,
+            p_entreprise_nom: formData.entreprise_nom || null,
+            p_email: formData.email,
+            p_password: formData.password,
+            p_telephone: formData.telephone || null,
+            p_adresse: formData.adresse || null,
+            p_code_postal: formData.code_postal || null,
+            p_ville: formData.ville || null,
+            p_siret: formData.siret || null,
+            p_plan_id: formData.plan_id,
+            p_options_ids: formData.options_ids.length > 0 ? formData.options_ids : [],
+          });
+
+          if (rpcError) {
+            console.error('Erreur RPC:', rpcError);
+            throw rpcError;
+          }
+
+          alert('Client et espace membre créés avec succès! L\'espace membre a été configuré avec l\'abonnement et les options sélectionnées.');
+        } else {
+          // Création simple sans espace membre
+          const { error } = await supabase.from('clients').insert([dataToSave]);
+          if (error) throw error;
+          alert('Client créé avec succès!');
+        }
       }
 
       setShowForm(false);
       setEditingId(null);
       resetForm();
       loadClients();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur sauvegarde client:', error);
-      alert('Erreur lors de la sauvegarde');
+      const errorMessage = error?.message || 'Erreur lors de la sauvegarde';
+      alert(`Erreur: ${errorMessage}`);
     }
   };
 
