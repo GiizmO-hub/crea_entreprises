@@ -178,8 +178,6 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
         .from('abonnements')
         .select(`
           id,
-          client_id,
-          user_id,
           entreprise_id,
           plan_id,
           statut,
@@ -281,7 +279,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
           return {
             ...ab,
             plan_nom: ab.plans_abonnement?.nom || 'Inconnu',
-            client_id: clientId || ab.client_id || undefined,
+            client_id: clientId || undefined,
             client_email: clientEmail,
             client_nom: clientNom,
             options: optionsActives,
