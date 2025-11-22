@@ -95,11 +95,15 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
   const [showEquipeForm, setShowEquipeForm] = useState(false);
   const [showPermissionForm, setShowPermissionForm] = useState(false);
   const [showMembreForm, setShowMembreForm] = useState(false);
+  const [showAjoutMembresForm, setShowAjoutMembresForm] = useState(false);
+  const [equipePourAjoutMembres, setEquipePourAjoutMembres] = useState<string | null>(null);
+  const [selectedCollaborateurs, setSelectedCollaborateurs] = useState<string[]>([]);
   const [editingEquipeId, setEditingEquipeId] = useState<string | null>(null);
   const [editingPermissionId, setEditingPermissionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'equipes' | 'permissions'>('equipes');
   const [searchTerm, setSearchTerm] = useState('');
   const [creatingMembre, setCreatingMembre] = useState(false);
+  const [ajoutMembresLoading, setAjoutMembresLoading] = useState(false);
   const [formData, setFormData] = useState({
     nom: '',
     description: '',
@@ -621,11 +625,101 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
   };
 
   // Fonctions pour gérer les membres d'équipe
-  // Ces fonctions pourront être utilisées dans l'interface si nécessaire
-  // Pour ajouter/retirer des membres d'une équipe :
-  // - Utiliser la table collaborateurs_equipes avec insert/update
-  // - Utiliser role_equipe: 'membre' | 'chef' | 'adjoint'
-  // - Utiliser date_entree et date_sortie pour tracker les membres
+  const loadMembresEquipe = async (equipeId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('collaborateurs_equipes')
+        .select('collaborateur_id')
+        .eq('equipe_id', equipeId)
+        .is('date_sortie', null);
+
+      if (error) throw error;
+      return (data || []).map((m) => m.collaborateur_id);
+    } catch (error) {
+      console.error('Erreur chargement membres équipe:', error);
+      return [];
+    }
+  };
+
+  const handleAjouterMembres = async (equipeId: string) => {
+    setEquipePourAjoutMembres(equipeId);
+    setSelectedCollaborateurs([]);
+    setShowAjoutMembresForm(true);
+  };
+
+  const handleSubmitAjoutMembres = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!equipePourAjoutMembres || selectedCollaborateurs.length === 0) {
+      alert('Veuillez sélectionner au moins un collaborateur');
+      return;
+    }
+
+    setAjoutMembresLoading(true);
+
+    try {
+      // Vérifier les membres actuels pour éviter les doublons
+      const membresActuels = await loadMembresEquipe(equipePourAjoutMembres);
+      const collaborateursAInserer = selectedCollaborateurs.filter(
+        (collabId) => !membresActuels.includes(collabId)
+      );
+
+      if (collaborateursAInserer.length === 0) {
+        alert('⚠️ Tous les collaborateurs sélectionnés sont déjà membres de cette équipe');
+        setAjoutMembresLoading(false);
+        return;
+      }
+
+      // Insérer les nouveaux membres dans la table collaborateurs_equipes
+      const membresToInsert = collaborateursAInserer.map((collaborateurId) => ({
+        collaborateur_id: collaborateurId,
+        equipe_id: equipePourAjoutMembres,
+        role_equipe: 'membre',
+        date_entree: new Date().toISOString().split('T')[0],
+      }));
+
+      const { error } = await supabase
+        .from('collaborateurs_equipes')
+        .insert(membresToInsert);
+
+      if (error) throw error;
+
+      alert(`✅ ${collaborateursAInserer.length} membre(s) ajouté(s) avec succès à l'équipe !`);
+      setShowAjoutMembresForm(false);
+      setEquipePourAjoutMembres(null);
+      setSelectedCollaborateurs([]);
+      await loadEquipes(); // Recharger les équipes pour mettre à jour le compteur de membres
+    } catch (error: any) {
+      console.error('Erreur ajout membres:', error);
+      alert('❌ Erreur lors de l\'ajout des membres: ' + (error.message || 'Erreur inconnue'));
+    } finally {
+      setAjoutMembresLoading(false);
+    }
+  };
+
+  // Obtenir les collaborateurs disponibles (non membres de l'équipe)
+  const getCollaborateursDisponibles = async () => {
+    if (!equipePourAjoutMembres || !selectedEntreprise) return [];
+
+    try {
+      // Charger les membres actuels
+      const membresActuels = await loadMembresEquipe(equipePourAjoutMembres);
+      
+      // Filtrer les collaborateurs pour exclure ceux déjà dans l'équipe
+      return collaborateurs.filter((collab) => !membresActuels.includes(collab.id));
+    } catch (error) {
+      console.error('Erreur chargement collaborateurs disponibles:', error);
+      return collaborateurs; // En cas d'erreur, retourner tous les collaborateurs
+    }
+  };
+
+  const [collaborateursDisponibles, setCollaborateursDisponibles] = useState<Collaborateur[]>([]);
+
+  useEffect(() => {
+    if (showAjoutMembresForm && equipePourAjoutMembres && selectedEntreprise) {
+      getCollaborateursDisponibles().then(setCollaborateursDisponibles);
+    }
+  }, [showAjoutMembresForm, equipePourAjoutMembres, selectedEntreprise, collaborateurs]);
 
   if (loading) {
     return (
@@ -855,11 +949,18 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
 
               <div className="flex items-center gap-2 pt-4 border-t border-white/10">
                 <button
-                  onClick={() => handleEditEquipe(equipe)}
-                  className="flex-1 px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg transition-all text-sm font-medium"
+                  onClick={() => handleAjouterMembres(equipe.id)}
+                  className="flex-1 px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all text-sm font-medium"
+                  title="Ajouter des membres à cette équipe"
                 >
-                  <Edit className="w-4 h-4 inline mr-1" />
-                  Modifier
+                  <UserPlus className="w-4 h-4 inline mr-1" />
+                  Ajouter
+                </button>
+                <button
+                  onClick={() => handleEditEquipe(equipe)}
+                  className="px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg transition-all text-sm font-medium"
+                >
+                  <Edit className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => handleDeleteEquipe(equipe.id)}
@@ -1597,6 +1698,152 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                       selectedDossiers: [],
                       permissionsParDossier: {},
                     });
+                  }}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ajouter Membres à l'Équipe */}
+      {showAjoutMembresForm && equipePourAjoutMembres && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-3xl w-full border border-white/20 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white">
+                Ajouter des membres à l'équipe
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAjoutMembresForm(false);
+                  setEquipePourAjoutMembres(null);
+                  setSelectedCollaborateurs([]);
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitAjoutMembres} className="space-y-6">
+              {/* Liste des collaborateurs disponibles */}
+              <div className="bg-white/5 rounded-lg p-4 space-y-4">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Collaborateurs disponibles
+                </h3>
+                <p className="text-sm text-gray-400 mb-4">
+                  Sélectionnez les collaborateurs de l'entreprise à ajouter à cette équipe.
+                </p>
+                
+                {collaborateursDisponibles.length === 0 ? (
+                  <p className="text-gray-400 text-sm italic">
+                    {collaborateurs.length === 0
+                      ? 'Aucun collaborateur disponible dans cette entreprise. Créez d\'abord des collaborateurs.'
+                      : 'Tous les collaborateurs sont déjà membres de cette équipe.'}
+                  </p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {collaborateursDisponibles.map((collab) => {
+                      const roleInfo = ROLES.find((r) => r.value === collab.role);
+                      const isSelected = selectedCollaborateurs.includes(collab.id);
+
+                      return (
+                        <div
+                          key={collab.id}
+                          className={`border rounded-lg p-4 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-green-500 bg-green-500/10'
+                              : 'border-white/10 bg-white/5 hover:bg-white/10'
+                          }`}
+                          onClick={() => {
+                            setSelectedCollaborateurs((prev) =>
+                              isSelected
+                                ? prev.filter((id) => id !== collab.id)
+                                : [...prev, collab.id]
+                            );
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                setSelectedCollaborateurs((prev) =>
+                                  isSelected
+                                    ? prev.filter((id) => id !== collab.id)
+                                    : [...prev, collab.id]
+                                );
+                              }}
+                              className="w-5 h-5 rounded bg-white/5 border-white/10 text-green-600 focus:ring-green-500 cursor-pointer"
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <div>
+                                  <p className="text-white font-medium">
+                                    {collab.prenom} {collab.nom}
+                                  </p>
+                                  <p className="text-sm text-gray-400">{collab.email}</p>
+                                </div>
+                                {roleInfo && (
+                                  <span
+                                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                      roleInfo.color === 'blue'
+                                        ? 'bg-blue-500/20 text-blue-400'
+                                        : roleInfo.color === 'purple'
+                                        ? 'bg-purple-500/20 text-purple-400'
+                                        : roleInfo.color === 'green'
+                                        ? 'bg-green-500/20 text-green-400'
+                                        : roleInfo.color === 'yellow'
+                                        ? 'bg-yellow-500/20 text-yellow-400'
+                                        : roleInfo.color === 'orange'
+                                        ? 'bg-orange-500/20 text-orange-400'
+                                        : 'bg-gray-500/20 text-gray-400'
+                                    }`}
+                                  >
+                                    {roleInfo.label}
+                                  </span>
+                                )}
+                              </div>
+                              {collab.poste && (
+                                <p className="text-xs text-gray-500 mt-1">{collab.poste}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {selectedCollaborateurs.length > 0 && (
+                  <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                    <p className="text-sm text-green-400">
+                      {selectedCollaborateurs.length} collaborateur(s) sélectionné(s)
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="submit"
+                  disabled={ajoutMembresLoading || selectedCollaborateurs.length === 0 || collaborateursDisponibles.length === 0}
+                  className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {ajoutMembresLoading ? 'Ajout en cours...' : `Ajouter ${selectedCollaborateurs.length > 0 ? `(${selectedCollaborateurs.length})` : ''}`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAjoutMembresForm(false);
+                    setEquipePourAjoutMembres(null);
+                    setSelectedCollaborateurs([]);
                   }}
                   className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
                 >
