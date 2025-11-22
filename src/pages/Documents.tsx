@@ -207,16 +207,19 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         setUploading(false);
       }
 
-      // Préparer les données du document - TOUTES les colonnes nécessaires
+      // Préparer les données du document - TOUTES les colonnes avec valeurs par défaut
       const documentData: Record<string, any> = {
         entreprise_id: selectedEntreprise,
         nom: formData.nom,
         description: formData.description && formData.description.trim() ? formData.description.trim() : null,
         categorie: formData.categorie || 'autre',
-        statut: formData.statut || 'actif',
+        type_fichier: 'autre', // Valeur par défaut, sera mise à jour si fichier sélectionné
+        taille: 0, // Valeur par défaut, sera mise à jour si fichier sélectionné
+        chemin_fichier: '', // Valeur par défaut, sera mise à jour si fichier sélectionné
+        tags: formData.tags && formData.tags.length > 0 ? formData.tags : [],
         date_document: formData.date_document,
         date_expiration: formData.date_expiration && formData.date_expiration.trim() ? formData.date_expiration : null,
-        tags: formData.tags && formData.tags.length > 0 ? formData.tags : [],
+        statut: formData.statut || 'actif',
       };
 
       // Gestion du fichier
@@ -233,33 +236,23 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         // En édition sans nouveau fichier, utiliser les valeurs existantes
         const currentDoc = documents.find(d => d.id === editingId);
         if (currentDoc) {
-          // Ne pas modifier chemin_fichier, type_fichier, taille si pas de nouveau fichier
-          documentData.chemin_fichier = currentDoc.chemin_fichier;
-          documentData.type_fichier = currentDoc.type_fichier;
-          documentData.taille = currentDoc.taille;
-        } else {
-          // Valeurs par défaut si document non trouvé
-          documentData.type_fichier = 'autre';
-          documentData.taille = 0;
-          documentData.chemin_fichier = '';
+          // Utiliser les valeurs existantes du document
+          documentData.chemin_fichier = currentDoc.chemin_fichier || '';
+          documentData.type_fichier = currentDoc.type_fichier || 'autre';
+          documentData.taille = currentDoc.taille || 0;
         }
+        // Sinon, garder les valeurs par défaut définies ci-dessus
       }
 
-      // S'assurer que created_by est défini
-      if (user?.id) {
+      // S'assurer que created_by est défini (seulement pour nouveau document)
+      if (!editingId && user?.id) {
         documentData.created_by = user.id;
       }
 
-      // S'assurer que toutes les colonnes obligatoires sont présentes
-      // Si type_fichier n'est pas défini, utiliser une valeur par défaut
-      if (!documentData.type_fichier) {
-        documentData.type_fichier = 'autre';
-      }
-      
-      // Si chemin_fichier n'est pas défini, utiliser une valeur par défaut
-      if (!documentData.chemin_fichier) {
-        documentData.chemin_fichier = '';
-      }
+      // S'assurer que toutes les colonnes obligatoires ont des valeurs non-null
+      documentData.type_fichier = documentData.type_fichier || 'autre';
+      documentData.chemin_fichier = documentData.chemin_fichier || '';
+      documentData.taille = documentData.taille || 0;
 
       if (editingId) {
         const { error } = await supabase
