@@ -671,9 +671,7 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
     return folders.filter((f) => !f.parent_id);
   };
 
-  const getChildFolders = (parentId: string) => {
-    return folders.filter((f) => f.parent_id === parentId);
-  };
+  // getChildFolders est utilisé dans FolderTreeComponent via children
 
   const getFolderPath = (folder: DocumentFolder): string => {
     const path: string[] = [];
@@ -1270,6 +1268,140 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
                     setShowForm(false);
                     setShowUploadForm(false);
                     resetForm();
+                  }}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Formulaire Modal Dossier */}
+      {showFolderForm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-lg w-full border border-white/20">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white">
+                {editingFolderId ? 'Modifier le dossier' : 'Créer un dossier'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowFolderForm(false);
+                  setEditingFolderId(null);
+                  setFolderFormData({
+                    nom: '',
+                    description: '',
+                    client_id: '',
+                    parent_id: '',
+                    couleur: '#3B82F6',
+                  });
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitFolder} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Nom du dossier *
+                </label>
+                <input
+                  type="text"
+                  value={folderFormData.nom}
+                  onChange={(e) => setFolderFormData({ ...folderFormData, nom: e.target.value })}
+                  required
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Salariés, Contrats, etc."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={folderFormData.description}
+                  onChange={(e) => setFolderFormData({ ...folderFormData, description: e.target.value })}
+                  rows={2}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Description du dossier..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Client (optionnel)
+                </label>
+                <select
+                  value={folderFormData.client_id}
+                  onChange={(e) => setFolderFormData({ ...folderFormData, client_id: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Aucun client (dossier général)</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.nom} {client.prenom} {client.entreprise_nom ? `(${client.entreprise_nom})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Dossier parent (pour créer un sous-dossier)
+                </label>
+                <select
+                  value={folderFormData.parent_id}
+                  onChange={(e) => setFolderFormData({ ...folderFormData, parent_id: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Racine (aucun parent)</option>
+                  {folders
+                    .filter((f) => !f.parent_id || f.id !== editingFolderId)
+                    .map((folder) => (
+                      <option key={folder.id} value={folder.id}>
+                        {getFolderPath(folder)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Couleur
+                </label>
+                <input
+                  type="color"
+                  value={folderFormData.couleur}
+                  onChange={(e) => setFolderFormData({ ...folderFormData, couleur: e.target.value })}
+                  className="w-full h-12 bg-white/5 border border-white/10 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+                >
+                  {editingFolderId ? 'Modifier' : 'Créer'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFolderForm(false);
+                    setEditingFolderId(null);
+                    setFolderFormData({
+                      nom: '',
+                      description: '',
+                      client_id: '',
+                      parent_id: '',
+                      couleur: '#3B82F6',
+                    });
                   }}
                   className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
                 >
