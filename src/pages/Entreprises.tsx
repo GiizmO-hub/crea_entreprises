@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, Building2, Edit, Trash2, X } from 'lucide-react';
+import { Plus, Building2, Edit, Trash2, X, Copy, Mail } from 'lucide-react';
 
 interface Entreprise {
   id: string;
