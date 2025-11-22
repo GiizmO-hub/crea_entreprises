@@ -27,7 +27,6 @@ export default function Admin({ onNavigate: _onNavigate }: AdminProps) {
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [formType, setFormType] = useState<'super_admin' | 'collaborateur'>('collaborateur');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
