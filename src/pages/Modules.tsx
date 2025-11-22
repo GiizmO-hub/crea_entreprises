@@ -431,6 +431,13 @@ export default function Modules({ onNavigate }: ModulesProps) {
 
   // Fonction pour activer/désactiver un module
   const handleToggleModule = async (module: Module, activer: boolean) => {
+    // Seuls les modules de type "option" peuvent être activés/désactivés
+    // Les modules "core", "premium" et "admin" sont liés au plan d'abonnement
+    if (module.categorie !== 'option') {
+      alert('❌ Ce module ne peut pas être activé/désactivé car il fait partie du plan d\'abonnement.\nSeules les options supplémentaires peuvent être activées/désactivées.');
+      return;
+    }
+
     if (!isSuperAdmin && !module.disponible) {
       alert('❌ Ce module n\'est pas disponible avec votre abonnement');
       return;
@@ -454,7 +461,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
       await loadModules();
       await loadAbonnement();
       
-      alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
+      alert(activer ? '✅ Option activée avec succès!' : '✅ Option désactivée avec succès!');
     } catch (error: any) {
       console.error('Erreur toggle module:', error);
       alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
