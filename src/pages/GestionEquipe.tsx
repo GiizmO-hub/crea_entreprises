@@ -643,7 +643,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
 
   const handleAjouterMembres = async (equipeId: string) => {
     setEquipePourAjoutMembres(equipeId);
-    setSelectedCollaborateurs([]);
+    setSelectedCollaborateurs([]); // Réinitialiser la sélection
     setShowAjoutMembresForm(true);
   };
 
@@ -658,9 +658,14 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     setAjoutMembresLoading(true);
 
     try {
-      // Vérifier les membres actuels pour éviter les doublons
+      // 1. Retirer les doublons de selectedCollaborateurs (sécurité supplémentaire)
+      const selectedUnique = [...new Set(selectedCollaborateurs)];
+      
+      // 2. Vérifier les membres actuels pour éviter les doublons
       const membresActuels = await loadMembresEquipe(equipePourAjoutMembres);
-      const collaborateursAInserer = selectedCollaborateurs.filter(
+      
+      // 3. Filtrer uniquement les collaborateurs qui ne sont pas déjà membres
+      const collaborateursAInserer = selectedUnique.filter(
         (collabId) => !membresActuels.includes(collabId)
       );
 
@@ -670,8 +675,37 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
         return;
       }
 
-      // Insérer les nouveaux membres dans la table collaborateurs_equipes
-      const membresToInsert = collaborateursAInserer.map((collaborateurId) => ({
+      if (collaborateursAInserer.length < selectedUnique.length) {
+        const dejaMembres = selectedUnique.length - collaborateursAInserer.length;
+        alert(`ℹ️ ${dejaMembres} collaborateur(s) déjà membre(s) de cette équipe. ${collaborateursAInserer.length} membre(s) seront ajouté(s).`);
+      }
+
+      // 4. Vérifier une dernière fois en interrogeant la base de données pour les membres actifs
+      const { data: membresActifs, error: checkError } = await supabase
+        .from('collaborateurs_equipes')
+        .select('collaborateur_id')
+        .eq('equipe_id', equipePourAjoutMembres)
+        .is('date_sortie', null)
+        .in('collaborateur_id', collaborateursAInserer);
+
+      if (checkError) {
+        console.warn('Erreur vérification membres actifs:', checkError);
+      }
+
+      // 5. Filtrer à nouveau en excluant ceux trouvés dans la DB
+      const membresActifsIds = (membresActifs || []).map((m: any) => m.collaborateur_id);
+      const collaborateursFinal = collaborateursAInserer.filter(
+        (collabId) => !membresActifsIds.includes(collabId)
+      );
+
+      if (collaborateursFinal.length === 0) {
+        alert('⚠️ Tous les collaborateurs sélectionnés sont déjà membres de cette équipe');
+        setAjoutMembresLoading(false);
+        return;
+      }
+
+      // 6. Insérer les nouveaux membres dans la table collaborateurs_equipes
+      const membresToInsert = collaborateursFinal.map((collaborateurId) => ({
         collaborateur_id: collaborateurId,
         equipe_id: equipePourAjoutMembres,
         role_equipe: 'membre',
@@ -682,13 +716,20 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
         .from('collaborateurs_equipes')
         .insert(membresToInsert);
 
-      if (error) throw error;
+      if (error) {
+        // Gérer spécifiquement l'erreur de contrainte unique
+        if (error.code === '23505' || error.message?.includes('unique constraint')) {
+          throw new Error('Certains collaborateurs sont déjà membres de cette équipe. Veuillez rafraîchir la page et réessayer.');
+        }
+        throw error;
+      }
 
-      alert(`✅ ${collaborateursAInserer.length} membre(s) ajouté(s) avec succès à l'équipe !`);
+      alert(`✅ ${collaborateursFinal.length} membre(s) ajouté(s) avec succès à l'équipe !`);
       setShowAjoutMembresForm(false);
       setEquipePourAjoutMembres(null);
       setSelectedCollaborateurs([]);
       await loadEquipes(); // Recharger les équipes pour mettre à jour le compteur de membres
+      await loadCollaborateurs(); // Recharger aussi les collaborateurs pour mettre à jour la liste disponible
     } catch (error: any) {
       console.error('Erreur ajout membres:', error);
       alert('❌ Erreur lors de l\'ajout des membres: ' + (error.message || 'Erreur inconnue'));
@@ -698,27 +739,45 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
   };
 
   // Obtenir les collaborateurs disponibles (non membres de l'équipe)
-  const getCollaborateursDisponibles = async () => {
-    if (!equipePourAjoutMembres || !selectedEntreprise) return [];
-
-    try {
-      // Charger les membres actuels
-      const membresActuels = await loadMembresEquipe(equipePourAjoutMembres);
-      
-      // Filtrer les collaborateurs pour exclure ceux déjà dans l'équipe
-      return collaborateurs.filter((collab) => !membresActuels.includes(collab.id));
-    } catch (error) {
-      console.error('Erreur chargement collaborateurs disponibles:', error);
-      return collaborateurs; // En cas d'erreur, retourner tous les collaborateurs
-    }
-  };
-
   const [collaborateursDisponibles, setCollaborateursDisponibles] = useState<Collaborateur[]>([]);
 
   useEffect(() => {
-    if (showAjoutMembresForm && equipePourAjoutMembres && selectedEntreprise) {
-      getCollaborateursDisponibles().then(setCollaborateursDisponibles);
-    }
+    const loadCollaborateursDisponibles = async () => {
+      if (!showAjoutMembresForm || !equipePourAjoutMembres || !selectedEntreprise) {
+        setCollaborateursDisponibles([]);
+        return;
+      }
+
+      try {
+        // Charger les membres actuels de l'équipe
+        const membresActuels = await loadMembresEquipe(equipePourAjoutMembres);
+        
+        // Filtrer les collaborateurs pour exclure ceux déjà dans l'équipe
+        const disponibles = collaborateurs.filter((collab) => !membresActuels.includes(collab.id));
+        
+        // Également retirer les doublons basés sur l'ID (sécurité supplémentaire)
+        const uniques = disponibles.filter((collab, index, self) => 
+          index === self.findIndex((c) => c.id === collab.id)
+        );
+        
+        setCollaborateursDisponibles(uniques);
+        
+        // Réinitialiser la sélection si des collaborateurs sélectionnés ne sont plus disponibles
+        setSelectedCollaborateurs((prev) => {
+          const availableIds = new Set(uniques.map((c) => c.id));
+          return prev.filter((id) => availableIds.has(id));
+        });
+      } catch (error) {
+        console.error('Erreur chargement collaborateurs disponibles:', error);
+        // En cas d'erreur, afficher tous les collaborateurs (meilleur que rien)
+        const uniques = collaborateurs.filter((collab, index, self) => 
+          index === self.findIndex((c) => c.id === collab.id)
+        );
+        setCollaborateursDisponibles(uniques);
+      }
+    };
+
+    loadCollaborateursDisponibles();
   }, [showAjoutMembresForm, equipePourAjoutMembres, selectedEntreprise, collaborateurs]);
 
   if (loading) {
@@ -1761,11 +1820,18 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                               : 'border-white/10 bg-white/5 hover:bg-white/10'
                           }`}
                           onClick={() => {
-                            setSelectedCollaborateurs((prev) =>
-                              isSelected
-                                ? prev.filter((id) => id !== collab.id)
-                                : [...prev, collab.id]
-                            );
+                            setSelectedCollaborateurs((prev) => {
+                              if (isSelected) {
+                                // Retirer de la sélection (sans doublons)
+                                return prev.filter((id) => id !== collab.id);
+                              } else {
+                                // Ajouter à la sélection uniquement s'il n'est pas déjà présent (éviter doublons)
+                                if (!prev.includes(collab.id)) {
+                                  return [...prev, collab.id];
+                                }
+                                return prev;
+                              }
+                            });
                           }}
                         >
                           <div className="flex items-center gap-3">
@@ -1774,11 +1840,18 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                               checked={isSelected}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                setSelectedCollaborateurs((prev) =>
-                                  isSelected
-                                    ? prev.filter((id) => id !== collab.id)
-                                    : [...prev, collab.id]
-                                );
+                                setSelectedCollaborateurs((prev) => {
+                                  if (isSelected) {
+                                    // Retirer de la sélection (sans doublons)
+                                    return prev.filter((id) => id !== collab.id);
+                                  } else {
+                                    // Ajouter à la sélection uniquement s'il n'est pas déjà présent (éviter doublons)
+                                    if (!prev.includes(collab.id)) {
+                                      return [...prev, collab.id];
+                                    }
+                                    return prev;
+                                  }
+                                });
                               }}
                               className="w-5 h-5 rounded bg-white/5 border-white/10 text-green-600 focus:ring-green-500 cursor-pointer"
                             />
@@ -1824,7 +1897,12 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                 {selectedCollaborateurs.length > 0 && (
                   <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
                     <p className="text-sm text-green-400">
-                      {selectedCollaborateurs.length} collaborateur(s) sélectionné(s)
+                      {new Set(selectedCollaborateurs).size} collaborateur(s) sélectionné(s)
+                      {new Set(selectedCollaborateurs).size !== selectedCollaborateurs.length && (
+                        <span className="ml-2 text-yellow-400 text-xs">
+                          ({selectedCollaborateurs.length - new Set(selectedCollaborateurs).size} doublon(s) retiré(s))
+                        </span>
+                      )}
                     </p>
                   </div>
                 )}
@@ -1836,7 +1914,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                   disabled={ajoutMembresLoading || selectedCollaborateurs.length === 0 || collaborateursDisponibles.length === 0}
                   className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {ajoutMembresLoading ? 'Ajout en cours...' : `Ajouter ${selectedCollaborateurs.length > 0 ? `(${selectedCollaborateurs.length})` : ''}`}
+                  {ajoutMembresLoading ? 'Ajout en cours...' : `Ajouter ${new Set(selectedCollaborateurs).size > 0 ? `(${new Set(selectedCollaborateurs).size})` : ''}`}
                 </button>
                 <button
                   type="button"
