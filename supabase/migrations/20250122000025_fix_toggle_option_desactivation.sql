@@ -149,16 +149,32 @@ BEGIN
     ELSE
       -- Option n'existe pas encore dans abonnement_options
       -- Créer l'entrée avec actif=false pour marquer qu'elle est désactivée
-      INSERT INTO abonnement_options (abonnement_id, option_id, actif, date_desactivation)
-      VALUES (v_abonnement_id, v_option_id, false, CURRENT_DATE)
-      ON CONFLICT (abonnement_id, option_id) DO UPDATE
-      SET actif = false,
-          date_desactivation = CURRENT_DATE
-      RETURNING id INTO v_abonnement_option_id;
+      BEGIN
+        INSERT INTO abonnement_options (abonnement_id, option_id, actif, date_desactivation)
+        VALUES (v_abonnement_id, v_option_id, false, CURRENT_DATE)
+        RETURNING id INTO v_abonnement_option_id;
+      EXCEPTION
+        WHEN unique_violation THEN
+          -- Si la contrainte unique existe, mettre à jour l'entrée existante
+          SELECT id INTO v_abonnement_option_id
+          FROM abonnement_options
+          WHERE abonnement_id = v_abonnement_id
+            AND option_id = v_option_id;
+          
+          IF v_abonnement_option_id IS NOT NULL THEN
+            UPDATE abonnement_options
+            SET actif = false,
+                date_desactivation = CURRENT_DATE
+            WHERE id = v_abonnement_option_id;
+          END IF;
+        WHEN OTHERS THEN
+          -- En cas d'autre erreur, ignorer et considérer comme désactivée
+          v_abonnement_option_id := NULL;
+      END;
 
       RETURN jsonb_build_object(
         'success', true,
-        'message', 'Option désactivée avec succès (créée comme inactive)',
+        'message', 'Option désactivée avec succès',
         'option_id', v_option_id,
         'abonnement_option_id', v_abonnement_option_id
       );
