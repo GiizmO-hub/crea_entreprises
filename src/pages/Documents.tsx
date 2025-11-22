@@ -250,8 +250,15 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         documentData.created_by = user.id;
       }
 
-      if (user?.id) {
-        documentData.created_by = user.id;
+      // S'assurer que toutes les colonnes obligatoires sont présentes
+      // Si type_fichier n'est pas défini, utiliser une valeur par défaut
+      if (!documentData.type_fichier) {
+        documentData.type_fichier = 'autre';
+      }
+      
+      // Si chemin_fichier n'est pas défini, utiliser une valeur par défaut
+      if (!documentData.chemin_fichier) {
+        documentData.chemin_fichier = '';
       }
 
       if (editingId) {
