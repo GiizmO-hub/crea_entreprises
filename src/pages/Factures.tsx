@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, FileText, Edit, Trash2, Search, Building2, Eye, X, Receipt, CreditCard, ArrowLeftRight } from 'lucide-react';
+import { Plus, FileText, Edit, Trash2, Search, Building2, X, Receipt, CreditCard, ArrowLeftRight, CheckCircle2, Clock, Download } from 'lucide-react';
+import { generatePDF } from '../lib/pdfGenerator';
 
 interface Facture {
   id: string;
@@ -277,10 +278,17 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
     setShowForm(true);
   };
 
+  const generateAvoirNumero = (factureNumero: string): string => {
+    // Convertir FACT-001 -> AVOIR-001, PROFORMA-001 -> AVOIR-001
+    const num = factureNumero.split('-')[1];
+    return `AVOIR-${num || '001'}`;
+  };
+
   const handleCreateAvoir = (facture: Facture) => {
     setFacturePourAvoir(facture);
+    const numeroAvoir = generateAvoirNumero(facture.numero);
     setFormData({
-      numero: '',
+      numero: numeroAvoir,
       type: 'facture' as 'facture' | 'proforma',
       client_id: facture.client_id,
       entreprise_id: facture.entreprise_id,
@@ -307,9 +315,11 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       const montant_tva = montant_ht * (taux_tva / 100);
       const montant_ttc = montant_ht + montant_tva;
 
-      const numeroAvoir = formData.numero || (await generateNumero('avoir'));
+      // Générer le numéro d'avoir basé sur la facture
+      const numeroAvoir = formData.numero || generateAvoirNumero(facturePourAvoir.numero);
 
-      const { error } = await supabase.from('avoirs').insert([{
+      // Créer l'avoir
+      const { error: avoirError } = await supabase.from('avoirs').insert([{
         numero: numeroAvoir,
         entreprise_id: selectedEntreprise,
         client_id: facturePourAvoir.client_id,
@@ -322,29 +332,138 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         statut: 'valide',
       }]);
 
-      if (error) throw error;
+      if (avoirError) throw avoirError;
+
+      // Supprimer la facture après création de l'avoir
+      const { error: deleteError } = await supabase
+        .from('factures')
+        .delete()
+        .eq('id', facturePourAvoir.id);
+
+      if (deleteError) {
+        console.warn('Avertissement: L\'avoir a été créé mais la facture n\'a pas pu être supprimée:', deleteError);
+      }
 
       setShowAvoirForm(false);
       setFacturePourAvoir(null);
       resetForm();
+      await loadFactures();
       await loadAvoirs();
-      alert('✅ Avoir créé avec succès!');
+      alert('✅ Avoir créé avec succès et facture supprimée!');
     } catch (error: any) {
       console.error('Erreur création avoir:', error);
       alert('❌ Erreur lors de la création de l\'avoir: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Supprimer cette facture ?')) return;
+  const handleDelete = async (id: string, isAvoir: boolean = false) => {
+    const type = isAvoir ? 'avoir' : 'facture';
+    if (!confirm(`Supprimer ce ${type} ?`)) return;
 
     try {
-      const { error } = await supabase.from('factures').delete().eq('id', id);
+      const table = isAvoir ? 'avoirs' : 'factures';
+      const { error } = await supabase.from(table).delete().eq('id', id);
       if (error) throw error;
-      loadFactures();
+      if (isAvoir) {
+        await loadAvoirs();
+      } else {
+        await loadFactures();
+      }
     } catch (error) {
       console.error('Erreur suppression:', error);
       alert('Erreur lors de la suppression');
+    }
+  };
+
+  const handleChangeStatut = async (doc: Facture & { docType?: string }, nouveauStatut: string) => {
+    try {
+      const isAvoir = doc.docType === 'avoir';
+      const table = isAvoir ? 'avoirs' : 'factures';
+      const updateData = isAvoir ? { statut: nouveauStatut } : { statut: nouveauStatut };
+
+      const { error } = await supabase
+        .from(table)
+        .update(updateData)
+        .eq('id', doc.id);
+
+      if (error) throw error;
+
+      await loadFactures();
+      await loadAvoirs();
+    } catch (error: any) {
+      console.error('Erreur changement statut:', error);
+      alert('❌ Erreur lors du changement de statut: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
+
+  const handleGeneratePDF = async (doc: Facture & { docType?: string }) => {
+    try {
+      // Charger les données complètes
+      const isAvoir = doc.docType === 'avoir';
+      const table = isAvoir ? 'avoirs' : 'factures';
+      
+      const { data: documentData, error: docError } = await supabase
+        .from(table)
+        .select('*')
+        .eq('id', doc.id)
+        .single();
+
+      if (docError || !documentData) throw docError;
+
+      // Charger les données du client
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', doc.client_id)
+        .single();
+
+      // Charger les données de l'entreprise
+      const { data: entrepriseData } = await supabase
+        .from('entreprises')
+        .select('*')
+        .eq('id', doc.entreprise_id)
+        .single();
+
+      // Charger les lignes si facture (pour l'instant on n'a pas de lignes détaillées dans le formulaire)
+      const lignes: any[] = [];
+
+      // Générer le PDF
+      generatePDF({
+        type: (doc.type || (isAvoir ? 'avoir' : 'facture')) as 'facture' | 'proforma' | 'avoir',
+        numero: doc.numero,
+        date_emission: doc.date_facturation || (doc as any).date_emission || doc.created_at,
+        date_echeance: doc.date_echeance,
+        client: {
+          nom: clientData?.nom,
+          prenom: clientData?.prenom,
+          entreprise_nom: clientData?.entreprise_nom,
+          adresse: clientData?.adresse,
+          code_postal: clientData?.code_postal,
+          ville: clientData?.ville,
+          email: clientData?.email,
+        },
+        entreprise: {
+          nom: entrepriseData?.nom || 'Entreprise',
+          adresse: entrepriseData?.adresse,
+          code_postal: entrepriseData?.code_postal,
+          ville: entrepriseData?.ville,
+          siret: entrepriseData?.siret,
+          email: entrepriseData?.email,
+          telephone: entrepriseData?.telephone,
+        },
+        montant_ht: doc.montant_ht,
+        montant_tva: doc.montant_tva || 0,
+        montant_ttc: doc.montant_ttc,
+        taux_tva: doc.taux_tva || 20,
+        lignes: lignes.length > 0 ? lignes : undefined,
+        motif: isAvoir ? (documentData as any).motif : undefined,
+        notes: documentData.notes,
+        statut: doc.statut,
+      });
+    } catch (error: any) {
+      console.error('Erreur génération PDF:', error);
+      alert('❌ Erreur lors de la génération du PDF: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
@@ -571,7 +690,39 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
                     <div className="text-sm text-gray-400">TTC</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 ml-4">
+                <div className="flex items-center gap-2 ml-4 flex-wrap">
+                  {/* Boutons changement de statut (uniquement pour factures/proforma) */}
+                  {!isAvoir && (
+                    <div className="flex items-center gap-1">
+                      {doc.statut === 'brouillon' && (
+                        <button
+                          onClick={() => handleChangeStatut(doc, 'envoyee')}
+                          className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all text-xs font-medium"
+                          title="Marquer comme envoyé"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {doc.statut === 'envoyee' && (
+                        <button
+                          onClick={() => handleChangeStatut(doc, 'en_attente')}
+                          className="px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg transition-all text-xs font-medium"
+                          title="Marquer comme en attente"
+                        >
+                          <Clock className="w-4 h-4" />
+                        </button>
+                      )}
+                      {doc.statut === 'en_attente' && (
+                        <button
+                          onClick={() => handleChangeStatut(doc, 'payee')}
+                          className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all text-xs font-medium"
+                          title="Marquer comme payé"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {!isAvoir && (
                     <button
                       onClick={() => handleCreateAvoir(doc as Facture)}
@@ -591,14 +742,14 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
                     </button>
                   )}
                   <button
-                    onClick={() => {}}
+                    onClick={() => handleGeneratePDF(doc)}
                     className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all"
-                    title="Voir / Télécharger PDF"
+                    title="Télécharger PDF"
                   >
-                    <Eye className="w-4 h-4" />
+                    <Download className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(doc.id)}
+                    onClick={() => handleDelete(doc.id, isAvoir)}
                     className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"
                     title="Supprimer"
                   >
@@ -843,16 +994,20 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Numéro de l'avoir *
+                  Numéro de l'avoir * (généré automatiquement)
                 </label>
                 <input
                   type="text"
                   value={formData.numero}
                   onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
                   required
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  readOnly
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-gray-400 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-not-allowed"
                   placeholder="AVOIR-001"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  Le numéro est automatiquement généré à partir de la facture {facturePourAvoir?.numero}
+                </p>
               </div>
 
               <div>
