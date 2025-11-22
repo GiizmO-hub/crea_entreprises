@@ -181,13 +181,17 @@ BEGIN
     );
   END IF;
 
-  -- Valider le rôle
+  -- Valider le rôle (rôles autorisés dans collaborateurs)
   IF p_role NOT IN ('collaborateur', 'admin', 'manager', 'comptable', 'commercial', 'super_admin') THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Rôle invalide. Rôles autorisés: collaborateur, admin, manager, comptable, commercial, super_admin'
     );
   END IF;
+
+  -- Mapper les rôles pour utilisateurs (tous les rôles collaborateurs → collaborateur dans utilisateurs si nécessaire)
+  -- Note: Maintenant que utilisateurs accepte tous les rôles, on peut utiliser p_role directement
+  -- Mais pour la compatibilité, on s'assure que le rôle est valide pour utilisateurs aussi
 
   -- Vérifier que l'email n'existe pas déjà
   IF EXISTS (SELECT 1 FROM auth.users WHERE email = p_email) THEN
