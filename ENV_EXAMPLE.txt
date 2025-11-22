@@ -1,0 +1,6 @@
+# Variables d'environnement Supabase
+# Copiez ce fichier en .env et remplissez avec vos valeurs
+
+VITE_SUPABASE_URL=https://votre-projet.supabase.co
+VITE_SUPABASE_ANON_KEY=votre_cle_anon_supabase
+
