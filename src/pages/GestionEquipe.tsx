@@ -47,6 +47,7 @@ interface Collaborateur {
   prenom?: string;
   poste?: string;
   statut: string;
+  entreprise_id?: string;
 }
 
 interface PermissionDossier {
