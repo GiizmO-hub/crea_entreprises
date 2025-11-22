@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { CreditCard, Plus, X, DollarSign, Package, CheckCircle, AlertCircle, Edit, Search, Filter } from 'lucide-react';
+import { CreditCard, Plus, X, DollarSign, Package, CheckCircle, AlertCircle, Edit, Search, Filter, ExternalLink, Copy, Check, Mail } from 'lucide-react';
 
 interface AbonnementsProps {
   onNavigate: (page: string) => void;
@@ -75,6 +75,10 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
   const [editingAbonnement, setEditingAbonnement] = useState<Abonnement | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<string>('all');
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [selectedAbonnementForLink, setSelectedAbonnementForLink] = useState<Abonnement | null>(null);
+  const [clientAccessLink, setClientAccessLink] = useState<string>('');
+  const [copiedLink, setCopiedLink] = useState(false);
   
   const [formData, setFormData] = useState({
     client_id: '',
@@ -251,6 +255,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
           return {
             ...ab,
             plan_nom: ab.plans_abonnement?.nom || 'Inconnu',
+            client_id: clientId || ab.client_id || undefined,
             client_email: clientEmail,
             client_nom: clientNom,
             options: optionsActives,
@@ -845,6 +850,108 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Lien d'Accès Espace Client */}
+      {showLinkModal && selectedAbonnementForLink && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-2xl w-full border border-white/20">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Lien d'Accès Espace Client
+                </h2>
+                <p className="text-gray-400 text-sm">
+                  Pour : <span className="text-white font-semibold">
+                    {selectedAbonnementForLink.client_nom || selectedAbonnementForLink.client_email || 'Client'}
+                  </span>
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowLinkModal(false);
+                  setSelectedAbonnementForLink(null);
+                  setClientAccessLink('');
+                }}
+                className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Lien d'accès à l'espace client
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={clientAccessLink}
+                    className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(clientAccessLink)}
+                    className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center gap-2"
+                  >
+                    {copiedLink ? (
+                      <>
+                        <Check className="w-5 h-5" />
+                        Copié !
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-5 h-5" />
+                        Copier
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  Ce lien permet d'accéder directement à l'espace client. Partagez-le par email ou messagerie.
+                </p>
+              </div>
+
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-yellow-300 mb-2">📋 Instructions</h3>
+                <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
+                  <li>Copiez le lien ci-dessus</li>
+                  <li>Envoyez-le au client par email ou messagerie</li>
+                  <li>Le client pourra accéder à son espace membre</li>
+                  <li>Si l'espace n'est pas encore créé, une page de connexion s'affichera</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowLinkModal(false);
+                    setSelectedAbonnementForLink(null);
+                    setClientAccessLink('');
+                  }}
+                  className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition-all"
+                >
+                  Fermer
+                </button>
+                <button
+                  onClick={() => {
+                    const subject = encodeURIComponent('Accès à votre espace client');
+                    const body = encodeURIComponent(
+                      `Bonjour,\n\nVoici votre lien d'accès à votre espace client :\n\n${clientAccessLink}\n\nCordialement`
+                    );
+                    window.location.href = `mailto:${selectedAbonnementForLink.client_email}?subject=${subject}&body=${body}`;
+                  }}
+                  className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all flex items-center justify-center gap-2"
+                  disabled={!selectedAbonnementForLink.client_email}
+                >
+                  <Mail className="w-5 h-5" />
+                  Envoyer par Email
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
