@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, FileText, Edit, Trash2, Search, Building2, X, Receipt, CreditCard, ArrowLeftRight, CheckCircle2, Clock, Download } from 'lucide-react';
+import { Plus, FileText, Edit, Trash2, Search, Building2, X, Receipt, CreditCard, ArrowLeftRight, CheckCircle2, Clock, Download, Minus } from 'lucide-react';
 import { generatePDF } from '../lib/pdfGenerator';
 
 interface Facture {
@@ -22,6 +22,18 @@ interface Facture {
   client_nom?: string;
   entreprise_nom?: string;
   facture_id?: string; // Pour les avoirs liés
+}
+
+interface FactureLigne {
+  id?: string;
+  description: string;
+  quantite: number;
+  prix_unitaire_ht: number;
+  taux_tva: number;
+  montant_ht: number;
+  montant_tva: number;
+  montant_ttc: number;
+  ordre: number;
 }
 
 interface FacturesProps {
@@ -53,7 +65,9 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
     taux_tva: 20,
     statut: 'brouillon',
     motif: '',
+    notes: '',
   });
+  const [lignes, setLignes] = useState<FactureLigne[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -185,6 +199,32 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
     }
   };
 
+  const calculateLigneTotals = (ligne: FactureLigne): FactureLigne => {
+    const montant_ht = ligne.quantite * ligne.prix_unitaire_ht;
+    const montant_tva = montant_ht * (ligne.taux_tva / 100);
+    const montant_ttc = montant_ht + montant_tva;
+    return {
+      ...ligne,
+      montant_ht: Number(montant_ht.toFixed(2)),
+      montant_tva: Number(montant_tva.toFixed(2)),
+      montant_ttc: Number(montant_ttc.toFixed(2)),
+    };
+  };
+
+  const calculateTotalFromLignes = () => {
+    if (lignes.length === 0) {
+      return { montant_ht: 0, montant_tva: 0, montant_ttc: 0 };
+    }
+    const total_ht = lignes.reduce((sum, ligne) => sum + ligne.montant_ht, 0);
+    const total_tva = lignes.reduce((sum, ligne) => sum + ligne.montant_tva, 0);
+    const total_ttc = lignes.reduce((sum, ligne) => sum + ligne.montant_ttc, 0);
+    return {
+      montant_ht: Number(total_ht.toFixed(2)),
+      montant_tva: Number(total_tva.toFixed(2)),
+      montant_ttc: Number(total_ttc.toFixed(2)),
+    };
+  };
+
   const generateNumero = async (type: 'facture' | 'proforma' | 'avoir' = 'facture') => {
     if (!selectedEntreprise) return type === 'proforma' ? 'PROFORMA-001' : type === 'avoir' ? 'AVOIR-001' : 'FACT-001';
 
@@ -261,7 +301,33 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
     }
   };
 
-  const handleEdit = (facture: Facture) => {
+  const loadFactureLignes = async (factureId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('facture_lignes')
+        .select('*')
+        .eq('facture_id', factureId)
+        .order('ordre');
+
+      if (error) throw error;
+      return (data || []).map(ligne => ({
+        id: ligne.id,
+        description: ligne.description,
+        quantite: ligne.quantite,
+        prix_unitaire_ht: ligne.prix_unitaire_ht,
+        taux_tva: ligne.taux_tva || 20,
+        montant_ht: ligne.montant_ht,
+        montant_tva: ligne.tva || ligne.montant_tva || 0,
+        montant_ttc: ligne.montant_ttc,
+        ordre: ligne.ordre || 0,
+      }));
+    } catch (error) {
+      console.error('Erreur chargement lignes:', error);
+      return [];
+    }
+  };
+
+  const handleEdit = async (facture: Facture) => {
     setEditingId(facture.id);
     setFormData({
       numero: facture.numero,
@@ -274,7 +340,13 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       taux_tva: facture.taux_tva || (facture.montant_tva ? (facture.montant_tva / facture.montant_ht) * 100 : 20),
       statut: facture.statut,
       motif: '',
+      notes: (facture as any).notes || '',
     });
+    
+    // Charger les lignes de la facture
+    const factureLignes = await loadFactureLignes(facture.id);
+    setLignes(factureLignes);
+    
     setShowForm(true);
   };
 
@@ -298,6 +370,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       taux_tva: facture.taux_tva || 20,
       statut: 'valide',
       motif: '',
+      notes: '',
     });
     setShowAvoirForm(true);
   };
@@ -425,8 +498,23 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         .eq('id', doc.entreprise_id)
         .single();
 
-      // Charger les lignes si facture (pour l'instant on n'a pas de lignes détaillées dans le formulaire)
-      const lignes: any[] = [];
+      // Charger les lignes de la facture
+      const { data: lignesData } = await supabase
+        .from('facture_lignes')
+        .select('*')
+        .eq('facture_id', doc.id)
+        .order('ordre');
+      
+      const lignesArray = (lignesData || []).map((ligne: any) => ({
+        description: ligne.description,
+        quantite: ligne.quantite,
+        prix_unitaire_ht: ligne.prix_unitaire_ht,
+        taux_tva: ligne.taux_tva || 20,
+        montant_ht: ligne.montant_ht,
+        montant_tva: ligne.tva || ligne.montant_tva || 0,
+        montant_ttc: ligne.montant_ttc,
+        ordre: ligne.ordre || 0,
+      }));
 
       // Générer le PDF
       generatePDF({
@@ -456,7 +544,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         montant_tva: doc.montant_tva || 0,
         montant_ttc: doc.montant_ttc,
         taux_tva: doc.taux_tva || 20,
-        lignes: lignes.length > 0 ? lignes : undefined,
+        lignes: lignesArray.length > 0 ? lignesArray : undefined,
         motif: isAvoir ? (documentData as any).motif : undefined,
         notes: documentData.notes,
         statut: doc.statut,
@@ -479,8 +567,38 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       taux_tva: 20,
       statut: 'brouillon',
       motif: '',
+      notes: '',
     });
+    setLignes([]);
     setEditingId(null);
+  };
+
+  const addLigne = () => {
+    const nouvelleLigne: FactureLigne = {
+      description: '',
+      quantite: 1,
+      prix_unitaire_ht: 0,
+      taux_tva: formData.taux_tva || 20,
+      montant_ht: 0,
+      montant_tva: 0,
+      montant_ttc: 0,
+      ordre: lignes.length,
+    };
+    setLignes([...lignes, nouvelleLigne]);
+  };
+
+  const removeLigne = (index: number) => {
+    setLignes(lignes.filter((_, i) => i !== index).map((ligne, i) => ({ ...ligne, ordre: i })));
+  };
+
+  const updateLigne = (index: number, updates: Partial<FactureLigne>) => {
+    const updatedLignes = [...lignes];
+    updatedLignes[index] = calculateLigneTotals({ ...updatedLignes[index], ...updates });
+    setLignes(updatedLignes);
+    
+    // Mettre à jour les totaux de la facture
+    const totals = calculateTotalFromLignes();
+    setFormData(prev => ({ ...prev, montant_ht: totals.montant_ht }));
   };
 
   const allDocuments: Array<Facture & { docType: string; date_emission?: string }> = [
@@ -850,6 +968,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
                 >
                   <option value="brouillon">Brouillon</option>
                   <option value="envoyee">Envoyée</option>
+                  <option value="en_attente">En attente</option>
                   <option value="payee">Payée</option>
                   <option value="annulee">Annulée</option>
                 </select>
@@ -901,45 +1020,177 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Montant HT (€) *
+              {/* Lignes d'articles */}
+              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block text-sm font-medium text-gray-300">
+                    Lignes d'articles
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.montant_ht}
-                    onChange={(e) => setFormData({ ...formData, montant_ht: Number(e.target.value) })}
-                    required
-                    min="0"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="1000.00"
-                  />
+                  <button
+                    type="button"
+                    onClick={addLigne}
+                    className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Ajouter une ligne
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Taux TVA (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.taux_tva}
-                    onChange={(e) => setFormData({ ...formData, taux_tva: Number(e.target.value) })}
-                    min="0"
-                    max="100"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="20"
-                  />
-                </div>
+                {lignes.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">
+                    Aucune ligne d'article. Cliquez sur "Ajouter une ligne" pour commencer.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {lignes.map((ligne, index) => (
+                      <div key={index} className="bg-white/5 rounded-lg p-3 border border-white/10">
+                        <div className="grid grid-cols-12 gap-2 items-start">
+                          <div className="col-span-12 md:col-span-5">
+                            <input
+                              type="text"
+                              value={ligne.description}
+                              onChange={(e) => updateLigne(index, { description: e.target.value })}
+                              placeholder="Description de l'article"
+                              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="col-span-4 md:col-span-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={ligne.quantite}
+                              onChange={(e) => updateLigne(index, { quantite: Number(e.target.value) || 0 })}
+                              placeholder="Qté"
+                              min="0"
+                              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="col-span-4 md:col-span-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={ligne.prix_unitaire_ht}
+                              onChange={(e) => updateLigne(index, { prix_unitaire_ht: Number(e.target.value) || 0 })}
+                              placeholder="P.U. HT"
+                              min="0"
+                              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="col-span-3 md:col-span-2">
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={ligne.taux_tva}
+                              onChange={(e) => updateLigne(index, { taux_tva: Number(e.target.value) || 0 })}
+                              placeholder="TVA %"
+                              min="0"
+                              max="100"
+                              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="col-span-1">
+                            <button
+                              type="button"
+                              onClick={() => removeLigne(index)}
+                              className="w-full px-2 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"
+                              title="Supprimer"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-2 text-right text-xs text-gray-400">
+                          HT: {ligne.montant_ht.toFixed(2)}€ | TVA: {ligne.montant_tva.toFixed(2)}€ | TTC: {ligne.montant_ttc.toFixed(2)}€
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Totaux */}
+                {lignes.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-white/10">
+                    {(() => {
+                      const totals = calculateTotalFromLignes();
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-300">Total HT:</span>
+                            <span className="text-white font-medium">{totals.montant_ht.toFixed(2)}€</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-300">Total TVA:</span>
+                            <span className="text-white font-medium">{totals.montant_tva.toFixed(2)}€</span>
+                          </div>
+                          <div className="flex items-center justify-between text-lg font-bold pt-2 border-t border-white/10">
+                            <span className="text-white">Total TTC:</span>
+                            <span className="text-white">{totals.montant_ttc.toFixed(2)}€</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
-              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                <div className="flex items-center justify-between text-lg font-semibold text-white">
-                  <span>Montant TTC:</span>
-                  <span>{calculateMontantTTC()}€</span>
-                </div>
+              {/* Montants manuels (si pas de lignes) */}
+              {lignes.length === 0 && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Montant HT (€) *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.montant_ht}
+                        onChange={(e) => setFormData({ ...formData, montant_ht: Number(e.target.value) })}
+                        required
+                        min="0"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="1000.00"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Taux TVA (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.taux_tva}
+                        onChange={(e) => setFormData({ ...formData, taux_tva: Number(e.target.value) })}
+                        min="0"
+                        max="100"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="20"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="flex items-center justify-between text-lg font-semibold text-white">
+                      <span>Montant TTC:</span>
+                      <span>{calculateMontantTTC()}€</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Notes (optionnel)
+                </label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={3}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Notes additionnelles pour la facture..."
+                />
               </div>
 
               <div className="flex gap-4 pt-4">
