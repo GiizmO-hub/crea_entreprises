@@ -105,6 +105,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
   const [creatingMembre, setCreatingMembre] = useState(false);
   const [ajoutMembresLoading, setAjoutMembresLoading] = useState(false);
   const [formData, setFormData] = useState({
+    entreprise_id: '',
     nom: '',
     description: '',
     responsable_id: '',
@@ -293,14 +294,14 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
 
   const handleSubmitEquipe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEntreprise || !formData.nom) {
-      alert('Veuillez remplir tous les champs obligatoires');
+    if (!formData.entreprise_id || !formData.nom) {
+      alert('Veuillez remplir tous les champs obligatoires (entreprise et nom)');
       return;
     }
 
     try {
       const equipeData: Record<string, any> = {
-        entreprise_id: selectedEntreprise,
+        entreprise_id: formData.entreprise_id,
         nom: formData.nom,
         description: formData.description || null,
         responsable_id: formData.responsable_id || null,
@@ -327,6 +328,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
       setShowEquipeForm(false);
       setEditingEquipeId(null);
       setFormData({
+        entreprise_id: selectedEntreprise || '',
         nom: '',
         description: '',
         responsable_id: '',
@@ -396,6 +398,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
   const handleEditEquipe = (equipe: Equipe) => {
     setEditingEquipeId(equipe.id);
     setFormData({
+      entreprise_id: equipe.entreprise_id,
       nom: equipe.nom,
       description: equipe.description || '',
       responsable_id: equipe.responsable_id || '',
@@ -862,6 +865,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
             <button
               onClick={() => {
                 setFormData({
+                  entreprise_id: selectedEntreprise || '',
                   nom: '',
                   description: '',
                   responsable_id: '',
@@ -870,6 +874,10 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                 });
                 setEditingEquipeId(null);
                 setShowEquipeForm(true);
+                // Charger les collaborateurs de l'entreprise sélectionnée par défaut
+                if (selectedEntreprise) {
+                  loadCollaborateurs(selectedEntreprise);
+                }
               }}
               className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
             >
@@ -1143,6 +1151,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                   setShowEquipeForm(false);
                   setEditingEquipeId(null);
                   setFormData({
+                    entreprise_id: selectedEntreprise || '',
                     nom: '',
                     description: '',
                     responsable_id: '',
