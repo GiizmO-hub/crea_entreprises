@@ -25,7 +25,7 @@ BEGIN
   -- Vérifier si l'utilisateur est super_admin
   SELECT is_super_admin() INTO v_is_super_admin;
   
-  -- Récupérer l'abonnement actif de l'utilisateur (ou tous si super_admin)
+  -- Récupérer l'abonnement actif de l'utilisateur
   IF v_is_super_admin THEN
     -- Super admin peut activer/désactiver pour tous les utilisateurs
     -- Utiliser le user_id fourni ou auth.uid()
@@ -141,6 +141,7 @@ AS $$
 DECLARE
   v_abonnement_id uuid;
   v_plan_fonctionnalites jsonb;
+  v_plan_nom text;
   v_options_actives jsonb;
   v_is_super_admin boolean;
 BEGIN
@@ -160,10 +161,9 @@ BEGIN
   -- Récupérer l'abonnement actif
   SELECT 
     ab.id,
-    ab.plan_id,
-    pa.nom,
-    pa.fonctionnalites
-  INTO v_abonnement_id, v_plan_fonctionnalites, v_plan_fonctionnalites
+    pa.fonctionnalites,
+    pa.nom
+  INTO v_abonnement_id, v_plan_fonctionnalites, v_plan_nom
   FROM abonnements ab
   JOIN plans_abonnement pa ON pa.id = ab.plan_id
   WHERE ab.user_id = COALESCE(p_user_id, auth.uid())
@@ -195,7 +195,7 @@ BEGIN
   RETURN jsonb_build_object(
     'success', true,
     'modules_actifs', v_plan_fonctionnalites,
-    'plan_nom', (SELECT nom FROM plans_abonnement WHERE id = (SELECT plan_id FROM abonnements WHERE id = v_abonnement_id)),
+    'plan_nom', v_plan_nom,
     'options_actives', COALESCE(v_options_actives, jsonb_build_array())
   );
 
