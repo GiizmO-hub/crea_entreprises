@@ -410,6 +410,17 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
     return montantPlan + montantOptions;
   };
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch (error) {
+      console.error('Erreur copie:', error);
+      alert('❌ Erreur lors de la copie');
+    }
+  };
+
   const filteredAbonnements = abonnements.filter((ab) => {
     const matchesSearch = !searchTerm || 
       ab.client_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -604,13 +615,22 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                   {abonnement.statut.charAt(0).toUpperCase() + abonnement.statut.slice(1)}
                 </span>
                 {isSuperAdmin && (
-                  <button
-                    onClick={() => handleEdit(abonnement)}
-                    className="p-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-all"
-                    title="Modifier"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleGenerateAccessLink(abonnement)}
+                      className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded-lg transition-all"
+                      title="Lien d'accès espace client"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleEdit(abonnement)}
+                      className="p-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-all"
+                      title="Modifier"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
