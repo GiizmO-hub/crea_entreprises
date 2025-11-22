@@ -48,8 +48,9 @@ export default function Modules({ onNavigate }: ModulesProps) {
     }
   };
 
-  // Obtenir les modules actifs pour les onglets
-  const activeModules = modules.filter((m) => m.active || (isSuperAdmin && m.categorie === 'admin'));
+  // Obtenir les modules actifs pour les onglets (uniquement pour super admin)
+  // Les clients n'ont pas besoin de cette liste car ils ne voient que les modules actifs
+  const activeModules = isSuperAdmin ? modules.filter((m) => m.active) : [];
 
   useEffect(() => {
     checkSuperAdmin();
@@ -296,41 +297,43 @@ export default function Modules({ onNavigate }: ModulesProps) {
         </div>
       )}
 
-      {/* Onglets Modules Actifs/Inactifs */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        <button
-          onClick={() => setModulesTab('all')}
-          className={`px-4 py-2 rounded-lg transition-all ${
-            modulesTab === 'all'
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-              : 'bg-white/10 text-gray-300 hover:bg-white/20'
-          }`}
-        >
-          Tous les modules
-        </button>
-        <button
-          onClick={() => setModulesTab('active')}
-          className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-            modulesTab === 'active'
-              ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
-              : 'bg-white/10 text-gray-300 hover:bg-white/20'
-          }`}
-        >
-          <CheckCircle className="w-4 h-4" />
-          Actifs ({modulesActifs.length})
-        </button>
-        <button
-          onClick={() => setModulesTab('inactive')}
-          className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-            modulesTab === 'inactive'
-              ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white'
-              : 'bg-white/10 text-gray-300 hover:bg-white/20'
-          }`}
-        >
-          <Lock className="w-4 h-4" />
-          Désactivés ({modulesInactifs.length})
-        </button>
-      </div>
+      {/* Onglets Modules Actifs/Inactifs - Uniquement pour super admin */}
+      {isSuperAdmin && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          <button
+            onClick={() => setModulesTab('all')}
+            className={`px-4 py-2 rounded-lg transition-all ${
+              modulesTab === 'all'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            Tous les modules
+          </button>
+          <button
+            onClick={() => setModulesTab('active')}
+            className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
+              modulesTab === 'active'
+                ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            <CheckCircle className="w-4 h-4" />
+            Actifs ({modulesActifs.length})
+          </button>
+          <button
+            onClick={() => setModulesTab('inactive')}
+            className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
+              modulesTab === 'inactive'
+                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white'
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            <Lock className="w-4 h-4" />
+            Désactivés ({modulesInactifs.length})
+          </button>
+        </div>
+      )}
 
       {/* Filtres par catégorie */}
       <div className="mb-6 flex flex-wrap gap-2">
