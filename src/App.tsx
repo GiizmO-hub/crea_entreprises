@@ -10,6 +10,7 @@ import Factures from './pages/Factures';
 import Modules from './pages/Modules';
 import Collaborateurs from './pages/Collaborateurs';
 import Documents from './pages/Documents';
+import GestionEquipe from './pages/GestionEquipe';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -52,6 +53,8 @@ function AppContent() {
             return <Collaborateurs onNavigate={setCurrentPage} />;
           case 'documents':
             return <Documents onNavigate={setCurrentPage} />;
+          case 'gestion-equipe':
+            return <GestionEquipe onNavigate={setCurrentPage} />;
           case 'settings':
             return <div className="p-8 text-white">Paramètres - À venir</div>;
       default:

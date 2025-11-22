@@ -16,6 +16,7 @@ import {
   Package,
   CreditCard,
   FolderOpen,
+  UsersRound,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -79,7 +80,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       // Pour les super admins, tous les modules sont visibles
       if (isSuperAdmin) {
         // Super admin voit tout, on met tous les modules comme actifs
-        setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'settings']));
+         setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'settings']));
         return;
       }
 
@@ -89,7 +90,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       if (error) {
         console.error('Erreur chargement modules actifs:', error);
         // En cas d'erreur, on affiche tous les modules par défaut (comportement de fallback)
-        setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'settings']));
+         setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'settings']));
         return;
       }
 
@@ -122,7 +123,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     } catch (error) {
       console.error('Erreur chargement modules actifs:', error);
       // En cas d'erreur, afficher tous les modules par défaut
-      setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'settings']));
+         setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'settings']));
     }
   };
 
@@ -133,6 +134,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'abonnements', label: 'Abonnements', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
     { id: 'factures', label: 'Facturation', icon: FileText, moduleCode: 'facturation' },
     { id: 'documents', label: 'Documents', icon: FolderOpen, moduleCode: 'documents' },
+    { id: 'gestion-equipe', label: 'Gestion d\'Équipe', icon: UsersRound, superAdminOnly: true, moduleCode: 'gestion-equipe' },
     { id: 'comptabilite', label: 'Comptabilité', icon: Calculator, moduleCode: 'comptabilite' },
     { id: 'finance', label: 'Finance', icon: TrendingUp, moduleCode: 'finance' },
     { id: 'modules', label: 'Modules', icon: Package, superAdminOnly: true, moduleCode: 'modules' },

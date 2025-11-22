@@ -199,10 +199,19 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
   };
 
   const loadFolders = async () => {
-    if (!selectedEntreprise) return;
+    if (!selectedEntreprise || !user) return;
 
     try {
-      const { data, error } = await supabase
+      // Récupérer le rôle de l'utilisateur
+      const { data: utilisateur } = await supabase
+        .from('utilisateurs')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      const userRole = utilisateur?.role || 'collaborateur';
+
+      let query = supabase
         .from('document_folders')
         .select(`
           *,
@@ -210,6 +219,29 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         `)
         .eq('entreprise_id', selectedEntreprise)
         .order('ordre, nom');
+
+      // Si pas super admin, filtrer selon les permissions
+      if (userRole !== 'super_admin') {
+        // Récupérer les dossiers accessibles pour ce rôle
+        const { data: accessibleFolders } = await supabase
+          .rpc('get_accessible_folders', {
+            p_user_id: user.id,
+            p_entreprise_id: selectedEntreprise,
+          });
+
+        const accessibleFolderIds = accessibleFolders?.map((f: any) => f.folder_id) || [];
+
+        // Filtrer les dossiers selon les permissions
+        if (accessibleFolderIds.length > 0) {
+          query = query.in('id', accessibleFolderIds);
+        } else {
+          // Aucun dossier accessible
+          setFolders([]);
+          return;
+        }
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setFolders(data || []);
@@ -219,9 +251,19 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
   };
 
   const loadDocuments = async () => {
-    if (!selectedEntreprise) return;
+    if (!selectedEntreprise || !user) return;
 
     try {
+      // Récupérer le rôle de l'utilisateur
+      const { data: utilisateur } = await supabase
+        .from('utilisateurs')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      const userRole = utilisateur?.role || 'collaborateur';
+
+      // Super admin voit tous les documents
       let query = supabase
         .from('documents')
         .select(`
@@ -230,14 +272,36 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         `)
         .eq('entreprise_id', selectedEntreprise);
 
-      // Filtrer par dossier sélectionné
-      if (selectedFolderId) {
-        query = query.eq('folder_id', selectedFolderId);
-      } else if (selectedFolderId === null) {
-        // Si selectedFolderId est explicitement null, afficher seulement les documents sans dossier
-        query = query.is('folder_id', null);
+      // Si pas super admin, filtrer selon les permissions
+      if (userRole !== 'super_admin') {
+        // Récupérer les dossiers accessibles pour ce rôle
+        const { data: accessibleFolders } = await supabase
+          .rpc('get_accessible_folders', {
+            p_user_id: user.id,
+            p_entreprise_id: selectedEntreprise,
+          });
+
+        const accessibleFolderIds = accessibleFolders?.map((f: any) => f.folder_id) || [];
+
+        // Filtrer les documents par dossiers accessibles
+        if (accessibleFolderIds.length > 0) {
+          query = query.in('folder_id', [...accessibleFolderIds, null]); // Inclure aussi les documents sans dossier
+        } else {
+          // Aucun dossier accessible, afficher uniquement les documents sans dossier
+          query = query.is('folder_id', null);
+        }
       }
-      // Si selectedFolderId est undefined, afficher tous les documents
+
+      // Filtrer par dossier sélectionné (si un dossier spécifique est sélectionné)
+      if (selectedFolderId !== undefined) {
+        if (selectedFolderId) {
+          query = query.eq('folder_id', selectedFolderId);
+        } else if (selectedFolderId === null) {
+          // Si selectedFolderId est explicitement null, afficher seulement les documents sans dossier
+          query = query.is('folder_id', null);
+        }
+      }
+      // Si selectedFolderId est undefined, afficher tous les documents accessibles
 
       const { data, error } = await query.order('created_at', { ascending: false });
 
@@ -1013,7 +1077,7 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
                   <Edit className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => handleDelete(doc.id)}
+                  onClick={() => handleDelete(doc)}
                   className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all text-sm font-medium"
                   title="Supprimer"
                 >
