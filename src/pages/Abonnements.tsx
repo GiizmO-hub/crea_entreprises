@@ -213,7 +213,12 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
 
       const { data: abonnementsData, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erreur chargement abonnements:', error);
+        throw error;
+      }
+
+      console.log('Abonnements chargés:', abonnementsData?.length || 0, 'abonnement(s)');
 
       // Enrichir avec les informations client et options
       const enrichedAbonnements = await Promise.all(
@@ -284,6 +289,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
         })
       );
 
+      console.log('Abonnements enrichis:', enrichedAbonnements?.length || 0, 'abonnement(s)');
       setAbonnements(enrichedAbonnements);
     } catch (error) {
       console.error('Erreur chargement abonnements:', error);
