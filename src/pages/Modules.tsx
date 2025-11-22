@@ -310,26 +310,12 @@ export default function Modules({ onNavigate }: ModulesProps) {
     try {
       setLoading(true);
 
-      // Liste des modules disponibles
+      // Liste des modules disponibles - UNIQUEMENT les modules réellement créés
       const allModules: Omit<Module, 'disponible' | 'active' | 'source' | 'plan_nom' | 'option_nom'>[] = [
         // Modules Core (inclus dans tous les plans)
         { id: 'dashboard', code: 'dashboard', nom: 'Tableau de bord', description: 'Vue d\'ensemble de votre activité', categorie: 'core' },
         { id: 'clients', code: 'clients', nom: 'Gestion des clients', description: 'Gérer vos clients et leurs informations', categorie: 'core' },
         { id: 'factures', code: 'facturation', nom: 'Facturation', description: 'Créer et gérer vos factures', categorie: 'core' },
-        
-        // Modules Premium
-        { id: 'comptabilite', code: 'comptabilite', nom: 'Comptabilité', description: 'Gestion comptable complète', categorie: 'premium' },
-        { id: 'salaries', code: 'salaries', nom: 'Gestion des salariés', description: 'Fiches de paie et gestion RH', categorie: 'premium' },
-        { id: 'automatisations', code: 'automatisations', nom: 'Automatisations', description: 'Automatiser vos processus', categorie: 'premium' },
-        { id: 'administration', code: 'administration', nom: 'Administration', description: 'Gestion administrative avancée', categorie: 'premium' },
-        
-        // Modules Options
-        { id: 'api', code: 'api', nom: 'API Avancée', description: 'Accès complet à l\'API REST avec webhooks', categorie: 'option' },
-        { id: 'integration_bancaire', code: 'integration_bancaire', nom: 'Intégration bancaire', description: 'Synchronisation avec vos banques', categorie: 'option' },
-        { id: 'comptabilite_avancee', code: 'comptabilite_avancee', nom: 'Comptabilité avancée', description: 'Module de comptabilité analytique', categorie: 'option' },
-        { id: 'signature_electronique', code: 'signature_electronique', nom: 'Signature électronique', description: 'Signature de documents en ligne', categorie: 'option' },
-        { id: 'support_prioritaire', code: 'support_prioritaire', nom: 'Support prioritaire', description: 'Support sous 2h par téléphone et email', categorie: 'option' },
-        { id: 'support_dedie', code: 'support_dedie', nom: 'Support dédié', description: 'Support dédié avec manager de compte', categorie: 'option' },
         
         // Modules Admin
         { id: 'collaborateurs', code: 'collaborateurs', nom: 'Gestion des collaborateurs', description: 'Gérer les collaborateurs et administrateurs', categorie: 'admin' },
