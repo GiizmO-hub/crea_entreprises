@@ -22,7 +22,6 @@ import {
   AlertCircle,
   ChevronRight,
   ChevronDown,
-  Users,
   Plus,
 } from 'lucide-react';
 
@@ -151,8 +150,16 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
   useEffect(() => {
     if (selectedEntreprise) {
       loadDocuments();
+      loadFolders();
+      loadClients();
     }
   }, [selectedEntreprise]);
+
+  useEffect(() => {
+    if (selectedEntreprise && selectedFolderId !== undefined) {
+      loadDocuments();
+    }
+  }, [selectedFolderId]);
 
   const loadEntreprises = async () => {
     try {
@@ -1273,6 +1280,132 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Composant récursif pour afficher la hiérarchie des dossiers
+function FolderTreeComponent({
+  folder,
+  folders,
+  selectedFolderId,
+  expandedFolders,
+  onSelect,
+  onToggle,
+  onEdit,
+  onDelete,
+  onAddSubfolder,
+  getFolderPath,
+  level = 0,
+}: {
+  folder: DocumentFolder;
+  folders: DocumentFolder[];
+  selectedFolderId: string | null;
+  expandedFolders: Set<string>;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+  onEdit: (folder: DocumentFolder) => void;
+  onDelete: (id: string) => void;
+  onAddSubfolder: (parentId: string) => void;
+  getFolderPath: (folder: DocumentFolder) => string;
+  level?: number;
+}) {
+  const children = folders.filter((f) => f.parent_id === folder.id);
+  const isExpanded = expandedFolders.has(folder.id);
+  const isSelected = selectedFolderId === folder.id;
+
+  return (
+    <div>
+      <div
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all group ${
+          isSelected
+            ? 'bg-blue-500/30 text-white'
+            : 'text-gray-300 hover:bg-white/5'
+        }`}
+        style={{ paddingLeft: `${level * 1.5 + 0.75}rem` }}
+      >
+        {children.length > 0 ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(folder.id);
+            }}
+            className="p-1 hover:bg-white/10 rounded transition-all"
+          >
+            {isExpanded ? (
+              <ChevronDown className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </button>
+        ) : (
+          <div className="w-6" />
+        )}
+        <button
+          onClick={() => onSelect(folder.id)}
+          className="flex-1 flex items-center gap-2 text-left"
+        >
+          <Folder
+            className="w-4 h-4"
+            style={{ color: folder.couleur || '#3B82F6' }}
+          />
+          <span className="text-sm font-medium truncate">{folder.nom}</span>
+          {folder.client && (
+            <span className="text-xs text-gray-400 truncate">
+              ({folder.client.nom || folder.client.entreprise_nom})
+            </span>
+          )}
+        </button>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddSubfolder(folder.id);
+            }}
+            className="p-1 hover:bg-white/10 rounded transition-all"
+            title="Ajouter un sous-dossier"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(folder);
+            }}
+            className="p-1 hover:bg-white/10 rounded transition-all"
+            title="Modifier"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(folder.id);
+            }}
+            className="p-1 hover:bg-red-500/20 rounded transition-all"
+            title="Supprimer"
+          >
+            <Trash2 className="w-4 h-4 text-red-400" />
+          </button>
+        </div>
+      </div>
+      {isExpanded &&
+        children.map((child) => (
+          <FolderTreeComponent
+            key={child.id}
+            folder={child}
+            folders={folders}
+            selectedFolderId={selectedFolderId}
+            expandedFolders={expandedFolders}
+            onSelect={onSelect}
+            onToggle={onToggle}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onAddSubfolder={onAddSubfolder}
+            getFolderPath={getFolderPath}
+            level={level + 1}
+          />
+        ))}
     </div>
   );
 }
