@@ -211,19 +211,21 @@ export default function Modules({ onNavigate }: ModulesProps) {
         return;
       }
 
-      // Récupérer les options souscrites
+      // Récupérer toutes les options (actives ET désactivées) pour vérifier leur statut
       const { data: optionsData } = await supabase
         .from('abonnement_options')
         .select(`
           id,
+          actif,
           options_supplementaires (
             id,
-            nom
+            nom,
+            code
           )
         `)
-        .eq('abonnement_id', abonnementData.id)
-        .eq('actif', true);
+        .eq('abonnement_id', abonnementData.id);
 
+      // Séparer les options actives et désactivées
       const options = (optionsData || []).map((opt: any) => {
         const option = Array.isArray(opt.options_supplementaires) 
           ? opt.options_supplementaires[0] 
@@ -231,7 +233,8 @@ export default function Modules({ onNavigate }: ModulesProps) {
         return {
           id: option?.id,
           nom: option?.nom,
-          code: option?.nom?.toLowerCase().replace(/\s+/g, '_'),
+          code: option?.code || option?.nom?.toLowerCase().replace(/\s+/g, '_'),
+          actif: opt.actif, // Inclure le statut actif/désactivé
         };
       }).filter((opt: any) => opt.nom);
 
@@ -286,10 +289,30 @@ export default function Modules({ onNavigate }: ModulesProps) {
         let option_nom: string | undefined;
 
         if (isSuperAdmin) {
-          // Super admin voit tout
+          // Super admin voit tout, mais on vérifie quand même le statut réel des options
           disponible = true;
-          active = true;
-          source = 'super_admin';
+          
+          // Pour les modules option, vérifier le statut réel dans abonnement_options
+          if (module.categorie === 'option' && abonnement) {
+            const optionAbonnement = abonnement.options?.find(
+              (opt: any) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
+            );
+            
+            // Si l'option existe dans l'abonnement, utiliser son statut réel
+            if (optionAbonnement !== undefined) {
+              active = optionAbonnement.actif !== false; // Utiliser le statut réel
+              source = optionAbonnement.actif !== false ? 'option' : 'super_admin';
+              option_nom = optionAbonnement.nom;
+            } else {
+              // Option n'existe pas encore dans l'abonnement, considérer comme disponible mais inactive
+              active = false;
+              source = 'super_admin';
+            }
+          } else {
+            // Pour les autres modules (core, premium, admin), super admin les voit tous comme actifs
+            active = true;
+            source = 'super_admin';
+          }
         } else if (abonnement) {
           // Vérifier si le module est inclus dans le plan
           if (module.categorie === 'core') {
@@ -303,12 +326,13 @@ export default function Modules({ onNavigate }: ModulesProps) {
             source = disponible ? 'plan' : undefined;
             plan_nom = disponible ? abonnement.plan_nom : undefined;
           } else if (module.categorie === 'option') {
-            // Vérifier si l'option est souscrite
-            const optionSouscrite = abonnement.options.find(
-              (opt) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
+            // Vérifier si l'option est souscrite et son statut actif/désactivé
+            const optionSouscrite = abonnement.options?.find(
+              (opt: any) => opt.code === module.code || opt.nom?.toLowerCase().replace(/\s+/g, '_') === module.code
             );
             disponible = !!optionSouscrite;
-            active = disponible;
+            // Utiliser le statut réel (actif) de l'option
+            active = disponible && (optionSouscrite?.actif !== false);
             source = disponible ? 'option' : undefined;
             option_nom = disponible ? (optionSouscrite?.nom || '') : undefined;
           } else if (module.categorie === 'admin') {
