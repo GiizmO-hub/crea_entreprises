@@ -410,6 +410,75 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
     return montantPlan + montantOptions;
   };
 
+  const handleGenerateAccessLink = async (abonnement: Abonnement) => {
+    try {
+      // Récupérer le client_id de l'abonnement
+      let clientId: string | null = null;
+      
+      if (abonnement.client_id) {
+        clientId = abonnement.client_id;
+      } else if (abonnement.entreprise_id) {
+        // Chercher le client via entreprise_id
+        const { data: clientData } = await supabase
+          .from('clients')
+          .select('id, email')
+          .eq('entreprise_id', abonnement.entreprise_id)
+          .limit(1)
+          .maybeSingle();
+        
+        if (clientData) {
+          clientId = clientData.id;
+        }
+      }
+
+      if (!clientId) {
+        alert('❌ Impossible de générer le lien : client non trouvé');
+        return;
+      }
+
+      // Récupérer les informations du client
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('email, nom, prenom, entreprise_nom')
+        .eq('id', clientId)
+        .single();
+
+      if (!clientData || !clientData.email) {
+        alert('❌ Impossible de générer le lien : client sans email');
+        return;
+      }
+
+      // Chercher le user_id dans espaces_membres_clients
+      let clientUserId: string | null = null;
+      const { data: espaceData } = await supabase
+        .from('espaces_membres_clients')
+        .select('user_id')
+        .eq('client_id', clientId)
+        .maybeSingle();
+      
+      clientUserId = espaceData?.user_id || null;
+
+      // Générer le lien d'accès
+      const baseUrl = window.location.origin;
+      
+      if (clientUserId) {
+        // Lien avec client_id pour redirection vers l'espace client
+        const link = `${baseUrl}/espace-client?client_id=${clientId}&token=${encodeURIComponent(clientUserId.substring(0, 8))}`;
+        setClientAccessLink(link);
+      } else {
+        // Lien avec email pour page de connexion pré-remplie
+        const link = `${baseUrl}/auth?email=${encodeURIComponent(clientData.email)}&redirect=espace-client&client_id=${clientId}`;
+        setClientAccessLink(link);
+      }
+
+      setSelectedAbonnementForLink(abonnement);
+      setShowLinkModal(true);
+    } catch (error: any) {
+      console.error('Erreur génération lien:', error);
+      alert('❌ Erreur lors de la génération du lien: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
