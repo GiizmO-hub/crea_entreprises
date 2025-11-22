@@ -18,7 +18,6 @@ interface DatabaseError {
  */
 export function detectDatabaseError(error: any): DatabaseError | null {
   const errorMessage = error?.message || error?.toString() || '';
-  const errorCode = error?.code || '';
 
   // Erreur: colonne manquante
   if (
