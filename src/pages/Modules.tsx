@@ -321,17 +321,22 @@ export default function Modules({ onNavigate }: ModulesProps) {
       ];
 
       // Charger le statut des modules depuis la table modules_activation
-      const { data: modulesStatus, error: modulesError } = await supabase.rpc('get_all_modules_status');
+      let modulesStatusMap = new Map();
+      
+      try {
+        const { data: modulesStatus, error: modulesError } = await supabase.rpc('get_all_modules_status');
 
-      if (modulesError) {
-        console.error('Erreur chargement statut modules:', modulesError);
-      }
-
-      const modulesStatusMap = new Map();
-      if (modulesStatus && Array.isArray(modulesStatus)) {
-        modulesStatus.forEach((mod: any) => {
-          modulesStatusMap.set(mod.code, mod);
-        });
+        if (modulesError) {
+          console.error('Erreur chargement statut modules:', modulesError);
+          // Si la fonction n'existe pas encore (migration non appliquée), utiliser un Map vide
+        } else if (modulesStatus && Array.isArray(modulesStatus)) {
+          modulesStatus.forEach((mod: any) => {
+            modulesStatusMap.set(mod.code, mod);
+          });
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des modules:', error);
+        // En cas d'erreur, continuer avec un Map vide (tous les modules seront inactifs)
       }
 
       // Déterminer la disponibilité de chaque module
@@ -382,100 +387,32 @@ export default function Modules({ onNavigate }: ModulesProps) {
       return;
     }
 
-    // Les modules de type "option" utilisent toggle_module_option
-    if (module.categorie === 'option') {
-      try {
-        const { data, error } = await supabase.rpc('toggle_module_option', {
-          p_option_code: module.code,
-          p_user_id: user?.id || null,
-          p_activer: activer,
-        });
+    try {
+      // Utiliser la nouvelle fonction toggle_module_activation
+      const { data, error } = await supabase.rpc('toggle_module_activation', {
+        p_module_code: module.code,
+        p_activer: activer,
+      });
 
-        if (error) throw error;
-
-        if (data && !data.success) {
-          alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
-          return;
-        }
-
-        // Recharger les modules
-        await loadModules();
-        await loadAbonnement();
-        
-        alert(activer ? '✅ Option activée avec succès!' : '✅ Option désactivée avec succès!');
-      } catch (error: any) {
-        console.error('Erreur toggle module option:', error);
-        alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+      if (error) {
+        console.error('Erreur toggle module:', error);
+        throw error;
       }
-      return;
-    }
 
-        // Pour les modules core et admin, modifier les fonctionnalités du plan dans l'abonnement
-        if ((module.categorie === 'core' || module.categorie === 'admin') && abonnement) {
-          try {
-            // Récupérer le plan actuel
-            const { data: planData, error: planError } = await supabase
-              .from('plans_abonnement')
-              .select('fonctionnalites')
-              .eq('id', abonnement.plan_id)
-              .single();
+      if (data && !data.success) {
+        alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
+        return;
+      }
 
-            if (planError || !planData) {
-              alert('❌ Erreur: Impossible de récupérer le plan d\'abonnement');
-              return;
-            }
+      console.log('Module activé/désactivé:', { code: module.code, activer, data });
 
-            // Mettre à jour les fonctionnalités du plan
-            const fonctionnalites = (planData.fonctionnalites as Record<string, boolean>) || {};
-            
-            // Si on active, mettre à true
-            // Si on désactive, mettre à false (ou supprimer la clé)
-            if (activer) {
-              fonctionnalites[module.code] = true;
-            } else {
-              fonctionnalites[module.code] = false;
-              // Alternative : supprimer la clé pour ne pas l'inclure
-              // delete fonctionnalites[module.code];
-            }
-
-            console.log('Mise à jour fonctionnalités:', { 
-              code: module.code, 
-              activer, 
-              fonctionnalites_avant: planData.fonctionnalites,
-              fonctionnalites_apres: fonctionnalites 
-            });
-
-            const { error: updateError } = await supabase
-              .from('plans_abonnement')
-              .update({ fonctionnalites })
-              .eq('id', abonnement.plan_id);
-
-            if (updateError) {
-              console.error('Erreur update plan:', updateError);
-              throw updateError;
-            }
-
-            // Attendre que la base de données se mette à jour
-            await new Promise(resolve => setTimeout(resolve, 300));
-
-            // Recharger l'abonnement puis les modules
-            await loadAbonnement();
-            // Attendre un peu plus pour être sûr que loadAbonnement est terminé
-            await new Promise(resolve => setTimeout(resolve, 200));
-            await loadModules();
-            
-            alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
-          } catch (error: any) {
-            console.error('Erreur toggle module core:', error);
-            alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
-          }
-          return;
-        }
-
-    // Pour les autres types de modules (premium, admin), message d'information
-    if (module.categorie === 'premium' || module.categorie === 'admin') {
-      alert('❌ Ce module fait partie du plan d\'abonnement et ne peut pas être activé/désactivé individuellement.');
-      return;
+      // Recharger les modules
+      await loadModules();
+      
+      alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
+    } catch (error: any) {
+      console.error('Erreur toggle module:', error);
+      alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
