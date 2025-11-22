@@ -700,8 +700,8 @@ export default function Modules({ onNavigate }: ModulesProps) {
               </div>
             )}
 
-            {/* Toggle et bouton d'accès */}
-            {module.disponible && (module.categorie === 'option' || (isSuperAdmin && module.categorie !== 'core')) && (
+            {/* Toggle et bouton d'accès - Seulement pour les modules de type "option" */}
+            {module.categorie === 'option' && module.disponible && (
               <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between gap-3">
                 <button
                   onClick={(e) => {
@@ -713,7 +713,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
                       ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
                       : 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
                   }`}
-                  title={module.active ? 'Désactiver ce module' : 'Activer ce module'}
+                  title={module.active ? 'Désactiver cette option' : 'Activer cette option'}
                 >
                   {module.active ? (
                     <>
@@ -745,7 +745,8 @@ export default function Modules({ onNavigate }: ModulesProps) {
               </div>
             )}
             
-            {module.active && moduleRoutes[module.id] && !(module.categorie === 'option' || (isSuperAdmin && module.categorie !== 'core')) && (
+            {/* Bouton d'accès pour les autres modules (core, premium, admin) */}
+            {module.active && moduleRoutes[module.id] && module.categorie !== 'option' && (
               <div className="mt-4 pt-4 border-t border-white/10">
                 <button
                   onClick={(e) => {
