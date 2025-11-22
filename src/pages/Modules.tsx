@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Package, CheckCircle, Lock, Unlock, Settings, Info } from 'lucide-react';
+import { Package, CheckCircle, Lock, Unlock, Settings, Info, ToggleLeft, ToggleRight } from 'lucide-react';
 
 interface ModulesProps {
   onNavigate: (page: string) => void;
@@ -42,6 +42,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
   const [modules, setModules] = useState<Module[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<string>('modules');
+  const [modulesTab, setModulesTab] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Mapping des modules vers les routes
   const moduleRoutes: Record<string, string> = {
@@ -289,6 +290,42 @@ export default function Modules({ onNavigate }: ModulesProps) {
     }
   };
 
+  // Séparer les modules actifs et inactifs
+  const modulesActifs = modules.filter((m) => m.active);
+  const modulesInactifs = modules.filter((m) => !m.active && m.disponible);
+
+  // Fonction pour activer/désactiver un module
+  const handleToggleModule = async (module: Module, activer: boolean) => {
+    if (!isSuperAdmin && !module.disponible) {
+      alert('❌ Ce module n\'est pas disponible avec votre abonnement');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('toggle_module_option', {
+        p_option_code: module.code,
+        p_user_id: user?.id || null,
+        p_activer: activer,
+      });
+
+      if (error) throw error;
+
+      if (data && !data.success) {
+        alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
+        return;
+      }
+
+      // Recharger les modules
+      await loadModules();
+      await loadAbonnement();
+      
+      alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
+    } catch (error: any) {
+      console.error('Erreur toggle module:', error);
+      alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
   const categories = [
     { id: 'all', label: 'Tous les modules' },
     { id: 'core', label: 'Modules de base' },
@@ -297,9 +334,20 @@ export default function Modules({ onNavigate }: ModulesProps) {
     { id: 'admin', label: 'Modules admin' },
   ];
 
-  const filteredModules = selectedCategory === 'all'
-    ? modules
-    : modules.filter((m) => m.categorie === selectedCategory);
+  // Filtrer selon l'onglet actif (all/active/inactive) et la catégorie
+  let filteredModules = modules;
+  
+  // Filtrer par statut (actif/inactif)
+  if (modulesTab === 'active') {
+    filteredModules = filteredModules.filter((m) => m.active);
+  } else if (modulesTab === 'inactive') {
+    filteredModules = filteredModules.filter((m) => !m.active && m.disponible);
+  }
+  
+  // Filtrer par catégorie
+  if (selectedCategory !== 'all') {
+    filteredModules = filteredModules.filter((m) => m.categorie === selectedCategory);
+  }
 
   if (loading) {
     return (
@@ -370,6 +418,42 @@ export default function Modules({ onNavigate }: ModulesProps) {
           </div>
         </div>
       )}
+
+      {/* Onglets Modules Actifs/Inactifs */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        <button
+          onClick={() => setModulesTab('all')}
+          className={`px-4 py-2 rounded-lg transition-all ${
+            modulesTab === 'all'
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+              : 'bg-white/10 text-gray-300 hover:bg-white/20'
+          }`}
+        >
+          Tous les modules
+        </button>
+        <button
+          onClick={() => setModulesTab('active')}
+          className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
+            modulesTab === 'active'
+              ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
+              : 'bg-white/10 text-gray-300 hover:bg-white/20'
+          }`}
+        >
+          <CheckCircle className="w-4 h-4" />
+          Actifs ({modulesActifs.length})
+        </button>
+        <button
+          onClick={() => setModulesTab('inactive')}
+          className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
+            modulesTab === 'inactive'
+              ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white'
+              : 'bg-white/10 text-gray-300 hover:bg-white/20'
+          }`}
+        >
+          <Lock className="w-4 h-4" />
+          Désactivés ({modulesInactifs.length})
+        </button>
+      </div>
 
       {/* Filtres par catégorie */}
       <div className="mb-6 flex flex-wrap gap-2">
@@ -474,7 +558,52 @@ export default function Modules({ onNavigate }: ModulesProps) {
               </div>
             )}
 
-            {module.active && moduleRoutes[module.id] && (
+            {/* Toggle et bouton d'accès */}
+            {module.disponible && (module.categorie === 'option' || (isSuperAdmin && module.categorie !== 'core')) && (
+              <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between gap-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleModule(module, !module.active);
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
+                    module.active
+                      ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                      : 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
+                  }`}
+                  title={module.active ? 'Désactiver ce module' : 'Activer ce module'}
+                >
+                  {module.active ? (
+                    <>
+                      <ToggleRight className="w-5 h-5" />
+                      Désactiver
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="w-5 h-5" />
+                      Activer
+                    </>
+                  )}
+                </button>
+                
+                {module.active && moduleRoutes[module.id] && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const route = moduleRoutes[module.id];
+                      if (route) {
+                        onNavigate(route);
+                      }
+                    }}
+                    className="flex-1 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+                  >
+                    Accéder
+                  </button>
+                )}
+              </div>
+            )}
+            
+            {module.active && moduleRoutes[module.id] && !(module.categorie === 'option' || (isSuperAdmin && module.categorie !== 'core')) && (
               <div className="mt-4 pt-4 border-t border-white/10">
                 <button
                   onClick={(e) => {
