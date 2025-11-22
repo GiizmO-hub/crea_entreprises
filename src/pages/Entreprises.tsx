@@ -34,11 +34,24 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
     adresse: '',
     code_postal: '',
     ville: '',
+    capital: 0,
+    rcs: '',
+    site_web: '',
   });
+  const [createClientAuto, setCreateClientAuto] = useState(true);
+  const [createEspaceMembre, setCreateEspaceMembre] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<string>('');
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [plans, setPlans] = useState<Array<{ id: string; nom: string; prix_mensuel: number }>>([]);
+  const [options, setOptions] = useState<Array<{ id: string; nom: string; prix_mensuel: number }>>([]);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [clientCredentials, setClientCredentials] = useState<{ email: string; password: string } | null>(null);
 
   useEffect(() => {
     if (user) {
       loadEntreprises();
+      loadPlans();
+      loadOptions();
     }
   }, [user]);
 
@@ -61,6 +74,39 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
     }
   };
 
+  const loadPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('plans_abonnement')
+        .select('id, nom, prix_mensuel')
+        .eq('actif', true)
+        .order('ordre');
+
+      if (error) throw error;
+      setPlans(data || []);
+      if (data && data.length > 0 && !selectedPlan) {
+        setSelectedPlan(data[0].id);
+      }
+    } catch (error) {
+      console.error('Erreur chargement plans:', error);
+    }
+  };
+
+  const loadOptions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('options_supplementaires')
+        .select('id, nom, prix_mensuel')
+        .eq('actif', true)
+        .order('nom');
+
+      if (error) throw error;
+      setOptions(data || []);
+    } catch (error) {
+      console.error('Erreur chargement options:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -78,25 +124,111 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
           .eq('user_id', user.id);
 
         if (error) throw error;
+        alert('✅ Entreprise modifiée avec succès!');
       } else {
-        // Création
-        const { error } = await supabase
+        // Création avec option automatique client + espace membre
+        if (createClientAuto && !formData.email) {
+          alert('❌ L\'email est obligatoire pour créer automatiquement le client et l\'espace membre');
+          return;
+        }
+
+        // Créer l'entreprise
+        const { data: entrepriseData, error: entrepriseError } = await supabase
           .from('entreprises')
           .insert({
             user_id: user.id,
-            ...formData,
-          });
+            nom: formData.nom,
+            forme_juridique: formData.forme_juridique,
+            siret: formData.siret || null,
+            email: formData.email || null,
+            telephone: formData.telephone || null,
+            adresse: formData.adresse || null,
+            code_postal: formData.code_postal || null,
+            ville: formData.ville || null,
+            capital: formData.capital || 0,
+            rcs: formData.rcs || null,
+            site_web: formData.site_web || null,
+            statut: 'active',
+          })
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (entrepriseError) throw entrepriseError;
+
+        // Créer client et espace membre automatiquement si demandé
+        if (createClientAuto && formData.email && entrepriseData) {
+          // Créer le client avec les mêmes informations
+          const { data: clientData, error: clientError } = await supabase
+            .from('clients')
+            .insert({
+              entreprise_id: entrepriseData.id,
+              nom: formData.nom,
+              prenom: '',
+              entreprise_nom: formData.nom,
+              email: formData.email,
+              telephone: formData.telephone || null,
+              adresse: formData.adresse || null,
+              code_postal: formData.code_postal || null,
+              ville: formData.ville || null,
+              statut: 'active',
+            })
+            .select()
+            .single();
+
+          if (clientError) {
+            console.error('Erreur création client:', clientError);
+            alert('⚠️ Entreprise créée mais erreur lors de la création du client: ' + clientError.message);
+          } else if (createEspaceMembre && clientData) {
+            // Créer l'espace membre avec abonnement si demandé
+            try {
+              const password = Math.random().toString(36).slice(-12) + 'A1!';
+              
+              let planId = selectedPlan;
+              if (!planId && plans.length > 0) {
+                planId = plans[0].id;
+              }
+
+              const { data: espaceResult, error: espaceError } = await supabase.rpc(
+                'create_espace_membre_from_client',
+                {
+                  p_client_id: clientData.id,
+                  p_entreprise_id: entrepriseData.id,
+                  p_password: password,
+                  p_plan_id: planId || null,
+                  p_options_ids: selectedOptions.length > 0 ? selectedOptions : null,
+                }
+              );
+
+              if (espaceError) {
+                console.error('Erreur création espace membre:', espaceError);
+                alert('⚠️ Entreprise et client créés mais erreur lors de la création de l\'espace membre: ' + espaceError.message);
+              } else if (espaceResult?.success) {
+                // Afficher les identifiants
+                setClientCredentials({
+                  email: formData.email,
+                  password: espaceResult.password || password,
+                });
+                setShowCredentialsModal(true);
+              }
+            } catch (espaceErr: any) {
+              console.error('Erreur création espace membre:', espaceErr);
+              alert('⚠️ Entreprise et client créés mais erreur lors de la création de l\'espace membre');
+            }
+          } else {
+            alert('✅ Entreprise et client créés avec succès!');
+          }
+        } else {
+          alert('✅ Entreprise créée avec succès!');
+        }
       }
 
       setShowForm(false);
       setEditingId(null);
       resetForm();
-      loadEntreprises();
-    } catch (error) {
+      await loadEntreprises();
+    } catch (error: any) {
       console.error('Erreur sauvegarde entreprise:', error);
-      alert('Erreur lors de la sauvegarde');
+      alert('❌ Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
@@ -144,8 +276,17 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
       adresse: '',
       code_postal: '',
       ville: '',
+      capital: 0,
+      rcs: '',
+      site_web: '',
     });
     setEditingId(null);
+    setCreateClientAuto(true);
+    setCreateEspaceMembre(true);
+    setSelectedPlan('');
+    setSelectedOptions([]);
+    setShowCredentialsModal(false);
+    setClientCredentials(null);
   };
 
   if (loading) {
@@ -368,6 +509,109 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
                 </div>
               </div>
 
+              {/* Options automatiques - uniquement pour la création */}
+              {!editingId && (
+                <div className="space-y-4 pt-4 border-t border-white/10">
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-blue-300 mb-3">Options automatiques</h3>
+                    
+                    <label className="flex items-start gap-3 cursor-pointer mb-3">
+                      <input
+                        type="checkbox"
+                        checked={createClientAuto}
+                        onChange={(e) => setCreateClientAuto(e.target.checked)}
+                        className="mt-1 w-4 h-4 rounded"
+                      />
+                      <div className="flex-1">
+                        <span className="text-white font-medium">Créer automatiquement un client</span>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Un client sera créé avec les mêmes informations que l'entreprise
+                        </p>
+                      </div>
+                    </label>
+
+                    {createClientAuto && (
+                      <div className="ml-7 space-y-3">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={createEspaceMembre}
+                            onChange={(e) => setCreateEspaceMembre(e.target.checked)}
+                            disabled={!formData.email}
+                            className="mt-1 w-4 h-4 rounded"
+                          />
+                          <div className="flex-1">
+                            <span className={`font-medium ${formData.email ? 'text-white' : 'text-gray-500'}`}>
+                              Créer automatiquement l'espace membre
+                            </span>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Un espace membre sera créé pour le client avec abonnement
+                            </p>
+                            {!formData.email && (
+                              <p className="text-xs text-orange-400 mt-1">
+                                ⚠️ L'email est obligatoire pour créer l'espace membre
+                              </p>
+                            )}
+                          </div>
+                        </label>
+
+                        {createEspaceMembre && formData.email && plans.length > 0 && (
+                          <div className="ml-7 space-y-2">
+                            <label className="block text-sm font-medium text-gray-300">
+                              Plan d'abonnement
+                            </label>
+                            <select
+                              value={selectedPlan}
+                              onChange={(e) => setSelectedPlan(e.target.value)}
+                              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {plans.map((plan) => (
+                                <option key={plan.id} value={plan.id}>
+                                  {plan.nom} - {plan.prix_mensuel}€/mois
+                                </option>
+                              ))}
+                            </select>
+
+                            {options.length > 0 && (
+                              <div className="mt-3">
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                  Options supplémentaires (optionnel)
+                                </label>
+                                <div className="space-y-2 max-h-32 overflow-y-auto bg-white/5 rounded-lg p-3">
+                                  {options.map((option) => (
+                                    <label
+                                      key={option.id}
+                                      className="flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedOptions.includes(option.id)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedOptions([...selectedOptions, option.id]);
+                                          } else {
+                                            setSelectedOptions(selectedOptions.filter(id => id !== option.id));
+                                          }
+                                        }}
+                                        className="w-4 h-4 rounded"
+                                      />
+                                      <span className="text-white text-sm">{option.nom}</span>
+                                      <span className="text-green-400 text-sm ml-auto">
+                                        +{option.prix_mensuel}€/mois
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-4 pt-4">
                 <button
                   type="submit"
@@ -387,6 +631,111 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal identifiants client créé */}
+      {showCredentialsModal && clientCredentials && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-md w-full border border-white/20">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  ✅ Espace Membre Créé !
+                </h2>
+                <p className="text-gray-400 text-sm">
+                  Les identifiants du client ont été générés
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowCredentialsModal(false);
+                  setClientCredentials(null);
+                }}
+                className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Email</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={clientCredentials.email}
+                      className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(clientCredentials.email);
+                        alert('Email copié !');
+                      }}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
+                      title="Copier"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Mot de passe</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={clientCredentials.password}
+                      className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(clientCredentials.password);
+                        alert('Mot de passe copié !');
+                      }}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
+                      title="Copier"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
+              <p className="text-xs text-yellow-300">
+                ⚠️ Ces identifiants sont affichés une seule fois. Enregistrez-les ou envoyez-les par email au client.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowCredentialsModal(false);
+                  setClientCredentials(null);
+                }}
+                className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition-all"
+              >
+                Fermer
+              </button>
+              <button
+                onClick={() => {
+                  const subject = encodeURIComponent('Identifiants accès - ' + formData.nom);
+                  const body = encodeURIComponent(
+                    `Bonjour,\n\nVoici vos identifiants pour accéder à votre espace client :\n\nEmail: ${clientCredentials.email}\nMot de passe: ${clientCredentials.password}\n\nCordialement`
+                  );
+                  window.location.href = `mailto:${clientCredentials.email}?subject=${subject}&body=${body}`;
+                }}
+                className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all flex items-center justify-center gap-2"
+              >
+                <Mail className="w-5 h-5" />
+                Envoyer par Email
+              </button>
+            </div>
           </div>
         </div>
       )}
