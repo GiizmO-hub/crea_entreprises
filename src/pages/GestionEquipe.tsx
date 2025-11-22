@@ -441,42 +441,12 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     }
   };
 
-  // Fonctions pour gérer les membres d'équipe (à utiliser dans l'interface si nécessaire)
-  const _handleAddMember = async (equipeId: string, collaborateurId: string) => {
-    try {
-      const { error } = await supabase
-        .from('collaborateurs_equipes')
-        .insert([{
-          equipe_id: equipeId,
-          collaborateur_id: collaborateurId,
-          role_equipe: 'membre',
-          date_entree: new Date().toISOString().split('T')[0],
-        }]);
-
-      if (error) throw error;
-      await loadEquipes();
-    } catch (error) {
-      console.error('Erreur ajout membre:', error);
-      alert('Erreur lors de l\'ajout du membre');
-    }
-  };
-
-  const _handleRemoveMember = async (equipeId: string, collaborateurId: string) => {
-    try {
-      const { error } = await supabase
-        .from('collaborateurs_equipes')
-        .update({ date_sortie: new Date().toISOString().split('T')[0] })
-        .eq('equipe_id', equipeId)
-        .eq('collaborateur_id', collaborateurId)
-        .is('date_sortie', null);
-
-      if (error) throw error;
-      await loadEquipes();
-    } catch (error) {
-      console.error('Erreur retrait membre:', error);
-      alert('Erreur lors du retrait du membre');
-    }
-  };
+  // Fonctions pour gérer les membres d'équipe
+  // Ces fonctions pourront être utilisées dans l'interface si nécessaire
+  // Pour ajouter/retirer des membres d'une équipe :
+  // - Utiliser la table collaborateurs_equipes avec insert/update
+  // - Utiliser role_equipe: 'membre' | 'chef' | 'adjoint'
+  // - Utiliser date_entree et date_sortie pour tracker les membres
 
   if (loading) {
     return (
