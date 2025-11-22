@@ -161,8 +161,10 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
         setOptions(optionsData);
       }
 
-      // Charger les abonnements
-      await loadAbonnements();
+      // Charger les abonnements après un court délai pour s'assurer que la création est terminée
+      setTimeout(async () => {
+        await loadAbonnements();
+      }, 500);
     } catch (error) {
       console.error('Erreur chargement données:', error);
     } finally {
