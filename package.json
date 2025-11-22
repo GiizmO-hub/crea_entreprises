@@ -9,8 +9,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "db:check": "node scripts/auto-fix-database.js",
-    "db:fix": "node scripts/auto-fix-database.js"
+    "db:check": "node scripts/auto-apply-migration.js check",
+    "db:fix": "node scripts/apply-fixes-via-rpc.js all",
+    "db:fix-date": "node scripts/apply-fixes-via-rpc.js fix-date-activation",
+    "db:fix-mode": "node scripts/apply-fixes-via-rpc.js fix-mode-paiement",
+    "db:migrate": "node scripts/auto-apply-migration.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",
