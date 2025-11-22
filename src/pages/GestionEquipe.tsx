@@ -12,6 +12,7 @@ import {
   Search,
   Building2,
   Settings,
+  UserPlus,
 } from 'lucide-react';
 
 interface GestionEquipeProps {
@@ -93,10 +94,12 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
   const [showEquipeForm, setShowEquipeForm] = useState(false);
   const [showPermissionForm, setShowPermissionForm] = useState(false);
+  const [showMembreForm, setShowMembreForm] = useState(false);
   const [editingEquipeId, setEditingEquipeId] = useState<string | null>(null);
   const [editingPermissionId, setEditingPermissionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'equipes' | 'permissions'>('equipes');
   const [searchTerm, setSearchTerm] = useState('');
+  const [creatingMembre, setCreatingMembre] = useState(false);
   const [formData, setFormData] = useState({
     nom: '',
     description: '',
@@ -112,6 +115,19 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     can_update: false,
     can_delete: false,
     can_share: false,
+  });
+  const [membreFormData, setMembreFormData] = useState({
+    email: '',
+    password: '',
+    nom: '',
+    prenom: '',
+    telephone: '',
+    role: 'collaborateur' as 'collaborateur' | 'admin' | 'manager' | 'comptable' | 'commercial',
+    entreprise_id: '',
+    departement: '',
+    poste: '',
+    selectedDossiers: [] as string[], // IDs des dossiers sélectionnés
+    permissionsParDossier: {} as Record<string, { niveau_acces: string; can_create: boolean; can_update: boolean; can_delete: boolean; can_share: boolean }>,
   });
 
   useEffect(() => {
@@ -441,6 +457,169 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     }
   };
 
+  const handleSubmitMembre = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!membreFormData.email || !membreFormData.password || !membreFormData.nom || !membreFormData.prenom) {
+      alert('Veuillez remplir tous les champs obligatoires (email, mot de passe, nom, prénom)');
+      return;
+    }
+
+    if (!membreFormData.entreprise_id) {
+      alert('Veuillez sélectionner une entreprise');
+      return;
+    }
+
+    setCreatingMembre(true);
+
+    try {
+      // 1. Créer le collaborateur via la fonction RPC
+      const { data: createResult, error: createError } = await supabase.rpc('create_collaborateur', {
+        p_email: membreFormData.email,
+        p_password: membreFormData.password,
+        p_nom: membreFormData.nom,
+        p_prenom: membreFormData.prenom,
+        p_telephone: membreFormData.telephone || null,
+        p_role: membreFormData.role,
+        p_entreprise_id: membreFormData.entreprise_id,
+        p_departement: membreFormData.departement || null,
+        p_poste: membreFormData.poste || null,
+        p_date_embauche: null,
+        p_salaire: null,
+      });
+
+      if (createError) throw createError;
+
+      if (createResult && !createResult.success) {
+        throw new Error(createResult.error || 'Erreur lors de la création du collaborateur');
+      }
+
+      const collaborateurId = createResult?.collaborateur_id;
+
+      // 2. Créer les permissions pour chaque dossier sélectionné
+      if (membreFormData.selectedDossiers.length > 0 && collaborateurId) {
+        // Utiliser le rôle du collaborateur créé
+        const roleDuCollaborateur = membreFormData.role;
+
+        // Créer les permissions pour chaque dossier
+        const permissionsToCreate = membreFormData.selectedDossiers.map((folderId) => {
+          const perms = membreFormData.permissionsParDossier[folderId] || {
+            niveau_acces: 'lecture',
+            can_create: false,
+            can_update: false,
+            can_delete: false,
+            can_share: false,
+          };
+
+          return {
+            entreprise_id: membreFormData.entreprise_id,
+            folder_id: folderId,
+            role: roleDuCollaborateur,
+            niveau_acces: perms.niveau_acces,
+            can_create: perms.can_create,
+            can_update: perms.can_update,
+            can_delete: perms.can_delete,
+            can_share: perms.can_share,
+            created_by: user?.id || null,
+          };
+        });
+
+        // Insérer toutes les permissions en une seule fois
+        const { error: permError } = await supabase
+          .from('permissions_dossiers')
+          .insert(permissionsToCreate);
+
+        if (permError) {
+          console.error('Erreur création permissions:', permError);
+          // Ne pas bloquer si les permissions échouent, on a quand même créé le collaborateur
+          alert('⚠️ Collaborateur créé mais erreur lors de la création des permissions. Vous pouvez les ajouter manuellement.');
+        }
+      }
+
+      alert('✅ Membre créé avec succès !');
+      setShowMembreForm(false);
+      setMembreFormData({
+        email: '',
+        password: '',
+        nom: '',
+        prenom: '',
+        telephone: '',
+        role: 'collaborateur',
+        entreprise_id: membreFormData.entreprise_id, // Garder l'entreprise sélectionnée
+        departement: '',
+        poste: '',
+        selectedDossiers: [],
+        permissionsParDossier: {},
+      });
+      await loadCollaborateurs();
+      await loadPermissions();
+    } catch (error: any) {
+      console.error('Erreur création membre:', error);
+      alert('❌ Erreur lors de la création: ' + (error.message || 'Erreur inconnue'));
+    } finally {
+      setCreatingMembre(false);
+    }
+  };
+
+  const handleToggleDossier = (folderId: string) => {
+    setMembreFormData((prev) => {
+      const isSelected = prev.selectedDossiers.includes(folderId);
+      const newSelectedDossiers = isSelected
+        ? prev.selectedDossiers.filter((id) => id !== folderId)
+        : [...prev.selectedDossiers, folderId];
+
+      // Si on désélectionne, retirer aussi les permissions
+      const newPermissions = { ...prev.permissionsParDossier };
+      if (isSelected) {
+        delete newPermissions[folderId];
+      } else {
+        // Par défaut, donner lecture seule
+        newPermissions[folderId] = {
+          niveau_acces: 'lecture',
+          can_create: false,
+          can_update: false,
+          can_delete: false,
+          can_share: false,
+        };
+      }
+
+      return {
+        ...prev,
+        selectedDossiers: newSelectedDossiers,
+        permissionsParDossier: newPermissions,
+      };
+    });
+  };
+
+  const handleUpdateDossierPermissions = (folderId: string, field: string, value: any) => {
+    setMembreFormData((prev) => {
+      const currentPerms = prev.permissionsParDossier[folderId] || {
+        niveau_acces: 'lecture',
+        can_create: false,
+        can_update: false,
+        can_delete: false,
+        can_share: false,
+      };
+
+      return {
+        ...prev,
+        permissionsParDossier: {
+          ...prev.permissionsParDossier,
+          [folderId]: {
+            ...currentPerms,
+            [field]: value,
+            // Si on change le niveau d'accès, ajuster automatiquement les permissions
+            ...(field === 'niveau_acces' && {
+              can_create: value === 'ecriture' || value === 'administration',
+              can_update: value === 'ecriture' || value === 'administration',
+              can_delete: value === 'administration',
+              can_share: value === 'administration',
+            }),
+          },
+        },
+      };
+    });
+  };
+
   // Fonctions pour gérer les membres d'équipe
   // Ces fonctions pourront être utilisées dans l'interface si nécessaire
   // Pour ajouter/retirer des membres d'une équipe :
@@ -504,6 +683,28 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
           <p className="text-gray-300">Gérez les équipes et les permissions d'accès aux dossiers</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setMembreFormData({
+                email: '',
+                password: '',
+                nom: '',
+                prenom: '',
+                telephone: '',
+                role: 'collaborateur',
+                entreprise_id: selectedEntreprise || '',
+                departement: '',
+                poste: '',
+                selectedDossiers: [],
+                permissionsParDossier: {},
+              });
+              setShowMembreForm(true);
+            }}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all"
+          >
+            <UserPlus className="w-5 h-5" />
+            Créer un membre
+          </button>
           {activeTab === 'equipes' && (
             <button
               onClick={() => {
@@ -1065,6 +1266,336 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                       can_update: false,
                       can_delete: false,
                       can_share: false,
+                    });
+                  }}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Formulaire Modal Créer Membre */}
+      {showMembreForm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-4xl w-full border border-white/20 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white">
+                Créer un nouveau membre
+              </h2>
+              <button
+                onClick={() => {
+                  setShowMembreForm(false);
+                  setMembreFormData({
+                    email: '',
+                    password: '',
+                    nom: '',
+                    prenom: '',
+                    telephone: '',
+                    role: 'collaborateur',
+                    entreprise_id: selectedEntreprise || '',
+                    departement: '',
+                    poste: '',
+                    selectedDossiers: [],
+                    permissionsParDossier: {},
+                  });
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitMembre} className="space-y-6">
+              {/* Informations personnelles */}
+              <div className="bg-white/5 rounded-lg p-4 space-y-4">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <UserPlus className="w-5 h-5" />
+                  Informations personnelles
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      value={membreFormData.email}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, email: e.target.value })}
+                      required
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="email@exemple.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Mot de passe *
+                    </label>
+                    <input
+                      type="password"
+                      value={membreFormData.password}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, password: e.target.value })}
+                      required
+                      minLength={8}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Minimum 8 caractères"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Nom *
+                    </label>
+                    <input
+                      type="text"
+                      value={membreFormData.nom}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, nom: e.target.value })}
+                      required
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Nom"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Prénom *
+                    </label>
+                    <input
+                      type="text"
+                      value={membreFormData.prenom}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, prenom: e.target.value })}
+                      required
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Prénom"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Téléphone
+                    </label>
+                    <input
+                      type="tel"
+                      value={membreFormData.telephone}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, telephone: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="+33 6 12 34 56 78"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Rôle *
+                    </label>
+                    <select
+                      value={membreFormData.role}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, role: e.target.value as any })}
+                      required
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {ROLES.filter((r) => r.value !== 'super_admin').map((role) => (
+                        <option key={role.value} value={role.value}>
+                          {role.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Département
+                    </label>
+                    <input
+                      type="text"
+                      value={membreFormData.departement}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, departement: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Ex: Commercial, RH, etc."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Poste
+                    </label>
+                    <input
+                      type="text"
+                      value={membreFormData.poste}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, poste: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Ex: Manager, Assistant, etc."
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Entreprise *
+                  </label>
+                  <select
+                    value={membreFormData.entreprise_id}
+                    onChange={(e) => setMembreFormData({ ...membreFormData, entreprise_id: e.target.value })}
+                    required
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Sélectionner une entreprise</option>
+                    {entreprises.map((ent) => (
+                      <option key={ent.id} value={ent.id}>
+                        {ent.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Permissions dossiers */}
+              <div className="bg-white/5 rounded-lg p-4 space-y-4">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <Shield className="w-5 h-5" />
+                  Permissions d'accès aux dossiers
+                </h3>
+                <p className="text-sm text-gray-400 mb-4">
+                  Sélectionnez les dossiers auxquels ce membre aura accès et définissez ses permissions pour chaque dossier.
+                </p>
+                
+                {dossiers.length === 0 ? (
+                  <p className="text-gray-400 text-sm italic">Aucun dossier disponible. Créez d'abord des dossiers dans le module Documents.</p>
+                ) : (
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {dossiers.map((dossier) => {
+                      const isSelected = membreFormData.selectedDossiers.includes(dossier.id);
+                      const perms = membreFormData.permissionsParDossier[dossier.id] || {
+                        niveau_acces: 'lecture',
+                        can_create: false,
+                        can_update: false,
+                        can_delete: false,
+                        can_share: false,
+                      };
+
+                      return (
+                        <div
+                          key={dossier.id}
+                          className={`border rounded-lg p-4 transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-500/10'
+                              : 'border-white/10 bg-white/5'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3 flex-1">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleDossier(dossier.id)}
+                                className="w-5 h-5 rounded bg-white/5 border-white/10 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              />
+                              <Folder className="w-5 h-5 text-blue-400" />
+                              <span className="text-white font-medium">{dossier.nom}</span>
+                              {dossier.client_id && (
+                                <span className="text-xs text-gray-400">(Client spécifique)</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {isSelected && (
+                            <div className="ml-8 space-y-3 pt-3 border-t border-white/10">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                  Niveau d'accès
+                                </label>
+                                <select
+                                  value={perms.niveau_acces}
+                                  onChange={(e) => handleUpdateDossierPermissions(dossier.id, 'niveau_acces', e.target.value)}
+                                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  {NIVEAUX_ACCES.map((niveau) => (
+                                    <option key={niveau.value} value={niveau.value}>
+                                      {niveau.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {(perms.niveau_acces === 'ecriture' || perms.niveau_acces === 'administration') && (
+                                <div className="space-y-2">
+                                  <label className="block text-sm font-medium text-gray-300">
+                                    Permissions détaillées
+                                  </label>
+                                  <div className="space-y-2">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={perms.can_create}
+                                        onChange={(e) => handleUpdateDossierPermissions(dossier.id, 'can_create', e.target.checked)}
+                                        className="w-4 h-4 rounded bg-white/5 border-white/10 text-blue-600 focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm text-gray-300">Créer des documents</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={perms.can_update}
+                                        onChange={(e) => handleUpdateDossierPermissions(dossier.id, 'can_update', e.target.checked)}
+                                        className="w-4 h-4 rounded bg-white/5 border-white/10 text-blue-600 focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm text-gray-300">Modifier des documents</span>
+                                    </label>
+                                    {perms.niveau_acces === 'administration' && (
+                                      <>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={perms.can_delete}
+                                            onChange={(e) => handleUpdateDossierPermissions(dossier.id, 'can_delete', e.target.checked)}
+                                            className="w-4 h-4 rounded bg-white/5 border-white/10 text-blue-600 focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-300">Supprimer des documents</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={perms.can_share}
+                                            onChange={(e) => handleUpdateDossierPermissions(dossier.id, 'can_share', e.target.checked)}
+                                            className="w-4 h-4 rounded bg-white/5 border-white/10 text-blue-600 focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-300">Partager des documents</span>
+                                        </label>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="submit"
+                  disabled={creatingMembre}
+                  className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50"
+                >
+                  {creatingMembre ? 'Création en cours...' : 'Créer le membre'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMembreForm(false);
+                    setMembreFormData({
+                      email: '',
+                      password: '',
+                      nom: '',
+                      prenom: '',
+                      telephone: '',
+                      role: 'collaborateur',
+                      entreprise_id: selectedEntreprise || '',
+                      departement: '',
+                      poste: '',
+                      selectedDossiers: [],
+                      permissionsParDossier: {},
                     });
                   }}
                   className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
