@@ -14,7 +14,8 @@
     "db:fix-rpc": "node scripts/apply-fixes-via-rpc.js all",
     "db:fix-date": "node scripts/apply-fixes-via-rpc.js fix-date-activation",
     "db:fix-mode": "node scripts/apply-fixes-via-rpc.js fix-mode-paiement",
-    "db:migrate": "node scripts/auto-apply-migration.js"
+    "db:migrate": "node scripts/auto-apply-migration.js",
+    "db:apply-migrations": "node scripts/auto-apply-migrations.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",
@@ -35,6 +36,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "glob": "^13.0.0",
     "globals": "^16.5.0",
+    "pg": "^8.16.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.1",
     "typescript": "~5.9.3",
