@@ -203,12 +203,17 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
                 console.error('Erreur création espace membre:', espaceError);
                 alert('⚠️ Entreprise et client créés mais erreur lors de la création de l\'espace membre: ' + espaceError.message);
               } else if (espaceResult?.success) {
-                // Afficher les identifiants
-                setClientCredentials({
-                  email: formData.email,
-                  password: espaceResult.password || password,
-                });
-                setShowCredentialsModal(true);
+                // Si l'espace membre existait déjà
+                if (espaceResult.already_exists) {
+                  alert('✅ Entreprise et client créés ! ' + (espaceResult.message || 'Un espace membre existe déjà pour ce client. Les identifiants peuvent être récupérés depuis la fiche client.'));
+                } else {
+                  // Afficher les identifiants pour un nouvel espace membre
+                  setClientCredentials({
+                    email: formData.email,
+                    password: espaceResult.password || password,
+                  });
+                  setShowCredentialsModal(true);
+                }
               }
             } catch (espaceErr: any) {
               console.error('Erreur création espace membre:', espaceErr);
