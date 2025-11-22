@@ -407,40 +407,82 @@ export default function Modules({ onNavigate }: ModulesProps) {
 
   // Fonction pour activer/désactiver un module
   const handleToggleModule = async (module: Module, activer: boolean) => {
-    // Seuls les modules de type "option" peuvent être activés/désactivés
-    // Les modules "core", "premium" et "admin" sont liés au plan d'abonnement
-    if (module.categorie !== 'option') {
-      alert('❌ Ce module ne peut pas être activé/désactivé car il fait partie du plan d\'abonnement.\nSeules les options supplémentaires peuvent être activées/désactivées.');
+    // Vérifier les permissions : seuls les super admins peuvent activer/désactiver les modules
+    if (!isSuperAdmin) {
+      alert('❌ Vous n\'avez pas les droits pour activer/désactiver des modules.\nSeul l\'administrateur peut gérer les modules.');
       return;
     }
 
-    if (!isSuperAdmin && !module.disponible) {
-      alert('❌ Ce module n\'est pas disponible avec votre abonnement');
-      return;
-    }
+    // Les modules de type "option" utilisent toggle_module_option
+    if (module.categorie === 'option') {
+      try {
+        const { data, error } = await supabase.rpc('toggle_module_option', {
+          p_option_code: module.code,
+          p_user_id: user?.id || null,
+          p_activer: activer,
+        });
 
-    try {
-      const { data, error } = await supabase.rpc('toggle_module_option', {
-        p_option_code: module.code,
-        p_user_id: user?.id || null,
-        p_activer: activer,
-      });
+        if (error) throw error;
 
-      if (error) throw error;
+        if (data && !data.success) {
+          alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
+          return;
+        }
 
-      if (data && !data.success) {
-        alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
-        return;
+        // Recharger les modules
+        await loadModules();
+        await loadAbonnement();
+        
+        alert(activer ? '✅ Option activée avec succès!' : '✅ Option désactivée avec succès!');
+      } catch (error: any) {
+        console.error('Erreur toggle module option:', error);
+        alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
       }
+      return;
+    }
 
-      // Recharger les modules
-      await loadModules();
-      await loadAbonnement();
-      
-      alert(activer ? '✅ Option activée avec succès!' : '✅ Option désactivée avec succès!');
-    } catch (error: any) {
-      console.error('Erreur toggle module:', error);
-      alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+    // Pour les modules core, modifier les fonctionnalités du plan dans l'abonnement
+    if (module.categorie === 'core' && abonnement) {
+      try {
+        // Récupérer le plan actuel
+        const { data: planData, error: planError } = await supabase
+          .from('plans_abonnement')
+          .select('fonctionnalites')
+          .eq('id', abonnement.plan_id)
+          .single();
+
+        if (planError || !planData) {
+          alert('❌ Erreur: Impossible de récupérer le plan d\'abonnement');
+          return;
+        }
+
+        // Mettre à jour les fonctionnalités du plan
+        const fonctionnalites = (planData.fonctionnalites as Record<string, boolean>) || {};
+        fonctionnalites[module.code] = activer;
+
+        const { error: updateError } = await supabase
+          .from('plans_abonnement')
+          .update({ fonctionnalites })
+          .eq('id', abonnement.plan_id);
+
+        if (updateError) throw updateError;
+
+        // Recharger les modules
+        await loadModules();
+        await loadAbonnement();
+        
+        alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
+      } catch (error: any) {
+        console.error('Erreur toggle module core:', error);
+        alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+      }
+      return;
+    }
+
+    // Pour les autres types de modules (premium, admin), message d'information
+    if (module.categorie === 'premium' || module.categorie === 'admin') {
+      alert('❌ Ce module fait partie du plan d\'abonnement et ne peut pas être activé/désactivé individuellement.');
+      return;
     }
   };
 
@@ -676,33 +718,35 @@ export default function Modules({ onNavigate }: ModulesProps) {
               </div>
             )}
 
-            {/* Toggle et bouton d'accès - Seulement pour les modules de type "option" */}
-            {module.categorie === 'option' && module.disponible && (
+            {/* Toggle et bouton d'accès - Pour les modules option ET core (uniquement super admin) */}
+            {((module.categorie === 'option' && module.disponible) || (module.categorie === 'core' && isSuperAdmin)) && (
               <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between gap-3">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleModule(module, !module.active);
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
-                    module.active
-                      ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
-                      : 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
-                  }`}
-                  title={module.active ? 'Désactiver cette option' : 'Activer cette option'}
-                >
-                  {module.active ? (
-                    <>
-                      <ToggleRight className="w-5 h-5" />
-                      Désactiver
-                    </>
-                  ) : (
-                    <>
-                      <ToggleLeft className="w-5 h-5" />
-                      Activer
-                    </>
-                  )}
-                </button>
+                {isSuperAdmin && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleModule(module, !module.active);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
+                      module.active
+                        ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                        : 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
+                    }`}
+                    title={module.active ? 'Désactiver ce module' : 'Activer ce module'}
+                  >
+                    {module.active ? (
+                      <>
+                        <ToggleRight className="w-5 h-5" />
+                        Désactiver
+                      </>
+                    ) : (
+                      <>
+                        <ToggleLeft className="w-5 h-5" />
+                        Activer
+                      </>
+                    )}
+                  </button>
+                )}
                 
                 {module.active && moduleRoutes[module.id] && (
                   <button
@@ -713,7 +757,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
                         onNavigate(route);
                       }
                     }}
-                    className="flex-1 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+                    className={isSuperAdmin ? "flex-1 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all" : "w-full py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"}
                   >
                     Accéder
                   </button>
@@ -721,8 +765,26 @@ export default function Modules({ onNavigate }: ModulesProps) {
               </div>
             )}
             
-            {/* Bouton d'accès pour les autres modules (core, premium, admin) */}
-            {module.active && moduleRoutes[module.id] && module.categorie !== 'option' && (
+            {/* Bouton d'accès pour les modules core actifs (clients uniquement, pas super admin) */}
+            {module.active && moduleRoutes[module.id] && module.categorie === 'core' && !isSuperAdmin && (
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const route = moduleRoutes[module.id];
+                    if (route) {
+                      onNavigate(route);
+                    }
+                  }}
+                  className="w-full py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+                >
+                  Accéder au module
+                </button>
+              </div>
+            )}
+            
+            {/* Bouton d'accès pour les autres modules (premium, admin) */}
+            {module.active && moduleRoutes[module.id] && module.categorie !== 'option' && module.categorie !== 'core' && (
               <div className="mt-4 pt-4 border-t border-white/10">
                 <button
                   onClick={(e) => {
