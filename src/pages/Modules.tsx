@@ -21,25 +21,11 @@ interface Module {
   option_nom?: string;
 }
 
-interface Abonnement {
-  id: string;
-  plan_id: string;
-  plan_nom: string;
-  statut: string;
-  fonctionnalites: Record<string, boolean>;
-  options: Array<{
-    id: string;
-    nom: string;
-    code: string;
-    actif?: boolean;
-  }>;
-}
 
 export default function Modules({ onNavigate }: ModulesProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [abonnement, setAbonnement] = useState<Abonnement | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<string>('modules');
