@@ -215,7 +215,6 @@ export default function Admin({ onNavigate: _onNavigate }: AdminProps) {
         <div className="flex gap-3">
           <button
             onClick={() => {
-              setFormType('collaborateur');
               resetForm();
               setShowForm(true);
             }}
