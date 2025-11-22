@@ -308,19 +308,8 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
         entrepriseId = entreprises?.id || null;
       }
 
-      // Calculer le montant total
-      const montantOptions = formData.options_selected
-        .map(optId => {
-          const opt = options.find(o => o.id === optId);
-          return opt ? opt.prix_mensuel : 0;
-        })
-        .reduce((sum, prix) => sum + prix, 0);
-
-      const montantPlan = formData.prix_sur_mesure 
-        ? formData.prix_personnalise 
-        : (formData.mode_paiement === 'mensuel' ? plan.prix_mensuel : plan.prix_annuel / 12);
-
       // Utiliser la fonction RPC pour créer l'abonnement complet
+      // Le calcul du montant est fait côté serveur dans la fonction RPC
       const { data: result, error: rpcError } = await supabase
         .rpc('create_abonnement_complete', {
           p_client_id: formData.client_id,
