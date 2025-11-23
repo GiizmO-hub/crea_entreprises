@@ -437,10 +437,10 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
                 <div className="mb-3">
                   <p className="text-gray-400 text-xs mb-1">Modules inclus</p>
                   <p className="text-white font-semibold">
-                    {plan.modules?.filter(m => m.inclus === true).length || 0} module(s)
+                    {plan.modules?.filter((m: PlanModule) => m.inclus === true).length || 0} module(s)
                     {plan.modules && plan.modules.length > 0 && (
                       <span className="text-gray-400 text-xs ml-2">
-                        ({plan.modules.filter(m => m.inclus && m.est_cree && m.actif).length} créés et actifs)
+                        ({plan.modules.filter((m: PlanModule) => m.inclus && m.est_cree && m.actif).length} créés et actifs)
                       </span>
                     )}
                   </p>
