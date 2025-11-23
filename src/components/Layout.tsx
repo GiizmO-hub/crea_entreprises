@@ -17,6 +17,7 @@ import {
   CreditCard,
   FolderOpen,
   UsersRound,
+  Shield,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -29,12 +30,48 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   const { user, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isClientSuperAdmin, setIsClientSuperAdmin] = useState(false);
   const [activeModules, setActiveModules] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     checkSuperAdmin();
     loadActiveModules();
+    checkClientSuperAdmin();
   }, [user, isSuperAdmin]);
+
+  const checkClientSuperAdmin = async () => {
+    if (!user) {
+      setIsClientSuperAdmin(false);
+      return;
+    }
+
+    try {
+      // Vérifier si l'utilisateur est un client super_admin (a un espace membre ET est super_admin dans utilisateurs)
+      const { data: espaceClient } = await supabase
+        .from('espaces_membres_clients')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (espaceClient) {
+        // C'est un client, vérifier s'il est super_admin
+        const { data: utilisateur } = await supabase
+          .from('utilisateurs')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        const isClientAdmin = utilisateur?.role === 'super_admin';
+        setIsClientSuperAdmin(isClientAdmin);
+        console.log('👤 Client super_admin détecté:', isClientAdmin);
+      } else {
+        setIsClientSuperAdmin(false);
+      }
+    } catch (error) {
+      console.error('Erreur vérification client super_admin:', error);
+      setIsClientSuperAdmin(false);
+    }
+  };
 
   const checkSuperAdmin = async () => {
     if (!user) {
@@ -378,7 +415,18 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
               {sidebarOpen && (
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{user?.email}</p>
+                  {isClientSuperAdmin && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <Shield className="w-3 h-3 text-yellow-400" />
+                      <span className="text-xs font-semibold text-yellow-400 bg-yellow-500/20 px-2 py-0.5 rounded-full">
+                        Super Admin
+                      </span>
+                    </div>
+                  )}
                 </div>
+              )}
+              {!sidebarOpen && isClientSuperAdmin && (
+                <Shield className="w-4 h-4 text-yellow-400" title="Super Admin" />
               )}
             </div>
             <button
