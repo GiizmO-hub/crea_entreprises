@@ -418,6 +418,9 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {menuItems
               .filter((item) => {
+                // ✅ Modules de base toujours visibles pour tous
+                const isBaseModule = item.id === 'dashboard' || item.id === 'entreprises' || item.id === 'settings';
+                
                 // ✅ ÉTAPE 1 : Les modules admin de la plateforme ne doivent JAMAIS apparaître pour les clients
                 // Même si le client est super_admin de son espace, il ne doit pas voir les modules admin plateforme
                 if (item.superAdminOnly) {
@@ -430,11 +433,13 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                 }
                 
                 // ✅ ÉTAPE 2 : Pour les clients, afficher uniquement les modules actifs de leur abonnement
-                if (isClientSuperAdmin) {
-                  // Client super_admin de son espace : afficher uniquement modules actifs
-                  if (item.id === 'dashboard' || item.id === 'entreprises' || item.id === 'settings') {
+                // Mais toujours afficher les modules de base
+                if (isClientSuperAdmin || (user && activeModules.size > 0)) {
+                  // Client : vérifier si c'est un module de base ou un module actif
+                  if (isBaseModule) {
                     return true; // Modules de base toujours visibles
                   }
+                  // Vérifier si le module est dans la liste des modules actifs
                   return activeModules.has(item.id);
                 }
                 
@@ -443,8 +448,8 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                   return true;
                 }
                 
-                // ✅ ÉTAPE 4 : Par défaut, vérifier si le module est actif
-                if (item.id === 'dashboard' || item.id === 'entreprises' || item.id === 'settings') {
+                // ✅ ÉTAPE 4 : Par défaut, afficher les modules de base et les modules actifs
+                if (isBaseModule) {
                   return true; // Modules de base toujours visibles
                 }
                 return activeModules.has(item.id);
