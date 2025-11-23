@@ -145,53 +145,103 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
 
     try {
-      // Pour les super admins, tous les modules sont visibles
+      // Pour les super admins plateforme, tous les modules sont visibles
       if (isSuperAdmin) {
-        // Super admin voit tout, on met tous les modules comme actifs
-         setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'settings']));
+        // Super admin plateforme voit tout, on met tous les modules comme actifs
+        setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'gestion-projets', 'documents', 'settings', 'abonnements', 'gestion-plans', 'modules']));
         return;
       }
 
-      // Pour les clients, charger uniquement les modules actifs depuis modules_activation
-      const { data: modulesStatus, error } = await supabase.rpc('get_all_modules_status');
+      // ✅ Pour les clients, lire depuis espaces_membres_clients.modules_actifs
+      // Cela contient les modules inclus dans leur abonnement
+      const { data: espaceClient, error: espaceError } = await supabase
+        .from('espaces_membres_clients')
+        .select('modules_actifs')
+        .eq('user_id', user.id)
+        .single();
 
-      if (error) {
-        console.error('Erreur chargement modules actifs:', error);
-        // En cas d'erreur, on affiche tous les modules par défaut (comportement de fallback)
-         setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'settings']));
+      if (espaceError || !espaceClient) {
+        console.warn('⚠️ Espace client non trouvé, utilisation des modules par défaut');
+        // Fallback : modules de base
+        setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
         return;
       }
 
-      // Filtrer uniquement les modules actifs
+      // Mapping complet entre codes de modules (depuis modules_activation) et IDs du menu
+      const moduleCodeToMenuId: Record<string, string> = {
+        // Modules de base
+        'dashboard': 'dashboard',
+        'tableau_de_bord': 'dashboard',
+        'mon_entreprise': 'entreprises',
+        'entreprises': 'entreprises',
+        
+        // Modules clients
+        'clients': 'clients',
+        'gestion_clients': 'clients',
+        
+        // Modules facturation
+        'facturation': 'factures',
+        'factures': 'factures',
+        
+        // Modules documents
+        'documents': 'documents',
+        'gestion_documents': 'documents',
+        'gestion-de-documents': 'documents',
+        
+        // Modules gestion équipe
+        'gestion-equipe': 'gestion-equipe',
+        'gestion_equipe': 'gestion-equipe',
+        'gestion-d-equipe': 'gestion-equipe',
+        
+        // Modules gestion projets
+        'gestion-projets': 'gestion-projets',
+        'gestion_projets': 'gestion-projets',
+        'gestion-de-projets': 'gestion-projets',
+        
+        // Modules comptabilité
+        'comptabilite': 'comptabilite',
+        'comptabilité': 'comptabilite',
+        
+        // Modules finance
+        'finance': 'finance',
+        'finances': 'finance',
+        
+        // Modules collaborateurs
+        'collaborateurs': 'collaborateurs',
+        'gestion-collaborateurs': 'collaborateurs',
+        'gestion_des_collaborateurs': 'collaborateurs',
+      };
+
+      // Extraire les modules actifs depuis le JSON
+      const modulesActifs = espaceClient.modules_actifs || {};
       const activeModulesSet = new Set<string>();
-      if (modulesStatus && Array.isArray(modulesStatus)) {
-        modulesStatus.forEach((mod: any) => {
-          if (mod.actif === true) {
-            // Mapper les codes de modules aux IDs du menu
-            const moduleCodeToMenuId: Record<string, string> = {
-              'dashboard': 'dashboard',
-              'clients': 'clients',
-              'facturation': 'factures',
-              'collaborateurs': 'collaborateurs',
-            };
-            const menuId = moduleCodeToMenuId[mod.code];
-            if (menuId) {
-              activeModulesSet.add(menuId);
-            }
+
+      // Parcourir tous les modules dans modules_actifs
+      Object.keys(modulesActifs).forEach((moduleCode) => {
+        // Vérifier si le module est actif (valeur true)
+        if (modulesActifs[moduleCode] === true || modulesActifs[moduleCode] === 'true') {
+          // Mapper le code du module à l'ID du menu
+          const menuId = moduleCodeToMenuId[moduleCode];
+          if (menuId) {
+            activeModulesSet.add(menuId);
+            console.log(`✅ Module actif trouvé: ${moduleCode} -> ${menuId}`);
+          } else {
+            console.warn(`⚠️ Code de module non mappé: ${moduleCode}`);
           }
-        });
-      }
+        }
+      });
 
       // Toujours afficher certains modules de base (dashboard, entreprises, settings)
       activeModulesSet.add('dashboard');
       activeModulesSet.add('entreprises');
       activeModulesSet.add('settings');
 
+      console.log(`✅ Modules actifs chargés pour le client: ${Array.from(activeModulesSet).join(', ')}`);
       setActiveModules(activeModulesSet);
     } catch (error) {
       console.error('Erreur chargement modules actifs:', error);
-      // En cas d'erreur, afficher tous les modules par défaut
-         setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'settings']));
+      // En cas d'erreur, afficher les modules de base
+      setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
     }
   };
 
