@@ -83,8 +83,13 @@ const POSTES = [
   'Responsable RH', 'Directeur', 'Consultant', 'Designer'
 ];
 
-const TYPES_DOCUMENTS = [
-  'contrat', 'facture', 'devis', 'note', 'rapport', 'fiche_paie', 'autre'
+// Types de documents selon les contraintes CHECK de la table documents
+const CATEGORIES_DOCUMENTS = [
+  'facture', 'devis', 'contrat', 'administratif', 'juridique', 'fiscal', 'rh', 'autre'
+];
+
+const TYPES_FICHIERS_DOCUMENTS = [
+  'pdf', 'image', 'excel', 'word', 'autre'
 ];
 
 const STATUTS_FACTURES = ['brouillon', 'envoyee', 'en_attente', 'payee'];
@@ -146,7 +151,7 @@ async function generateTestData() {
     console.log('📋 Recherche automatique du super admin...\n');
   
     // Méthode 1: Chercher dans auth.users via RPC SQL direct (si disponible avec Service Role)
-  console.log('   1️⃣  Tentative via requête SQL directe...');
+    console.log('   1️⃣  Tentative via requête SQL directe...');
   try {
     // Utiliser une requête SQL directe via RPC pour accéder à auth.users
     const { data: sqlResult, error: sqlError } = await supabase.rpc('get_super_admin_user_id');
@@ -333,6 +338,7 @@ async function generateTestData() {
     console.error('   npm run test:generate-data -- --user-id=12345678-1234-1234-1234-123456789abc\n');
     
     process.exit(1);
+    }
   }
 
   const errors = [];
@@ -425,11 +431,17 @@ async function generateTestData() {
     // Générer des factures
     console.log('📄 Génération de 50 factures...');
     let factureCount = 0;
+    const factureNumeros = new Set(); // Pour éviter les doublons
     for (const clientData of clientIds) {
       // Générer 2-3 factures par client
       const nbFactures = Math.floor(Math.random() * 2) + 2;
       for (let i = 0; i < nbFactures && factureCount < 50; i++) {
-        const numero = `FACT-${String(factureCount + 1).padStart(3, '0')}`;
+        // Générer un numéro unique par entreprise
+        let numero;
+        do {
+          numero = `FACT-${clientData.entreprise_id.substring(0, 8)}-${String(factureCount + 1).padStart(3, '0')}`;
+        } while (factureNumeros.has(`${clientData.entreprise_id}-${numero}`));
+        factureNumeros.add(`${clientData.entreprise_id}-${numero}`);
         const statut = STATUTS_FACTURES[Math.floor(Math.random() * STATUTS_FACTURES.length)];
         const dateEmission = randomDate();
         const tauxTVA = [0.2, 0.1, 0.055, 0.021][Math.floor(Math.random() * 4)];
@@ -447,11 +459,11 @@ async function generateTestData() {
             date_emission: formatDate(dateEmission),
             date_echeance: formatDate(dateEcheance),
             montant_ht: montantHT,
-            montant_tva: montantTVA,
+            tva: montantTVA, // Colonne 'tva' dans le schéma initial
             montant_ttc: montantTTC,
             statut,
             type: 'facture',
-            taux_tva: tauxTVA,
+            // taux_tva n'existe pas dans factures, seulement dans facture_lignes
           })
           .select('id')
           .single();
@@ -481,10 +493,10 @@ async function generateTestData() {
             facture_id: factureId,
             description,
             quantite,
-            prix_unitaire: prixUnitaire,
+            prix_unitaire_ht: prixUnitaire,
             taux_tva: tauxTVA,
             montant_ht: montantHTLigne,
-            montant_tva: montantTVALigne,
+            tva: montantTVALigne, // Utiliser 'tva' au lieu de 'montant_tva' selon le schéma
             montant_ttc: montantTTCLigne,
           });
         }
@@ -512,8 +524,9 @@ async function generateTestData() {
       // Générer 1-2 documents par client
       const nbDocs = Math.floor(Math.random() * 2) + 1;
       for (let i = 0; i < nbDocs && docCount < 30; i++) {
-        const type = TYPES_DOCUMENTS[Math.floor(Math.random() * TYPES_DOCUMENTS.length)];
-        const nom = `${type}_${clientData.id}_${docCount + 1}.pdf`;
+        const categorie = CATEGORIES_DOCUMENTS[Math.floor(Math.random() * CATEGORIES_DOCUMENTS.length)];
+        const typeFichier = TYPES_FICHIERS_DOCUMENTS[Math.floor(Math.random() * TYPES_FICHIERS_DOCUMENTS.length)];
+        const nom = `${categorie}_${clientData.id}_${docCount + 1}.${typeFichier === 'pdf' ? 'pdf' : typeFichier === 'image' ? 'jpg' : typeFichier === 'excel' ? 'xlsx' : typeFichier === 'word' ? 'docx' : 'pdf'}`;
 
         const { error: docError } = await supabase
           .from('documents')
@@ -521,13 +534,13 @@ async function generateTestData() {
             entreprise_id: clientData.entreprise_id,
             client_id: clientData.id,
             nom,
-            description: `Document ${type} généré automatiquement`,
-            categorie: type,
-            type_fichier: 'application/pdf',
+            description: `Document ${categorie} généré automatiquement`,
+            categorie: categorie, // Utiliser les valeurs autorisées par CHECK
+            type_fichier: typeFichier, // Utiliser les valeurs autorisées par CHECK ('pdf', 'image', 'excel', 'word', 'autre')
             taille: Math.floor(50000 + Math.random() * 500000),
             chemin_fichier: `documents/${clientData.entreprise_id}/${nom}`,
             url: `https://storage.example.com/${nom}`,
-            mime_type: 'application/pdf',
+            mime_type: typeFichier === 'pdf' ? 'application/pdf' : typeFichier === 'image' ? 'image/jpeg' : typeFichier === 'excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : typeFichier === 'word' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf',
             date_document: formatDate(randomDate()),
             statut: 'actif',
           });
