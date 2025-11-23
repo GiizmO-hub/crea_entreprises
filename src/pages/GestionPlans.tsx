@@ -164,10 +164,10 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
         })
       );
 
-      console.log('📊 Plans chargés avec modules:', plansWithModules.map(p => ({
+      console.log('📊 Plans chargés avec modules:', plansWithModules.map((p: Plan) => ({
         nom: p.nom,
         modulesCount: p.modules?.length || 0,
-        modulesInclus: p.modules?.filter(m => m.inclus).length || 0,
+        modulesInclus: p.modules?.filter((m: PlanModule) => m.inclus).length || 0,
       })));
 
       setPlans(plansWithModules);
