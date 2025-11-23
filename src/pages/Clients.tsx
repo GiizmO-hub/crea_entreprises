@@ -423,8 +423,14 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
 
   const handleToggleClientSuperAdmin = async (client: Client, isSuperAdmin: boolean) => {
     try {
-      console.log(`🔄 Toggle super_admin pour client ${client.id}: ${isSuperAdmin ? 'activer' : 'désactiver'}`);
+      console.log(`🔄 Toggle client_super_admin pour client ${client.id}: ${isSuperAdmin ? 'activer' : 'désactiver'}`);
       
+      // Vérifier que le client a un email (nécessaire pour avoir un espace membre)
+      if (!client.email) {
+        alert('⚠️ Le client doit avoir un email pour être défini comme super admin. Veuillez d\'abord créer un espace membre.');
+        return;
+      }
+
       const { data, error } = await supabase.rpc('toggle_client_super_admin', {
         p_client_id: client.id,
         p_is_super_admin: isSuperAdmin,
@@ -448,20 +454,25 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
           return updated;
         });
         
-        // Attendre un peu pour laisser la base de données se mettre à jour
+        // Recharger le statut après un court délai pour s'assurer de la persistance
         setTimeout(async () => {
-          console.log('🔄 Rechargement du statut super_admin...');
+          console.log('🔄 Rechargement du statut client_super_admin...');
           await loadClientSuperAdminStatus();
-        }, 500);
+        }, 300);
         
-        alert(`✅ ${data.message}`);
+        alert(`✅ ${data.message}\n\n💡 Le client doit se déconnecter et se reconnecter pour voir les changements dans son espace.`);
+        
+        // Forcer un rechargement complet après un délai plus long
+        setTimeout(async () => {
+          await loadClientSuperAdminStatus();
+        }, 1000);
       } else {
         console.error('❌ Erreur dans la réponse:', data?.error);
         alert('Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
     } catch (error: any) {
-      console.error('❌ Erreur toggle super_admin:', error);
-      alert(`Erreur: ${error.message || 'Erreur lors de la modification du statut super_admin'}`);
+      console.error('❌ Erreur toggle client_super_admin:', error);
+      alert(`Erreur: ${error.message || 'Erreur lors de la modification du statut client_super_admin'}`);
     }
   };
 
@@ -635,9 +646,9 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                </button>
              </div>
 
-             {/* ✅ Contenu conditionnel selon l'onglet actif */}
+             {/* ✅ Contenu conditionnel selon l'onglet actif - Liste des Clients */}
              {activeTab === 'liste' && (
-               <>
+               <div>
              {/* Sélection Entreprise */}
              {entreprises.length > 1 && (
                <div className="mb-6">
@@ -769,7 +780,12 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                  <p className="text-gray-400">Aucun client trouvé pour cette entreprise.</p>
                </div>
              )}
-               </>
+               </div>
+             )}
+
+             {/* ✅ Séparateur visuel entre les onglets (optionnel) */}
+             {activeTab === 'super-admin' && (
+               <div className="mb-0"></div>
              )}
 
              {/* ✅ Onglet Administration Super Admin */}
