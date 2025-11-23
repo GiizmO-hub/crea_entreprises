@@ -197,12 +197,14 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
 
     try {
-      // Pour les super admins plateforme, tous les modules sont visibles
-      if (isSuperAdmin) {
+      // ✅ Pour les super admins plateforme (pas les clients super_admin), tous les modules sont visibles
+      if (isSuperAdmin && !isClientSuperAdmin) {
         // Super admin plateforme voit tout, on met tous les modules comme actifs
         setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'gestion-projets', 'documents', 'settings', 'abonnements', 'gestion-plans', 'modules']));
         return;
       }
+      
+      // ✅ Pour les clients (même super_admin de leur espace), charger uniquement les modules de leur abonnement
 
       // ✅ Pour les clients, lire depuis espaces_membres_clients.modules_actifs
       // Cela contient les modules inclus dans leur abonnement
@@ -374,20 +376,24 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {menuItems
               .filter((item) => {
-                // Filtrer les éléments admin uniquement
-                if (item.superAdminOnly && !isSuperAdmin) {
-                  return false;
+                // ✅ Les modules admin de la plateforme ne doivent JAMAIS apparaître pour les clients
+                // Même si le client est super_admin de son espace, il ne doit pas voir les modules admin plateforme
+                if (item.superAdminOnly) {
+                  // Seuls les super_admin de la plateforme (pas les clients) peuvent voir ces modules
+                  return isSuperAdmin && !isClientSuperAdmin;
                 }
-                // Pour les clients, vérifier si le module est actif
-                if (!isSuperAdmin && !item.superAdminOnly) {
+                
+                // ✅ Pour les clients (même super_admin de leur espace), afficher uniquement les modules actifs
+                if (isClientSuperAdmin || (!isSuperAdmin && !item.superAdminOnly)) {
                   // Les modules de base (dashboard, entreprises, settings) sont toujours visibles
                   if (item.id === 'dashboard' || item.id === 'entreprises' || item.id === 'settings') {
                     return true;
                   }
-                  // Vérifier si le module est actif
+                  // Vérifier si le module est actif dans l'abonnement
                   return activeModules.has(item.id);
                 }
-                // Super admin voit tout
+                
+                // Super admin plateforme voit tout
                 return true;
               })
               .map((item) => {
