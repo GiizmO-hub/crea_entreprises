@@ -65,6 +65,13 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
     }
   }, [user]);
 
+  // Recharger le statut super_admin quand les clients changent
+  useEffect(() => {
+    if (clients.length > 0) {
+      loadClientSuperAdminStatus();
+    }
+  }, [clients.length, selectedEntreprise]);
+
   const loadClientSuperAdminStatus = async () => {
     if (!user) return;
     
