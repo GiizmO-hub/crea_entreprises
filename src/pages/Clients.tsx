@@ -778,7 +778,7 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
       {/* ✅ Onglet Administration Super Admin */}
       {activeTab === 'super-admin' && (
         <div className="space-y-6">
-                 <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+          <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
                    <div className="flex items-start gap-3">
                      <Crown className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
                      <div>
