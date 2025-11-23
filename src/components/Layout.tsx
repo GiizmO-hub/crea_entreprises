@@ -426,7 +426,9 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                 </div>
               )}
               {!sidebarOpen && isClientSuperAdmin && (
-                <Shield className="w-4 h-4 text-yellow-400" title="Super Admin" />
+                <div title="Super Admin">
+                  <Shield className="w-4 h-4 text-yellow-400" />
+                </div>
               )}
             </div>
             <button
