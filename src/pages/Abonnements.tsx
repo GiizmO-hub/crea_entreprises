@@ -818,14 +818,44 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                     </p>
                   </div>
                 </div>
+                
+                {/* Modules inclus dans le plan */}
+                {abonnement.modules && abonnement.modules.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-gray-400 text-sm mb-2">Modules inclus dans le plan:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {abonnement.modules
+                        .filter((mod: any) => mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true')
+                        .map((mod: any) => (
+                          <span
+                            key={mod.module_code}
+                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              mod.est_cree && mod.actif
+                                ? 'bg-green-500/20 text-green-300'
+                                : mod.est_cree
+                                ? 'bg-blue-500/20 text-blue-300'
+                                : 'bg-gray-500/20 text-gray-300'
+                            }`}
+                          >
+                            {mod.module_nom}
+                            {mod.prix_mensuel > 0 && ` (+${mod.prix_mensuel}€/mois)`}
+                            {!mod.est_cree && ' (À venir)'}
+                            {mod.est_cree && !mod.actif && ' (Inactif)'}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Options supplémentaires (ancien système pour compatibilité) */}
                 {abonnement.options && abonnement.options.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-gray-400 text-sm mb-2">Options souscrites:</p>
+                    <p className="text-gray-400 text-sm mb-2">Options supplémentaires:</p>
                     <div className="flex flex-wrap gap-2">
                       {abonnement.options.map((opt) => (
                         <span
                           key={opt.id}
-                          className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs font-semibold"
+                          className="px-3 py-1 bg-orange-500/20 text-orange-300 rounded-full text-xs font-semibold"
                         >
                           {opt.nom} (+{opt.prix_mensuel}€/mois)
                         </span>
