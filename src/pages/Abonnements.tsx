@@ -299,6 +299,8 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
             .map((opt: any) => opt.options_supplementaires)
             .filter((opt: any) => opt && opt.actif !== false);
 
+          console.log(`📋 Abonnement ${ab.plans_abonnement?.nom || 'Inconnu'}: ${planModules.length} modules inclus`);
+
           return {
             ...ab,
             plan_nom: ab.plans_abonnement?.nom || 'Inconnu',
@@ -820,13 +822,17 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                 </div>
                 
                 {/* Modules inclus dans le plan */}
-                {abonnement.modules && abonnement.modules.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-gray-400 text-sm mb-2">Modules inclus dans le plan:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {abonnement.modules
-                        .filter((mod: any) => mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true')
-                        .map((mod: any) => (
+                {(() => {
+                  const modulesInclus = abonnement.modules?.filter((mod: any) => {
+                    const inclus = mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true';
+                    return inclus;
+                  }) || [];
+                  
+                  return modulesInclus.length > 0 ? (
+                    <div className="mt-3">
+                      <p className="text-gray-400 text-sm mb-2">Modules inclus dans le plan ({modulesInclus.length}):</p>
+                      <div className="flex flex-wrap gap-2">
+                        {modulesInclus.map((mod: any) => (
                           <span
                             key={mod.module_code}
                             className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -843,9 +849,14 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                             {mod.est_cree && !mod.actif && ' (Inactif)'}
                           </span>
                         ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="mt-3">
+                      <p className="text-gray-400 text-sm">Aucun module inclus dans ce plan</p>
+                    </div>
+                  );
+                })()}
 
                 {/* Options supplémentaires (ancien système pour compatibilité) */}
                 {abonnement.options && abonnement.options.length > 0 && (
