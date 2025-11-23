@@ -886,32 +886,33 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
 
                        <div className="mt-4 pt-4 border-t border-white/10">
                          {client.email ? (
-                           <button
-                             onClick={() => handleToggleClientSuperAdmin(client, !clientSuperAdminStatus[client.id])}
-                             className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition-all font-semibold ${
-                               clientSuperAdminStatus[client.id]
-                                 ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
-                                 : 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30'
-                             }`}
-                           >
-                             {clientSuperAdminStatus[client.id] ? (
-                               <>
-                                 <ShieldOff className="w-4 h-4" />
-                                 Retirer Super Admin
-                               </>
-                             ) : (
-                               <>
-                                 <Shield className="w-4 h-4" />
-                                 Définir Super Admin
-                               </>
-                             )}
-                           </button>
+                           <div>
+                             <button
+                               onClick={() => handleToggleClientSuperAdmin(client, !clientSuperAdminStatus[client.id])}
+                               className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition-all font-semibold ${
+                                 clientSuperAdminStatus[client.id]
+                                   ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
+                                   : 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30'
+                               }`}
+                             >
+                               {clientSuperAdminStatus[client.id] ? (
+                                 <>
+                                   <ShieldOff className="w-4 h-4" />
+                                   Retirer Super Admin
+                                 </>
+                               ) : (
+                                 <>
+                                   <Shield className="w-4 h-4" />
+                                   Définir Super Admin
+                                 </>
+                               )}
+                             </button>
                              {clientSuperAdminStatus[client.id] && (
                                <p className="text-xs text-yellow-400/70 mt-2 text-center">
                                  💡 Le client doit se reconnecter pour voir le badge dans son espace
                                </p>
                              )}
-                           </>
+                           </div>
                          ) : (
                            <div className="text-center py-2 px-4 bg-gray-500/20 text-gray-400 rounded-lg text-sm">
                              Email requis pour créer un espace membre
