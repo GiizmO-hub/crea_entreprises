@@ -557,6 +557,46 @@ async function generateTestData() {
     }
     console.log(`\n✅ ${stats.documents}/30 documents créés\n`);
 
+    // Générer des collaborateurs - Pour simplifier, on va skip cette partie car elle nécessite
+    // de créer des comptes auth.users et la fonction RPC nécessite un super_admin authentifié
+    // On va juste créer des équipes sans membres pour l'instant
+    console.log('👥 Génération de collaborateurs (SKIP - nécessite auth.users)...');
+    const collaborateurIds = []; // Vide pour l'instant
+    console.log(`\n✅ ${stats.collaborateurs}/15 collaborateurs créés\n`);
+
+    // Générer des équipes (1 par entreprise, sans membres pour l'instant)
+    console.log('🏢 Génération de 5 équipes (1 par entreprise)...');
+    const equipeIds = [];
+    for (let i = 0; i < entrepriseIds.length && i < 5; i++) {
+      const entrepriseId = entrepriseIds[i];
+      const nomsEquipes = ['Équipe Développement', 'Équipe Commerciale', 'Équipe Marketing', 'Équipe Support', 'Équipe Management'];
+      const nomEquipe = nomsEquipes[Math.floor(Math.random() * nomsEquipes.length)];
+      const description = `Équipe ${nomEquipe} de l'entreprise`;
+
+      const { data: equipeData, error: equipeError } = await supabase
+        .from('equipes')
+        .insert({
+          entreprise_id: entrepriseId,
+          nom: `${nomEquipe} ${i + 1}`,
+          description,
+          responsable_id: null, // Pas de responsable pour l'instant
+          couleur: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
+          actif: true,
+        })
+        .select('id')
+        .single();
+
+      if (equipeError) {
+        console.error(`  ❌ Erreur création équipe ${nomEquipe}:`, equipeError.message);
+        errors.push({ type: 'equipe', error: equipeError.message });
+      } else {
+        equipeIds.push({ id: equipeData.id, entreprise_id: entrepriseId });
+        stats.equipes++;
+        console.log(`  ✅ Équipe créée: ${nomEquipe} ${i + 1} (${equipeData.id})`);
+      }
+    }
+    console.log(`\n✅ ${stats.equipes}/5 équipes créées\n`);
+
     // Afficher le résumé final
     console.log('\n✅✅✅ GÉNÉRATION DE DONNÉES DE TEST TERMINÉE ✅✅✅\n');
     console.log('📊 RÉSUMÉ:');
