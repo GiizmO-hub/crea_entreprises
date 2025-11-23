@@ -137,15 +137,38 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
       // Pour chaque plan, charger ses modules
       const plansWithModules = await Promise.all(
         (plansData || []).map(async (plan) => {
-          const { data: planModulesData } = await supabase.rpc('get_plan_modules', {
-            p_plan_id: plan.id
-          });
-          return {
-            ...plan,
-            modules: planModulesData || [],
-          };
+          try {
+            const { data: planModulesData, error: modulesError } = await supabase.rpc('get_plan_modules', {
+              p_plan_id: plan.id
+            });
+            
+            if (modulesError) {
+              console.error(`Erreur chargement modules pour plan ${plan.id}:`, modulesError);
+              return {
+                ...plan,
+                modules: [],
+              };
+            }
+            
+            return {
+              ...plan,
+              modules: planModulesData || [],
+            };
+          } catch (error) {
+            console.error(`Erreur chargement modules pour plan ${plan.id}:`, error);
+            return {
+              ...plan,
+              modules: [],
+            };
+          }
         })
       );
+
+      console.log('📊 Plans chargés avec modules:', plansWithModules.map(p => ({
+        nom: p.nom,
+        modulesCount: p.modules?.length || 0,
+        modulesInclus: p.modules?.filter(m => m.inclus).length || 0,
+      })));
 
       setPlans(plansWithModules);
     } catch (error) {
@@ -414,7 +437,12 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
                 <div className="mb-3">
                   <p className="text-gray-400 text-xs mb-1">Modules inclus</p>
                   <p className="text-white font-semibold">
-                    {plan.modules?.filter(m => m.inclus && m.est_cree && m.actif).length || 0} module(s)
+                    {plan.modules?.filter(m => m.inclus === true).length || 0} module(s)
+                    {plan.modules && plan.modules.length > 0 && (
+                      <span className="text-gray-400 text-xs ml-2">
+                        ({plan.modules.filter(m => m.inclus && m.est_cree && m.actif).length} créés et actifs)
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
