@@ -94,60 +94,42 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
 
       const entrepriseIds = userEntreprises.map(e => e.id);
 
-      // Charger le statut super_admin de tous les clients qui ont un espace membre
-      const { data: espaces, error } = await supabase
-        .from('espaces_membres_clients')
-        .select(`
-          client_id,
-          user_id,
-          entreprise_id,
-          clients!inner(id)
-        `)
-        .in('entreprise_id', entrepriseIds);
+      // ✅ Utiliser la fonction RPC pour chaque entreprise (contourne RLS)
+      const statusMap: Record<string, boolean> = {};
+      
+      for (const entrepriseId of entrepriseIds) {
+        try {
+          const { data: statusData, error: rpcError } = await supabase.rpc(
+            'get_client_super_admin_status',
+            { p_entreprise_id: entrepriseId }
+          );
 
-      if (error) {
-        console.error('Erreur chargement statut super_admin:', error);
-        return;
-      }
-
-      console.log('🔍 Espaces membres trouvés:', espaces?.length || 0);
-
-      if (espaces && espaces.length > 0) {
-        const userIds = espaces.map(e => e.user_id).filter(Boolean) as string[];
-        
-        if (userIds.length > 0) {
-          const { data: utilisateurs, error: utilisateursError } = await supabase
-            .from('utilisateurs')
-            .select('id, role')
-            .in('id', userIds);
-
-          if (utilisateursError) {
-            console.error('Erreur chargement utilisateurs:', utilisateursError);
-            return;
+          if (rpcError) {
+            console.error(`Erreur RPC pour entreprise ${entrepriseId}:`, rpcError);
+            // Si l'erreur est "permission denied", c'est normal si l'utilisateur n'est pas super_admin
+            // On continue pour les autres entreprises
+            continue;
           }
 
-          console.log('👥 Utilisateurs trouvés:', utilisateurs?.length || 0);
-
-          const statusMap: Record<string, boolean> = {};
-          espaces.forEach(espace => {
-            if (espace.client_id && espace.user_id) {
-              const utilisateur = utilisateurs?.find(u => u.id === espace.user_id);
-              const isSuperAdmin = utilisateur?.role === 'super_admin' || false;
-              statusMap[espace.client_id] = isSuperAdmin;
-              console.log(`📋 Client ${espace.client_id}: super_admin = ${isSuperAdmin}`);
-            }
-          });
-          
-          console.log('✅ Statut super_admin chargé:', statusMap);
-          setClientSuperAdminStatus(statusMap);
-        } else {
-          setClientSuperAdminStatus({});
+          if (statusData && Array.isArray(statusData)) {
+            statusData.forEach((row: { client_id: string; is_super_admin: boolean }) => {
+              if (row.client_id) {
+                statusMap[row.client_id] = row.is_super_admin === true;
+              }
+            });
+          }
+        } catch (error) {
+          console.error(`Erreur lors du chargement du statut pour entreprise ${entrepriseId}:`, error);
+          // Continuer avec les autres entreprises
         }
-      } else {
-        setClientSuperAdminStatus({});
       }
+      
+      console.log('✅ Statut super_admin chargé via RPC:', statusMap);
+      setClientSuperAdminStatus(statusMap);
     } catch (error) {
       console.error('Erreur chargement statut super_admin:', error);
+      // En cas d'erreur, réinitialiser le statut vide plutôt que de laisser un état incohérent
+      setClientSuperAdminStatus({});
     }
   };
 
