@@ -66,36 +66,78 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
   }, [user]);
 
   const loadClientSuperAdminStatus = async () => {
+    if (!user) return;
+    
     try {
+      // Récupérer les entreprises de l'utilisateur pour filtrer les clients
+      const { data: userEntreprises, error: entrepriseError } = await supabase
+        .from('entreprises')
+        .select('id')
+        .eq('user_id', user.id);
+
+      if (entrepriseError) {
+        console.error('Erreur chargement entreprises pour statut super_admin:', entrepriseError);
+        return;
+      }
+
+      if (!userEntreprises || userEntreprises.length === 0) {
+        setClientSuperAdminStatus({});
+        return;
+      }
+
+      const entrepriseIds = userEntreprises.map(e => e.id);
+
       // Charger le statut super_admin de tous les clients qui ont un espace membre
       const { data: espaces, error } = await supabase
         .from('espaces_membres_clients')
         .select(`
           client_id,
           user_id,
+          entreprise_id,
           clients!inner(id)
-        `);
+        `)
+        .in('entreprise_id', entrepriseIds);
 
       if (error) {
         console.error('Erreur chargement statut super_admin:', error);
         return;
       }
 
+      console.log('🔍 Espaces membres trouvés:', espaces?.length || 0);
+
       if (espaces && espaces.length > 0) {
         const userIds = espaces.map(e => e.user_id).filter(Boolean) as string[];
-        const { data: utilisateurs } = await supabase
-          .from('utilisateurs')
-          .select('id, role')
-          .in('id', userIds);
+        
+        if (userIds.length > 0) {
+          const { data: utilisateurs, error: utilisateursError } = await supabase
+            .from('utilisateurs')
+            .select('id, role')
+            .in('id', userIds);
 
-        const statusMap: Record<string, boolean> = {};
-        espaces.forEach(espace => {
-          if (espace.client_id && espace.user_id) {
-            const utilisateur = utilisateurs?.find(u => u.id === espace.user_id);
-            statusMap[espace.client_id] = utilisateur?.role === 'super_admin';
+          if (utilisateursError) {
+            console.error('Erreur chargement utilisateurs:', utilisateursError);
+            return;
           }
-        });
-        setClientSuperAdminStatus(statusMap);
+
+          console.log('👥 Utilisateurs trouvés:', utilisateurs?.length || 0);
+
+          const statusMap: Record<string, boolean> = {};
+          espaces.forEach(espace => {
+            if (espace.client_id && espace.user_id) {
+              const utilisateur = utilisateurs?.find(u => u.id === espace.user_id);
+              const isSuperAdmin = utilisateur?.role === 'super_admin' || false;
+              statusMap[espace.client_id] = isSuperAdmin;
+              console.log(`📋 Client ${espace.client_id}: super_admin = ${isSuperAdmin}`);
+            }
+          });
+          
+          console.log('✅ Statut super_admin chargé:', statusMap);
+          setClientSuperAdminStatus(statusMap);
+        } else {
+          setClientSuperAdminStatus({});
+        }
+      } else {
+        setClientSuperAdminStatus({});
       }
     } catch (error) {
       console.error('Erreur chargement statut super_admin:', error);
@@ -379,28 +421,44 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
 
   const handleToggleClientSuperAdmin = async (client: Client, isSuperAdmin: boolean) => {
     try {
+      console.log(`🔄 Toggle super_admin pour client ${client.id}: ${isSuperAdmin ? 'activer' : 'désactiver'}`);
+      
       const { data, error } = await supabase.rpc('toggle_client_super_admin', {
         p_client_id: client.id,
         p_is_super_admin: isSuperAdmin,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur RPC toggle_client_super_admin:', error);
+        throw error;
+      }
+
+      console.log('📦 Réponse RPC:', data);
 
       if (data?.success) {
-        // Mettre à jour le statut local
-        setClientSuperAdminStatus(prev => ({
-          ...prev,
-          [client.id]: data.is_super_admin,
-        }));
+        // Mettre à jour le statut local immédiatement
+        setClientSuperAdminStatus(prev => {
+          const updated = {
+            ...prev,
+            [client.id]: data.is_super_admin === true,
+          };
+          console.log('✅ Statut local mis à jour:', updated);
+          return updated;
+        });
+        
+        // Attendre un peu pour laisser la base de données se mettre à jour
+        setTimeout(async () => {
+          console.log('🔄 Rechargement du statut super_admin...');
+          await loadClientSuperAdminStatus();
+        }, 500);
+        
         alert(`✅ ${data.message}`);
-        // Recharger les clients pour afficher les mises à jour
-        loadClients();
-        loadClientSuperAdminStatus();
       } else {
+        console.error('❌ Erreur dans la réponse:', data?.error);
         alert('Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
     } catch (error: any) {
-      console.error('Erreur toggle super_admin:', error);
+      console.error('❌ Erreur toggle super_admin:', error);
       alert(`Erreur: ${error.message || 'Erreur lors de la modification du statut super_admin'}`);
     }
   };
@@ -657,30 +715,31 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                       <Key className="w-4 h-4" />
                     </button>
                   </div>
-                  {/* Bouton Super Admin */}
-                  {clientSuperAdminStatus[client.id] !== undefined && (
-                    <button
-                      onClick={() => handleToggleClientSuperAdmin(client, !clientSuperAdminStatus[client.id])}
-                      className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                        clientSuperAdminStatus[client.id]
-                          ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400'
-                          : 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-400'
-                      }`}
-                      title={clientSuperAdminStatus[client.id] ? 'Désactiver super_admin' : 'Activer super_admin'}
-                    >
-                      {clientSuperAdminStatus[client.id] ? (
-                        <>
-                          <ShieldOff className="w-4 h-4" />
-                          Retirer Super Admin
-                        </>
-                      ) : (
-                        <>
-                          <Shield className="w-4 h-4" />
-                          Définir Super Admin
-                        </>
-                      )}
-                    </button>
-                  )}
+                  {/* Bouton Super Admin - Afficher pour tous les clients avec email */}
+                  <button
+                    onClick={() => {
+                      const currentStatus = clientSuperAdminStatus[client.id] || false;
+                      handleToggleClientSuperAdmin(client, !currentStatus);
+                    }}
+                    className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                      clientSuperAdminStatus[client.id] === true
+                        ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30'
+                        : 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-400 border border-gray-500/30'
+                    }`}
+                    title={clientSuperAdminStatus[client.id] === true ? 'Désactiver super_admin' : 'Activer super_admin'}
+                  >
+                    {clientSuperAdminStatus[client.id] === true ? (
+                      <>
+                        <ShieldOff className="w-4 h-4" />
+                        Retirer Super Admin
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="w-4 h-4" />
+                        Définir Super Admin
+                      </>
+                    )}
+                  </button>
                 </>
               )}
             </div>
