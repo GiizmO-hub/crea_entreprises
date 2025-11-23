@@ -788,43 +788,43 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                        </p>
                      </div>
                    </div>
-                 </div>
+          </div>
 
-                 {/* Sélection Entreprise */}
-                 {entreprises.length > 1 && (
-                   <div className="mb-6">
-                     <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
-                     <select
-                       value={selectedEntreprise}
-                       onChange={(e) => {
-                         setSelectedEntreprise(e.target.value);
-                       }}
-                       className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                     >
-                       {entreprises.map((ent) => (
-                         <option key={ent.id} value={ent.id}>
-                           {ent.nom}
-                         </option>
-                       ))}
-                     </select>
-                   </div>
-                 )}
+          {/* Sélection Entreprise */}
+          {entreprises.length > 1 && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
+              <select
+                value={selectedEntreprise}
+                onChange={(e) => {
+                  setSelectedEntreprise(e.target.value);
+                }}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                {entreprises.map((ent) => (
+                  <option key={ent.id} value={ent.id}>
+                    {ent.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-                 {/* Recherche */}
-                 <div className="mb-6 relative">
-                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                   <input
-                     type="text"
-                     placeholder="Rechercher un client..."
-                     value={searchTerm}
-                     onChange={(e) => setSearchTerm(e.target.value)}
-                     className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                   />
-                 </div>
+          {/* Recherche */}
+          <div className="mb-6 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher un client..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+            />
+          </div>
 
-                 {/* Liste des clients avec statut super admin */}
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {filteredClients.map((client) => (
+          {/* Liste des clients avec statut super admin */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredClients.map((client) => (
                      <div
                        key={client.id}
                        className={`bg-white/10 backdrop-blur-lg rounded-xl p-6 border transition-all ${
