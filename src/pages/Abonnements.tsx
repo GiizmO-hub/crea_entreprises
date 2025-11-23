@@ -229,15 +229,44 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
           return inclus && m.est_cree && m.actif;
         });
 
-        setPlanModules(modulesInclus);
-        console.log(`✅ ${modulesInclus.length} modules inclus chargés pour le plan ${planId}`);
+        // Enrichir les modules avec leurs UUIDs réels depuis modules_activation
+        const moduleCodes = modulesInclus.map((m: any) => m.module_code);
+        const { data: modulesActivation } = await supabase
+          .from('modules_activation')
+          .select('id, module_code')
+          .in('module_code', moduleCodes);
 
-        // Pré-sélectionner les modules inclus dans le plan
-        const moduleIds = modulesInclus.map((m: any) => m.module_id || m.module_code);
-        setFormData(prev => ({
-          ...prev,
-          options_selected: [...new Set([...prev.options_selected, ...moduleIds])]
+        // Créer un mapping code -> UUID
+        const codeToUuidMap = new Map<string, string>();
+        (modulesActivation || []).forEach(mod => {
+          if (mod.module_code && mod.id) {
+            codeToUuidMap.set(mod.module_code, mod.id);
+          }
+        });
+
+        // Enrichir les modules inclus avec leurs UUIDs
+        const modulesEnrichis = modulesInclus.map((m: any) => ({
+          ...m,
+          module_id: m.module_id || codeToUuidMap.get(m.module_code) || null
         }));
+
+        setPlanModules(modulesEnrichis);
+        console.log(`✅ ${modulesEnrichis.length} modules inclus chargés pour le plan ${planId}`);
+
+        // Pré-sélectionner les modules inclus dans le plan (uniquement les UUIDs valides)
+        const moduleIds = modulesEnrichis
+          .map((m: any) => m.module_id)
+          .filter((id: string | null) => id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+        if (moduleIds.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            options_selected: [...new Set([...prev.options_selected, ...moduleIds])]
+          }));
+          console.log(`✅ ${moduleIds.length} modules pré-sélectionnés avec leurs UUIDs`);
+        } else {
+          console.warn('⚠️ Aucun UUID valide trouvé pour les modules inclus');
+        }
       } else {
         setPlanModules([]);
         console.log('⚠️ Aucun module inclus dans ce plan');
@@ -1147,7 +1176,10 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto bg-green-500/5 border border-green-500/30 rounded-lg p-4">
                     {planModules.map((mod) => {
-                      const moduleId = mod.module_id || mod.module_code;
+                      // Utiliser l'UUID du module (déjà enrichi dans loadPlanModules)
+                      const moduleId = mod.module_id;
+                      if (!moduleId) return null; // Si pas d'UUID, ne pas afficher
+                      
                       const option = options.find(o => o.id === moduleId || o.code === mod.module_code);
                       return (
                         <label
