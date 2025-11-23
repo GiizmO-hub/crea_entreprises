@@ -14,6 +14,7 @@ const Collaborateurs = lazy(() => import('./pages/Collaborateurs'));
 const Documents = lazy(() => import('./pages/Documents'));
 const GestionEquipe = lazy(() => import('./pages/GestionEquipe'));
 const GestionProjets = lazy(() => import('./pages/GestionProjets'));
+const GestionPlans = lazy(() => import('./pages/GestionPlans'));
 
 // Composant de chargement pour les pages lazy-loaded
 const PageLoader = () => (
@@ -108,6 +109,12 @@ function AppContent() {
         return (
           <Suspense fallback={<PageLoader />}>
             <GestionProjets onNavigate={setCurrentPage} />
+          </Suspense>
+        );
+      case 'gestion-plans':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <GestionPlans onNavigate={setCurrentPage} />
           </Suspense>
         );
       case 'settings':
