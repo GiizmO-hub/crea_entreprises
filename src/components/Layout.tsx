@@ -47,7 +47,11 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   // Charger les modules actifs après avoir déterminé le statut super_admin
   useEffect(() => {
     if (user) {
-      loadActiveModules();
+      // Attendre un court délai pour s'assurer que checkClientSuperAdmin a terminé
+      const timer = setTimeout(() => {
+        loadActiveModules();
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [user, isSuperAdmin, isClientSuperAdmin]);
 
