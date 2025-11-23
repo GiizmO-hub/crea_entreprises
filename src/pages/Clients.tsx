@@ -61,8 +61,46 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
       loadClients();
       loadPlans();
       loadOptions();
+      loadClientSuperAdminStatus();
     }
   }, [user]);
+
+  const loadClientSuperAdminStatus = async () => {
+    try {
+      // Charger le statut super_admin de tous les clients qui ont un espace membre
+      const { data: espaces, error } = await supabase
+        .from('espaces_membres_clients')
+        .select(`
+          client_id,
+          user_id,
+          clients!inner(id)
+        `);
+
+      if (error) {
+        console.error('Erreur chargement statut super_admin:', error);
+        return;
+      }
+
+      if (espaces && espaces.length > 0) {
+        const userIds = espaces.map(e => e.user_id).filter(Boolean) as string[];
+        const { data: utilisateurs } = await supabase
+          .from('utilisateurs')
+          .select('id, role')
+          .in('id', userIds);
+
+        const statusMap: Record<string, boolean> = {};
+        espaces.forEach(espace => {
+          if (espace.client_id && espace.user_id) {
+            const utilisateur = utilisateurs?.find(u => u.id === espace.user_id);
+            statusMap[espace.client_id] = utilisateur?.role === 'super_admin';
+          }
+        });
+        setClientSuperAdminStatus(statusMap);
+      }
+    } catch (error) {
+      console.error('Erreur chargement statut super_admin:', error);
+    }
+  };
 
   useEffect(() => {
     if (entreprises.length > 0 && !selectedEntreprise) {
