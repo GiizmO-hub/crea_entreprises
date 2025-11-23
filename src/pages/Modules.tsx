@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Package, CheckCircle, Lock, Unlock, Settings, Info, ToggleLeft, ToggleRight, Building2, Hammer, Briefcase, Store, Factory, Heart, GraduationCap, Truck, Hotel, Home, Users, TrendingUp } from 'lucide-react';
+import { Package, CheckCircle, Lock, Unlock, Settings, Info, ToggleLeft, ToggleRight, Building2, Hammer, Briefcase, Store, Factory, Heart, GraduationCap, Truck, Hotel, Home, Users, TrendingUp, Link2, AlertTriangle } from 'lucide-react';
+import { getModuleDependencies, canActivateModule, getModuleLabel } from '../lib/moduleReuse';
 
 interface ModulesProps {
   onNavigate: (page: string) => void;
