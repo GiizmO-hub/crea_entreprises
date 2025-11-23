@@ -395,12 +395,17 @@ BEGIN
     user_id = EXCLUDED.user_id,
     abonnement_id = COALESCE(EXCLUDED.abonnement_id, espaces_membres_clients.abonnement_id),
     actif = true,
-    modules_actifs = EXCLUDED.modules_actifs,
+    modules_actifs = COALESCE(EXCLUDED.modules_actifs, espaces_membres_clients.modules_actifs),
     email = EXCLUDED.email,
     password_temporaire = EXCLUDED.password_temporaire,
     doit_changer_password = true,
     updated_at = NOW()
   RETURNING id INTO v_existing_espace_id;
+
+  -- ✅ Synchroniser automatiquement les modules depuis l'abonnement après création/mise à jour
+  IF v_existing_espace_id IS NOT NULL THEN
+    PERFORM sync_client_space_modules_from_abonnement(v_existing_espace_id);
+  END IF;
 
   RETURN jsonb_build_object(
     'success', true,
