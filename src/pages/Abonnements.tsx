@@ -53,6 +53,14 @@ interface Abonnement {
     prix_mensuel: number;
     actif: boolean;
   }>;
+  modules?: Array<{
+    module_code: string;
+    module_nom: string;
+    inclus: boolean;
+    prix_mensuel: number;
+    est_cree: boolean;
+    actif: boolean;
+  }>;
 }
 
 interface Client {
@@ -260,7 +268,19 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
             }
           }
 
-          // Récupérer les options souscrites
+          // Récupérer les modules inclus dans le plan (nouveau système)
+          let planModules: any[] = [];
+          if (ab.plan_id) {
+            const { data: modulesData, error: modulesError } = await supabase.rpc('get_plan_modules', {
+              p_plan_id: ab.plan_id
+            });
+            
+            if (!modulesError && modulesData) {
+              planModules = modulesData.filter((m: any) => m.inclus === true || m.inclus === 'true');
+            }
+          }
+
+          // Récupérer les options supplémentaires souscrites (ancien système, pour compatibilité)
           const { data: optionsData } = await supabase
             .from('abonnement_options')
             .select(`
@@ -285,7 +305,8 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
             client_id: clientId || undefined,
             client_email: clientEmail,
             client_nom: clientNom,
-            options: optionsActives,
+            options: optionsActives, // Anciennes options pour compatibilité
+            modules: planModules, // Nouveaux modules du plan
           };
         })
       );
