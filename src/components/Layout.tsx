@@ -43,10 +43,37 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
 
     try {
-      // Méthode 1 : Utiliser la fonction RPC qui contourne RLS
+      // ✅ NOUVEAU : Utiliser is_platform_super_admin pour distinguer super_admin plateforme vs client
+      // Les clients même super_admin de leur espace ne sont PAS super_admin de la plateforme
+      const { data: isPlatformAdmin, error: platformAdminError } = await supabase.rpc('is_platform_super_admin', {
+        p_user_id: user.id
+      });
+
+      if (!platformAdminError && isPlatformAdmin === true) {
+        console.log('✅ Super admin plateforme détecté (accès complet)');
+        setIsSuperAdmin(true);
+        return;
+      }
+
+      // Méthode de fallback : Utiliser la fonction RPC qui contourne RLS
       const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
       
       if (!rpcError && roleData) {
+        // Vérifier si c'est un client (ne doit pas avoir accès aux modules)
+        const { data: isClient } = await supabase
+          .from('espaces_membres_clients')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .single();
+
+        if (isClient) {
+          // C'est un client, même si super_admin, il n'est pas super_admin plateforme
+          console.log('✅ Utilisateur est un client (pas super_admin plateforme)');
+          setIsSuperAdmin(false);
+          return;
+        }
+
         const isAdmin = roleData.is_super_admin === true || roleData.is_admin === true;
         console.log('✅ Rôle vérifié via RPC:', roleData.role, '-> isSuperAdmin:', isAdmin);
         setIsSuperAdmin(isAdmin);
@@ -61,6 +88,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         .single();
 
       if (!tableError && utilisateur) {
+        // Vérifier si c'est un client
+        const { data: isClient } = await supabase
+          .from('espaces_membres_clients')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .single();
+
+        if (isClient) {
+          // C'est un client, même si super_admin, il n'est pas super_admin plateforme
+          console.log('✅ Utilisateur est un client (pas super_admin plateforme)');
+          setIsSuperAdmin(false);
+          return;
+        }
+
         const isAdmin = utilisateur.role === 'super_admin' || utilisateur.role === 'admin';
         console.log('✅ Rôle vérifié dans utilisateurs:', utilisateur.role, '-> isSuperAdmin:', isAdmin);
         setIsSuperAdmin(isAdmin);
@@ -71,6 +113,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       console.warn('⚠️ Impossible de lire utilisateurs, fallback sur user_metadata. RPC error:', rpcError, 'Table error:', tableError);
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const role = authUser?.user_metadata?.role || authUser?.app_metadata?.role;
+      
+      // Vérifier si c'est un client
+      const { data: isClient } = await supabase
+        .from('espaces_membres_clients')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .single();
+
+      if (isClient) {
+        console.log('✅ Utilisateur est un client (pas super_admin plateforme)');
+        setIsSuperAdmin(false);
+        return;
+      }
+
       const isAdmin = role === 'super_admin' || role === 'admin';
       console.log('✅ Rôle vérifié dans user_metadata:', role, '-> isSuperAdmin:', isAdmin);
       setIsSuperAdmin(isAdmin);
