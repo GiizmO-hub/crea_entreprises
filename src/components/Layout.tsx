@@ -34,10 +34,16 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   const [activeModules, setActiveModules] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    checkSuperAdmin();
-    loadActiveModules();
-    checkClientSuperAdmin();
-  }, [user, isSuperAdmin]);
+    if (user) {
+      checkSuperAdmin();
+      loadActiveModules();
+      checkClientSuperAdmin();
+    } else {
+      setIsSuperAdmin(false);
+      setIsClientSuperAdmin(false);
+      setActiveModules(new Set());
+    }
+  }, [user]); // ✅ Retirer isSuperAdmin des dépendances pour éviter boucle infinie
 
   const checkClientSuperAdmin = async () => {
     if (!user) {
@@ -134,7 +140,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         .from('utilisateurs')
         .select('role')
         .eq('id', user.id)
-        .single();
+        .maybeSingle(); // ✅ Utiliser maybeSingle() pour éviter erreur si 0 lignes
 
       if (!tableError && utilisateur) {
         // Vérifier si c'est un client
