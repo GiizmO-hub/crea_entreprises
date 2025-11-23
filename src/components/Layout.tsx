@@ -168,16 +168,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       }
 
       // Mapping complet entre codes de modules (depuis modules_activation) et IDs du menu
+      // Les codes utilisent des tirets (ex: "gestion-projets", "gestion-equipe")
       const moduleCodeToMenuId: Record<string, string> = {
         // Modules de base
         'dashboard': 'dashboard',
         'tableau_de_bord': 'dashboard',
+        'tableau-de-bord': 'dashboard',
         'mon_entreprise': 'entreprises',
+        'mon-entreprise': 'entreprises',
         'entreprises': 'entreprises',
         
         // Modules clients
         'clients': 'clients',
         'gestion_clients': 'clients',
+        'gestion-clients': 'clients',
+        'gestion-des-clients': 'clients',
         
         // Modules facturation
         'facturation': 'factures',
@@ -186,12 +191,14 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         // Modules documents
         'documents': 'documents',
         'gestion_documents': 'documents',
+        'gestion-documents': 'documents',
         'gestion-de-documents': 'documents',
         
         // Modules gestion équipe
         'gestion-equipe': 'gestion-equipe',
         'gestion_equipe': 'gestion-equipe',
         'gestion-d-equipe': 'gestion-equipe',
+        'gestion-d-équipe': 'gestion-equipe',
         
         // Modules gestion projets
         'gestion-projets': 'gestion-projets',
@@ -210,6 +217,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         'collaborateurs': 'collaborateurs',
         'gestion-collaborateurs': 'collaborateurs',
         'gestion_des_collaborateurs': 'collaborateurs',
+        'gestion-des-collaborateurs': 'collaborateurs',
       };
 
       // Extraire les modules actifs depuis le JSON

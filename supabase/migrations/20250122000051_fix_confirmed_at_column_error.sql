@@ -34,6 +34,8 @@ DECLARE
   v_password_final text;
   v_password_generated boolean := false;
   v_result jsonb;
+  v_modules_actifs jsonb := '{}'::jsonb;
+  v_module_record record;
 BEGIN
   -- Vérifier que l'utilisateur actuel peut créer un espace membre pour ce client
   IF NOT EXISTS (
@@ -196,7 +198,39 @@ BEGIN
     END IF;
   END IF;
 
-  -- Créer ou mettre à jour l'espace membre
+  -- ✅ Construire modules_actifs depuis le plan si un abonnement existe
+  -- Si un plan est fourni, récupérer les modules inclus dans le plan
+  IF p_plan_id IS NOT NULL THEN
+    FOR v_module_record IN
+      SELECT pm.module_code
+      FROM plans_modules pm
+      JOIN modules_activation ma ON ma.module_code = pm.module_code
+      WHERE pm.plan_id = p_plan_id
+        AND pm.inclus = true
+        AND ma.est_cree = true
+        AND ma.actif = true
+    LOOP
+      v_modules_actifs := jsonb_set(
+        v_modules_actifs,
+        ARRAY[v_module_record.module_code],
+        'true'::jsonb
+      );
+    END LOOP;
+  END IF;
+
+  -- Si aucun module n'a été trouvé, utiliser les modules par défaut
+  IF v_modules_actifs = '{}'::jsonb THEN
+    v_modules_actifs := '{
+      "dashboard": true,
+      "tableau_de_bord": true,
+      "mon_entreprise": true,
+      "entreprises": true,
+      "facturation": true,
+      "documents": true
+    }'::jsonb;
+  END IF;
+
+  -- Créer ou mettre à jour l'espace membre avec les modules du plan
   INSERT INTO espaces_membres_clients (
     client_id,
     entreprise_id,
@@ -215,12 +249,7 @@ BEGIN
     v_user_id,
     v_abonnement_id,
     true,
-    '{
-      "tableau_de_bord": true,
-      "mon_entreprise": true,
-      "facturation": true,
-      "documents": true
-    }'::jsonb,
+    v_modules_actifs, -- ✅ Modules synchronisés depuis le plan
     jsonb_build_object(
       'theme', 'dark',
       'langue', 'fr',
@@ -235,6 +264,7 @@ BEGIN
     user_id = EXCLUDED.user_id,
     abonnement_id = COALESCE(EXCLUDED.abonnement_id, espaces_membres_clients.abonnement_id),
     actif = true,
+    modules_actifs = COALESCE(EXCLUDED.modules_actifs, espaces_membres_clients.modules_actifs), -- ✅ Mettre à jour les modules si fournis
     email = EXCLUDED.email,
     password_temporaire = EXCLUDED.password_temporaire,
     doit_changer_password = true,
