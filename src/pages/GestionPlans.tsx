@@ -150,9 +150,24 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
               };
             }
             
+            // Normaliser les valeurs boolean et s'assurer que les modules retournés sont correctement typés
+            const normalizedModules = (planModulesData || []).map((mod: any) => ({
+              module_code: mod.module_code || '',
+              module_nom: mod.module_nom || '',
+              module_description: mod.module_description || '',
+              categorie: mod.categorie || '',
+              inclus: mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true',
+              prix_mensuel: parseFloat(String(mod.prix_mensuel || 0)),
+              prix_annuel: parseFloat(String(mod.prix_annuel || 0)),
+              est_cree: mod.est_cree === true || mod.est_cree === 'true' || String(mod.est_cree).toLowerCase() === 'true',
+              actif: mod.actif === true || mod.actif === 'true' || String(mod.actif).toLowerCase() === 'true',
+            }));
+            
+            console.log(`📦 Plan "${plan.nom}": ${normalizedModules.filter(m => m.inclus).length} modules inclus sur ${normalizedModules.length} modules chargés`);
+            
             return {
               ...plan,
-              modules: planModulesData || [],
+              modules: normalizedModules,
             };
           } catch (error) {
             console.error(`Erreur chargement modules pour plan ${plan.id}:`, error);
