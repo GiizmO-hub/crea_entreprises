@@ -1136,64 +1136,129 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                 <p className="text-xs text-gray-400 mt-1">Laisser vide pour un abonnement sans limite</p>
               </div>
 
-              {/* Modules créés disponibles comme options */}
-              {options.length > 0 ? (
+              {/* Modules inclus dans le plan */}
+              {formData.plan_id && planModules.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Modules inclus dans le plan ({planModules.length})
+                  </label>
+                  <p className="text-xs text-gray-400 mb-3">
+                    Ces modules sont automatiquement inclus dans ce plan. Vous pouvez les désélectionner si nécessaire.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto bg-green-500/5 border border-green-500/30 rounded-lg p-4">
+                    {planModules.map((mod) => {
+                      const moduleId = mod.module_id || mod.module_code;
+                      const option = options.find(o => o.id === moduleId || o.code === mod.module_code);
+                      return (
+                        <label
+                          key={mod.module_code}
+                          className="flex items-start gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-all border border-green-500/20"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.options_selected.includes(moduleId)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({
+                                  ...formData,
+                                  options_selected: [...formData.options_selected, moduleId],
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  options_selected: formData.options_selected.filter(id => id !== moduleId),
+                                });
+                              }
+                            }}
+                            className="mt-1 w-4 h-4 rounded"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-green-300 font-medium">{mod.module_nom}</span>
+                              {mod.prix_mensuel > 0 ? (
+                                <span className="text-green-400 text-sm font-semibold">
+                                  +{mod.prix_mensuel}€/mois
+                                </span>
+                              ) : (
+                                <span className="text-green-400 text-xs">Inclus</span>
+                              )}
+                            </div>
+                            {option?.description && (
+                              <p className="text-xs text-gray-400 mt-1">{option.description}</p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">Code: {mod.module_code}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Modules créés disponibles comme options supplémentaires */}
+              {options.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Modules disponibles (options supplémentaires)
                   </label>
                   <p className="text-xs text-gray-400 mb-3">
-                    Sélectionnez les modules créés que vous souhaitez ajouter à cet abonnement
+                    Sélectionnez des modules supplémentaires à ajouter à cet abonnement (non inclus dans le plan)
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto bg-white/5 rounded-lg p-4">
-                    {options.map((option) => (
-                      <label
-                        key={option.id}
-                        className="flex items-start gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-all border border-white/10"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData.options_selected.includes(option.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setFormData({
-                                ...formData,
-                                options_selected: [...formData.options_selected, option.id],
-                              });
-                            } else {
-                              setFormData({
-                                ...formData,
-                                options_selected: formData.options_selected.filter(id => id !== option.id),
-                              });
-                            }
-                          }}
-                          className="mt-1 w-4 h-4 rounded"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-white font-medium">{option.nom}</span>
-                            {option.prix_mensuel > 0 ? (
-                              <span className="text-green-400 font-semibold">+{option.prix_mensuel}€/mois</span>
-                            ) : (
-                              <span className="text-blue-400 font-semibold text-xs">Inclus</span>
+                    {options
+                      .filter(opt => {
+                        // Exclure les modules déjà inclus dans le plan
+                        const moduleId = opt.id;
+                        const moduleCode = opt.code;
+                        return !planModules.some(mod => 
+                          (mod.module_id && mod.module_id === moduleId) || 
+                          mod.module_code === moduleCode
+                        );
+                      })
+                      .map((option) => (
+                        <label
+                          key={option.id}
+                          className="flex items-start gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-all border border-white/10"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.options_selected.includes(option.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({
+                                  ...formData,
+                                  options_selected: [...formData.options_selected, option.id],
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  options_selected: formData.options_selected.filter(id => id !== option.id),
+                                });
+                              }
+                            }}
+                            className="mt-1 w-4 h-4 rounded"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-white font-medium">{option.nom}</span>
+                              {option.prix_mensuel > 0 ? (
+                                <span className="text-blue-400 text-sm font-semibold">
+                                  +{option.prix_mensuel}€/mois
+                                </span>
+                              ) : (
+                                <span className="text-blue-400 text-xs">Inclus</span>
+                              )}
+                            </div>
+                            {option.description && (
+                              <p className="text-xs text-gray-400 mt-1">{option.description}</p>
+                            )}
+                            {option.code && (
+                              <p className="text-xs text-gray-500 mt-1">Code: {option.code}</p>
                             )}
                           </div>
-                          {option.description && (
-                            <p className="text-xs text-gray-400 mt-1">{option.description}</p>
-                          )}
-                          {option.code && (
-                            <p className="text-xs text-gray-500 mt-1">Code: {option.code}</p>
-                          )}
-                        </div>
-                      </label>
-                    ))}
+                        </label>
+                      ))}
                   </div>
-                </div>
-              ) : (
-                <div className="bg-gray-500/10 border border-gray-500/30 rounded-lg p-4">
-                  <p className="text-gray-400 text-sm">
-                    Aucun module créé disponible comme option. Les modules doivent être créés et avoir la catégorie "option" ou "premium" pour apparaître ici.
-                  </p>
                 </div>
               )}
 
