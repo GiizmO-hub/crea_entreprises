@@ -46,6 +46,22 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
 
     try {
+      // D'abord vérifier si l'utilisateur est un client (a un espace membre)
+      const { data: espaceClient, error: espaceError } = await supabase
+        .from('espaces_membres_clients')
+        .select('client_id, entreprise_id')
+        .eq('user_id', user.id)
+        .maybeSingle(); // ✅ Utiliser maybeSingle() pour éviter erreur si 0 lignes
+
+      if (espaceError || !espaceClient) {
+        // Pas un client ou erreur
+        setIsClientSuperAdmin(false);
+        if (espaceError) {
+          console.log('⚠️ Pas un client ou erreur:', espaceError.code);
+        }
+        return;
+      }
+
       // ✅ Utiliser une fonction RPC pour vérifier le statut super_admin (contourne RLS)
       // Cette fonction permet au client de vérifier son propre statut
       const { data: isSuperAdmin, error: rpcError } = await supabase.rpc(
@@ -54,12 +70,13 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
 
       if (!rpcError && isSuperAdmin === true) {
         setIsClientSuperAdmin(true);
-        console.log('👤 Client super_admin détecté via RPC:', true);
+        console.log('👤 ✅ Client super_admin détecté via RPC:', true);
       } else {
         setIsClientSuperAdmin(false);
         if (rpcError) {
-          // Si erreur, vérifier si c'est parce que ce n'est pas un client
           console.warn('⚠️ Erreur RPC check_my_super_admin_status:', rpcError);
+        } else {
+          console.log('👤 Client détecté mais pas super_admin');
         }
       }
     } catch (error) {
@@ -191,7 +208,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         .from('espaces_membres_clients')
         .select('modules_actifs, client_id, entreprise_id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle(); // ✅ Utiliser maybeSingle() au lieu de single() pour éviter erreur si 0 lignes
 
       if (espaceError) {
         console.error('❌ Erreur chargement espace client:', espaceError);
@@ -202,7 +219,8 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       }
 
       if (!espaceClient) {
-        console.warn('⚠️ Aucun espace client trouvé pour cet utilisateur');
+        console.warn('⚠️ Aucun espace client trouvé pour cet utilisateur (normal si ce n\'est pas un client)');
+        // Si ce n'est pas un client, utiliser les modules par défaut
         setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
         return;
       }
