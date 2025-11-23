@@ -105,43 +105,80 @@ function formatDate(date) {
 async function generateTestData() {
   console.log('🔧 Initialisation de la génération de données de test...\n');
 
-  // Récupérer l'ID du super admin
-  console.log('👤 Recherche du super admin...');
+  // Récupérer l'ID du super admin - Recherche automatique multi-méthodes
+  console.log('👤 Recherche automatique du super admin...\n');
   let superAdminId = null;
-
-  // Essayer de chercher par email connu
   const knownAdminEmail = 'meddecyril@icloud.com';
   
-  // Option 1: Chercher dans la table utilisateurs
+  console.log('📋 Méthodes de recherche:');
+  
+  // Méthode 1: Chercher dans auth.users via RPC SQL direct (si disponible avec Service Role)
+  console.log('   1️⃣  Tentative via requête SQL directe...');
   try {
-    const { data: adminData, error: adminError } = await supabase
-      .from('utilisateurs')
-      .select('id, user_id, email')
-      .or(`role.eq.super_admin,email.eq.${knownAdminEmail}`)
-      .limit(1)
-      .maybeSingle();
-
-    if (!adminError && adminData) {
-      superAdminId = adminData.user_id || adminData.id;
-      console.log(`✅ Super admin trouvé dans utilisateurs: ${adminData.email || 'N/A'} (${superAdminId})\n`);
+    // Utiliser une requête SQL directe via RPC pour accéder à auth.users
+    const { data: sqlResult, error: sqlError } = await supabase.rpc('get_super_admin_user_id');
+    if (!sqlError && sqlResult) {
+      superAdminId = sqlResult;
+      console.log(`   ✅ Super admin trouvé via RPC get_super_admin_user_id: ${superAdminId}\n`);
+    } else {
+      console.log(`   ⚠️  RPC get_super_admin_user_id non disponible (normal si fonction n'existe pas)\n`);
+      if (sqlError) {
+        console.log(`      Erreur: ${sqlError.message}\n`);
+      }
     }
   } catch (error) {
-    console.log('⚠️ Impossible de lire utilisateurs:', error.message);
+    // Ignorer - fonction RPC peut ne pas exister
+    console.log(`   ⚠️  Erreur lors de l'appel RPC: ${error.message}\n`);
   }
 
-  // Option 2: Chercher dans auth.users via RPC (si fonction disponible)
+  // Méthode 2: Chercher dans la table utilisateurs
   if (!superAdminId) {
+    console.log('   2️⃣  Tentative via table utilisateurs...');
     try {
-      // Utiliser une fonction RPC pour récupérer l'utilisateur par email
-      const { data: rpcData, error: rpcError } = await supabase.rpc('is_super_admin');
-      // Cette fonction n'existe peut-être pas, on continue...
+      // Chercher par role super_admin
+      const { data: adminByRole, error: roleError } = await supabase
+        .from('utilisateurs')
+        .select('id, user_id, email, role')
+        .eq('role', 'super_admin')
+        .limit(1)
+        .maybeSingle();
+
+      if (!roleError && adminByRole) {
+        superAdminId = adminByRole.user_id || adminByRole.id;
+        console.log(`   ✅ Super admin trouvé par rôle dans utilisateurs: ${adminByRole.email || 'N/A'} (${superAdminId})\n`);
+      } else {
+        console.log(`   ⚠️  Aucun super_admin trouvé par rôle\n`);
+      }
     } catch (error) {
-      // Ignorer
+      console.log(`   ⚠️  Erreur lecture utilisateurs: ${error.message}\n`);
     }
   }
 
-  // Option 3: Chercher toutes les entreprises et prendre le premier user_id
+  // Méthode 3: Chercher par email connu dans utilisateurs
   if (!superAdminId) {
+    console.log('   3️⃣  Tentative via email connu dans utilisateurs...');
+    try {
+      const { data: adminByEmail, error: emailError } = await supabase
+        .from('utilisateurs')
+        .select('id, user_id, email, role')
+        .eq('email', knownAdminEmail)
+        .limit(1)
+        .maybeSingle();
+
+      if (!emailError && adminByEmail) {
+        superAdminId = adminByEmail.user_id || adminByEmail.id;
+        console.log(`   ✅ Utilisateur trouvé par email dans utilisateurs: ${knownAdminEmail} (${superAdminId})\n`);
+      } else {
+        console.log(`   ⚠️  Email ${knownAdminEmail} non trouvé dans utilisateurs\n`);
+      }
+    } catch (error) {
+      console.log(`   ⚠️  Erreur recherche par email: ${error.message}\n`);
+    }
+  }
+
+  // Méthode 4: Chercher via entreprises existantes (prendre le premier user_id)
+  if (!superAdminId) {
+    console.log('   4️⃣  Tentative via entreprises existantes...');
     try {
       const { data: entreprises, error: entreprisesError } = await supabase
         .from('entreprises')
@@ -149,30 +186,112 @@ async function generateTestData() {
         .limit(1)
         .maybeSingle();
 
-      if (!entreprisesError && entreprises) {
+      if (!entreprisesError && entreprises && entreprises.user_id) {
         superAdminId = entreprises.user_id;
-        console.log(`✅ Utilisateur trouvé via entreprises: ${superAdminId}\n`);
+        console.log(`   ✅ Utilisateur trouvé via entreprises: ${superAdminId}\n`);
+        console.log(`   ⚠️  Note: Ce n'est peut-être pas le super admin, mais sera utilisé pour les tests\n`);
+      } else {
+        console.log(`   ⚠️  Aucune entreprise trouvée\n`);
       }
     } catch (error) {
-      console.log('⚠️ Impossible de lire entreprises:', error.message);
+      console.log(`   ⚠️  Erreur lecture entreprises: ${error.message}\n`);
     }
   }
 
-  // Si toujours rien, demander à l'utilisateur de fournir l'ID
+  // Méthode 5: Chercher dans auth.users via requête directe (si fonction RPC existe)
   if (!superAdminId) {
-    console.error('❌ Impossible de trouver automatiquement le super admin.');
-    console.error('💡 Options:');
-    console.error('   1. Fournissez un ID d\'utilisateur en variable d\'environnement: SUPER_ADMIN_ID=xxx');
-    console.error('   2. Vérifiez que l\'email meddecyril@icloud.com existe dans auth.users');
-    console.error('   3. Vérifiez que la table utilisateurs contient un super_admin');
-    
-    // Essayer de récupérer depuis l'environnement
-    if (process.env.SUPER_ADMIN_ID) {
-      superAdminId = process.env.SUPER_ADMIN_ID;
-      console.log(`✅ Utilisation de SUPER_ADMIN_ID depuis .env: ${superAdminId}\n`);
-    } else {
-      process.exit(1);
+    console.log('   5️⃣  Tentative via fonction RPC is_super_admin...');
+    try {
+      // Tenter d'utiliser une requête SQL via RPC pour accéder à auth.users
+      // Note: On peut créer une fonction RPC qui retourne l'ID du super admin
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_super_admin_user_id');
+      if (!rpcError && rpcData) {
+        superAdminId = rpcData;
+        console.log(`   ✅ Super admin trouvé via RPC get_super_admin_user_id: ${superAdminId}\n`);
+      } else {
+        console.log(`   ⚠️  Fonction RPC get_super_admin_user_id non disponible\n`);
+      }
+    } catch (error) {
+      // Ignorer - fonction peut ne pas exister
     }
+  }
+
+  // Méthode 6: Utiliser SUPER_ADMIN_ID depuis .env
+  if (!superAdminId && process.env.SUPER_ADMIN_ID) {
+    console.log('   6️⃣  Utilisation de SUPER_ADMIN_ID depuis .env...');
+    superAdminId = process.env.SUPER_ADMIN_ID;
+    console.log(`   ✅ Utilisation de SUPER_ADMIN_ID: ${superAdminId}\n`);
+  }
+
+  // Vérifier que l'ID trouvé existe vraiment
+  if (superAdminId) {
+    console.log(`✅✅✅ Super admin identifié: ${superAdminId}\n`);
+    
+    // Vérifier que l'utilisateur existe en tentant de lire une entreprise
+    try {
+      const { data: testEntreprise, error: testError } = await supabase
+        .from('entreprises')
+        .select('id')
+        .eq('user_id', superAdminId)
+        .limit(1)
+        .maybeSingle();
+
+      if (testError && testError.code !== 'PGRST116') {
+        console.log(`⚠️  Attention: L'ID ${superAdminId} peut ne pas être valide (${testError.message})\n`);
+      }
+    } catch (error) {
+      // Ignorer les erreurs de test
+    }
+  } else {
+    console.error('\n❌❌❌ IMPOSSIBLE DE TROUVER LE SUPER ADMIN ❌❌❌\n');
+    console.error('📋 Options pour résoudre:');
+    console.error('\n   Option A - Ajouter SUPER_ADMIN_ID dans .env:');
+    console.error('     1. Connectez-vous à l\'application');
+    console.error('     2. Ouvrez la console (F12)');
+    console.error('     3. Exécutez: const { data: { user } } = await supabase.auth.getUser(); console.log(user.id);');
+    console.error('     4. Ajoutez dans .env: SUPER_ADMIN_ID=votre-uuid-utilisateur');
+    console.error('\n   Option B - Créer une entreprise dans l\'application:');
+    console.error('     1. L\'ID user_id de cette entreprise sera utilisé automatiquement');
+    console.error('\n   Option C - Créer une fonction RPC get_super_admin_user_id:');
+    console.error('     (Je peux créer cette fonction si vous le souhaitez)\n');
+    
+    // Afficher les IDs trouvés pour aider au diagnostic
+    console.error('🔍 Diagnostic - IDs trouvés dans la base:');
+    try {
+      const { data: allUtilisateurs } = await supabase
+        .from('utilisateurs')
+        .select('id, user_id, email, role')
+        .limit(5);
+      
+      if (allUtilisateurs && allUtilisateurs.length > 0) {
+        console.error('\n   Utilisateurs dans la table utilisateurs:');
+        allUtilisateurs.forEach((u, i) => {
+          console.error(`     ${i + 1}. ID: ${u.id}, user_id: ${u.user_id || 'N/A'}, email: ${u.email || 'N/A'}, role: ${u.role || 'N/A'}`);
+        });
+      }
+    } catch (error) {
+      // Ignorer
+    }
+
+    try {
+      const { data: allEntreprises } = await supabase
+        .from('entreprises')
+        .select('id, user_id')
+        .limit(5);
+      
+      if (allEntreprises && allEntreprises.length > 0) {
+        console.error('\n   User IDs trouvés dans entreprises:');
+        allEntreprises.forEach((e, i) => {
+          console.error(`     ${i + 1}. Entreprise ID: ${e.id}, user_id: ${e.user_id || 'N/A'}`);
+        });
+        console.error(`\n   💡 Suggestion: Utiliser le premier user_id: ${allEntreprises[0].user_id}`);
+        console.error(`      Ajoutez dans .env: SUPER_ADMIN_ID=${allEntreprises[0].user_id}\n`);
+      }
+    } catch (error) {
+      // Ignorer
+    }
+    
+    process.exit(1);
   }
 
   const errors = [];
