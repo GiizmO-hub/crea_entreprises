@@ -6,6 +6,9 @@
   et utiliser sa valeur par défaut.
 */
 
+-- Supprimer la fonction existante pour éviter les conflits de paramètres
+DROP FUNCTION IF EXISTS create_espace_membre_from_client(uuid, uuid, text, uuid, uuid[]);
+
 -- Mettre à jour la fonction pour retirer confirmed_at de l'INSERT
 CREATE OR REPLACE FUNCTION create_espace_membre_from_client(
   p_client_id uuid,
