@@ -264,7 +264,11 @@ BEGIN
   FROM modules_activation ma
   LEFT JOIN plans_modules pm ON pm.module_code = ma.module_code AND pm.plan_id = p_plan_id
   WHERE ma.est_cree = true
-  ORDER BY ma.categorie, ma.module_nom;
+    AND (pm.plan_id IS NOT NULL OR pm.plan_id IS NULL) -- Afficher tous les modules créés, même ceux non liés au plan
+  ORDER BY 
+    CASE WHEN pm.inclus = true THEN 0 ELSE 1 END, -- Modules inclus en premier
+    ma.categorie, 
+    ma.module_nom;
 END;
 $$;
 
