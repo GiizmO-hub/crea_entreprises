@@ -213,7 +213,8 @@ async function applyMigration(client, version, sql) {
           'relation already exists',
           'constraint already exists',
           'index already exists',
-          'column already exists'
+          'column already exists',
+          'cannot remove parameter defaults from existing function'
         ];
         
         const isIgnorable = ignorableErrors.some(err => errorMessage.includes(err));
