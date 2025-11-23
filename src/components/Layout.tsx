@@ -31,6 +31,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isClientSuperAdmin, setIsClientSuperAdmin] = useState(false);
+  const [isClient, setIsClient] = useState(false); // ✅ Nouvel état pour détecter si c'est un client
   const [activeModules, setActiveModules] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     } else {
       setIsSuperAdmin(false);
       setIsClientSuperAdmin(false);
+      setIsClient(false);
       setActiveModules(new Set());
     }
   }, [user]); // ✅ Retirer isSuperAdmin des dépendances pour éviter boucle infinie
@@ -53,11 +55,12 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [user, isSuperAdmin, isClientSuperAdmin]);
+  }, [user, isSuperAdmin, isClientSuperAdmin, isClient]);
 
   const checkClientSuperAdmin = async () => {
     if (!user) {
       setIsClientSuperAdmin(false);
+      setIsClient(false);
       return;
     }
 
@@ -72,11 +75,16 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       if (espaceError || !espaceClient) {
         // Pas un client ou erreur
         setIsClientSuperAdmin(false);
+        setIsClient(false);
         if (espaceError) {
           console.log('⚠️ Pas un client ou erreur:', espaceError.code);
         }
         return;
       }
+
+      // ✅ L'utilisateur est un client
+      setIsClient(true);
+      console.log('👤 ✅ Client détecté (a un espace membre)');
 
       // ✅ Utiliser une fonction RPC pour vérifier le statut client_super_admin (contourne RLS)
       // Cette fonction permet au client de vérifier son propre statut avec le nouveau rôle spécifique
@@ -98,6 +106,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     } catch (error) {
       console.error('Erreur vérification client super_admin:', error);
       setIsClientSuperAdmin(false);
+      setIsClient(false);
     }
   };
 
@@ -347,13 +356,28 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         activeModulesSet.add('entreprises');
         activeModulesSet.add('settings');
 
-        console.log(`✅ Modules actifs chargés pour le client: ${Array.from(activeModulesSet).join(', ')}`);
+        console.log(`✅ Modules actifs chargés pour le client (avant filtre): ${Array.from(activeModulesSet).join(', ')}`);
+        
         // ✅ IMPORTANT : Exclure les modules admin de la liste active
         const filteredModules = Array.from(activeModulesSet).filter(id => {
           const menuItem = menuItems.find(item => item.id === id);
-          return !menuItem?.superAdminOnly; // Exclure les modules admin
+          const isAdminModule = menuItem?.superAdminOnly === true;
+          if (isAdminModule) {
+            console.log(`⚠️ Module admin exclu: ${id}`);
+          }
+          return !isAdminModule; // Exclure les modules admin
         });
-        setActiveModules(new Set(filteredModules));
+        
+        console.log(`✅ Modules actifs finaux pour le client (après filtre): ${Array.from(filteredModules).join(', ')}`);
+        console.log(`📊 Nombre de modules actifs: ${filteredModules.length}`);
+        
+        // ✅ Toujours s'assurer que les modules de base sont présents
+        if (filteredModules.length === 0) {
+          console.warn('⚠️ Aucun module trouvé, utilisation des modules de base par défaut');
+          setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
+        } else {
+          setActiveModules(new Set(filteredModules));
+        }
         return;
       }
       
@@ -434,12 +458,16 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                 
                 // ✅ ÉTAPE 2 : Pour les clients, afficher uniquement les modules actifs de leur abonnement
                 // Mais toujours afficher les modules de base
-                if (isClientSuperAdmin || (user && activeModules.size > 0)) {
+                if (isClient) {
                   // Client : vérifier si c'est un module de base ou un module actif
                   if (isBaseModule) {
-                    return true; // Modules de base toujours visibles
+                    return true; // Modules de base toujours visibles pour les clients
                   }
                   // Vérifier si le module est dans la liste des modules actifs
+                  // Si activeModules est vide, on affiche quand même les modules de base
+                  if (activeModules.size === 0) {
+                    return isBaseModule; // Seulement les modules de base si rien n'est chargé
+                  }
                   return activeModules.has(item.id);
                 }
                 
