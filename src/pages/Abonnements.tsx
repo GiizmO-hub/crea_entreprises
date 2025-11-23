@@ -150,15 +150,31 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
         setPlans(plansData);
       }
 
-      // Charger les options
-      const { data: optionsData } = await supabase
-        .from('options_supplementaires')
-        .select('*')
-        .eq('actif', true)
-        .order('nom', { ascending: true });
+      // Charger les modules créés (remplace les anciennes options)
+      // On affiche uniquement les modules créés qui peuvent être ajoutés comme options
+      const { data: modulesData } = await supabase
+        .from('modules_activation')
+        .select('id, module_code, module_nom, module_description, prix_optionnel, categorie, secteur_activite, est_cree, icone')
+        .eq('est_cree', true)
+        .in('categorie', ['option', 'premium']) // Uniquement les modules optionnels ou premium
+        .order('module_nom', { ascending: true });
 
-      if (optionsData) {
-        setOptions(optionsData);
+      if (modulesData) {
+        // Transformer les modules en format Option pour la compatibilité
+        const modulesAsOptions = modulesData.map(mod => ({
+          id: mod.id,
+          nom: mod.module_nom,
+          description: mod.module_description || '',
+          prix_mensuel: mod.prix_optionnel || 0,
+          type: mod.secteur_activite || 'module',
+          actif: true,
+          code: mod.module_code,
+        }));
+        setOptions(modulesAsOptions);
+        console.log('✅ Modules chargés comme options:', modulesAsOptions.length);
+      } else {
+        setOptions([]);
+        console.log('⚠️ Aucun module disponible comme option');
       }
 
       // Charger les abonnements après un court délai pour s'assurer que la création est terminée
