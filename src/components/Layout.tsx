@@ -203,38 +203,29 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
 
     try {
-      // ✅ Pour les super admins plateforme (pas les clients super_admin), tous les modules sont visibles
-      if (isSuperAdmin && !isClientSuperAdmin) {
-        // Super admin plateforme voit tout, on met tous les modules comme actifs
-        setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'gestion-projets', 'documents', 'settings', 'abonnements', 'gestion-plans', 'modules']));
-        return;
-      }
-      
-      // ✅ Pour les clients (même super_admin de leur espace), charger uniquement les modules de leur abonnement
-
-      // ✅ Pour les clients, lire depuis espaces_membres_clients.modules_actifs
-      // Cela contient les modules inclus dans leur abonnement
-      console.log('🔍 Chargement modules pour client, user_id:', user.id);
-      const { data: espaceClient, error: espaceError } = await supabase
+      // ✅ Vérifier d'abord si c'est un client (a un espace membre)
+      const { data: espaceClientCheck } = await supabase
         .from('espaces_membres_clients')
-        .select('modules_actifs, client_id, entreprise_id')
+        .select('id')
         .eq('user_id', user.id)
-        .maybeSingle(); // ✅ Utiliser maybeSingle() au lieu de single() pour éviter erreur si 0 lignes
+        .maybeSingle();
 
-      if (espaceError) {
-        console.error('❌ Erreur chargement espace client:', espaceError);
-        console.warn('⚠️ Espace client non trouvé, utilisation des modules par défaut');
-        // Fallback : modules de base
-        setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
-        return;
-      }
+      // ✅ Si c'est un client, charger uniquement les modules de son abonnement (pas les modules admin)
+      if (espaceClientCheck) {
+        // C'est un client, charger uniquement les modules de son abonnement depuis espaces_membres_clients
+        console.log('👤 Client détecté, chargement modules depuis abonnement uniquement (pas modules admin)');
+        
+        const { data: espaceClient, error: espaceError } = await supabase
+          .from('espaces_membres_clients')
+          .select('modules_actifs, client_id, entreprise_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-      if (!espaceClient) {
-        console.warn('⚠️ Aucun espace client trouvé pour cet utilisateur (normal si ce n\'est pas un client)');
-        // Si ce n'est pas un client, utiliser les modules par défaut
-        setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
-        return;
-      }
+        if (espaceError || !espaceClient) {
+          console.warn('⚠️ Erreur chargement espace client, modules de base uniquement');
+          setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
+          return;
+        }
 
       console.log('✅ Espace client trouvé:', {
         client_id: espaceClient.client_id,
@@ -382,25 +373,36 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {menuItems
               .filter((item) => {
-                // ✅ Les modules admin de la plateforme ne doivent JAMAIS apparaître pour les clients
+                // ✅ ÉTAPE 1 : Les modules admin de la plateforme ne doivent JAMAIS apparaître pour les clients
                 // Même si le client est super_admin de son espace, il ne doit pas voir les modules admin plateforme
                 if (item.superAdminOnly) {
-                  // Seuls les super_admin de la plateforme (pas les clients) peuvent voir ces modules
-                  return isSuperAdmin && !isClientSuperAdmin;
+                  // Seuls les super_admin de la plateforme (PAS les clients) peuvent voir ces modules
+                  if (isClientSuperAdmin) {
+                    // C'est un client, ne jamais afficher les modules admin
+                    return false;
+                  }
+                  return isSuperAdmin;
                 }
                 
-                // ✅ Pour les clients (même super_admin de leur espace), afficher uniquement les modules actifs
-                if (isClientSuperAdmin || (!isSuperAdmin && !item.superAdminOnly)) {
-                  // Les modules de base (dashboard, entreprises, settings) sont toujours visibles
+                // ✅ ÉTAPE 2 : Pour les clients, afficher uniquement les modules actifs de leur abonnement
+                if (isClientSuperAdmin) {
+                  // Client super_admin de son espace : afficher uniquement modules actifs
                   if (item.id === 'dashboard' || item.id === 'entreprises' || item.id === 'settings') {
-                    return true;
+                    return true; // Modules de base toujours visibles
                   }
-                  // Vérifier si le module est actif dans l'abonnement
                   return activeModules.has(item.id);
                 }
                 
-                // Super admin plateforme voit tout
-                return true;
+                // ✅ ÉTAPE 3 : Pour les super_admin plateforme, tout est visible
+                if (isSuperAdmin && !isClientSuperAdmin) {
+                  return true;
+                }
+                
+                // ✅ ÉTAPE 4 : Par défaut, vérifier si le module est actif
+                if (item.id === 'dashboard' || item.id === 'entreprises' || item.id === 'settings') {
+                  return true; // Modules de base toujours visibles
+                }
+                return activeModules.has(item.id);
               })
               .map((item) => {
                 const Icon = item.icon;
