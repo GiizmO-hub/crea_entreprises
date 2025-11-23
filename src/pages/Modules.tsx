@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Package, CheckCircle, Lock, Unlock, Settings, Info, ToggleLeft, ToggleRight, Building2, Hammer, Briefcase, Store, Factory, Heart, GraduationCap, Truck, Hotel, Home, Users, TrendingUp, Link2, AlertTriangle } from 'lucide-react';
-import { getModuleDependencies, canActivateModule, getModuleLabel } from '../lib/moduleReuse';
+import { Package, CheckCircle, Lock, Unlock, ToggleLeft, ToggleRight, Hammer, Briefcase, Store, Factory, Heart, GraduationCap, Truck, Hotel, Home, Users, TrendingUp } from 'lucide-react';
 
 interface ModulesProps {
   onNavigate: (page: string) => void;
@@ -79,14 +78,6 @@ export default function Modules({ onNavigate }: ModulesProps) {
     'gestion-budget': 'gestion-budget',
   };
 
-  const handleModuleClick = (module: Module) => {
-    if (!module.active && !isSuperAdmin) return;
-    
-    const route = moduleRoutes[module.code];
-    if (route) {
-      onNavigate(route);
-    }
-  };
 
   // Obtenir les modules actifs pour les onglets (uniquement pour super admin)
   const activeModules = isSuperAdmin ? modules.filter((m) => m.active && m.est_cree) : [];

@@ -8,20 +8,16 @@ import {
   Trash2, 
   Search, 
   Building2, 
-  Users, 
   Calendar,
   CheckCircle2,
   Clock,
   X,
-  AlertCircle,
-  FolderOpen,
   Link2,
   Target,
   DollarSign,
   TrendingUp,
   User,
   Shield,
-  FileText,
 } from 'lucide-react';
 import { getModuleDependencies, canReuseModule, navigateToReusableModule, getModuleLabel } from '../lib/moduleReuse';
 
@@ -1108,7 +1104,7 @@ export default function GestionProjets({ onNavigate }: GestionProjetsProps) {
                       </div>
                       <div>
                         <p className="text-gray-400 text-sm">Heures estimées</p>
-                        <p className="text-white text-2xl font-bold">{selectedProjet.stats.total_heures_estimees || 0}h</p>
+                        <p className="text-white text-2xl font-bold">{(selectedProjet.stats as any).total_heures_estimees || 0}h</p>
                       </div>
                     </div>
                   </div>
