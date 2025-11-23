@@ -610,45 +610,37 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                )}
              </div>
 
-             {/* ✅ Onglets */}
-             <div className="mb-6 flex gap-4 border-b border-white/10">
-               <button
-                 onClick={() => setActiveTab('liste')}
-                 className={`px-6 py-3 font-semibold transition-all relative ${
-                   activeTab === 'liste'
-                     ? 'text-white'
-                     : 'text-gray-400 hover:text-white'
-                 }`}
-               >
-                 <span className="flex items-center gap-2">
-                   <Users className="w-4 h-4" />
+             {/* ✅ Onglets - Design amélioré */}
+             <div className="mb-8">
+               <div className="flex gap-2 border-b-2 border-white/10">
+                 <button
+                   onClick={() => setActiveTab('liste')}
+                   className={`px-6 py-4 font-semibold transition-all relative flex items-center gap-2 ${
+                     activeTab === 'liste'
+                       ? 'text-white border-b-2 border-blue-500 -mb-0.5'
+                       : 'text-gray-400 hover:text-gray-200'
+                   }`}
+                 >
+                   <Users className="w-5 h-5" />
                    Liste des Clients
-                 </span>
-                 {activeTab === 'liste' && (
-                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-purple-600"></div>
-                 )}
-               </button>
-               <button
-                 onClick={() => setActiveTab('super-admin')}
-                 className={`px-6 py-3 font-semibold transition-all relative ${
-                   activeTab === 'super-admin'
-                     ? 'text-white'
-                     : 'text-gray-400 hover:text-white'
-                 }`}
-               >
-                 <span className="flex items-center gap-2">
-                   <Crown className="w-4 h-4" />
+                 </button>
+                 <button
+                   onClick={() => setActiveTab('super-admin')}
+                   className={`px-6 py-4 font-semibold transition-all relative flex items-center gap-2 ${
+                     activeTab === 'super-admin'
+                       ? 'text-white border-b-2 border-yellow-500 -mb-0.5'
+                       : 'text-gray-400 hover:text-gray-200'
+                   }`}
+                 >
+                   <Crown className="w-5 h-5" />
                    Administration Super Admin
-                 </span>
-                 {activeTab === 'super-admin' && (
-                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-yellow-600 to-orange-600"></div>
-                 )}
-               </button>
+                 </button>
+               </div>
              </div>
 
              {/* ✅ Contenu conditionnel selon l'onglet actif - Liste des Clients */}
              {activeTab === 'liste' && (
-               <div>
+               <div className="space-y-6">
              {/* Sélection Entreprise */}
              {entreprises.length > 1 && (
                <div className="mb-6">
@@ -790,7 +782,7 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
 
              {/* ✅ Onglet Administration Super Admin */}
              {activeTab === 'super-admin' && (
-               <div>
+               <div className="space-y-6">
                  <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
                    <div className="flex items-start gap-3">
                      <Crown className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
