@@ -227,11 +227,11 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           return;
         }
 
-      console.log('✅ Espace client trouvé:', {
-        client_id: espaceClient.client_id,
-        entreprise_id: espaceClient.entreprise_id,
-        modules_actifs: espaceClient.modules_actifs,
-      });
+        console.log('✅ Espace client trouvé:', {
+          client_id: espaceClient.client_id,
+          entreprise_id: espaceClient.entreprise_id,
+          modules_actifs: espaceClient.modules_actifs,
+        });
 
       // Mapping complet entre codes de modules (depuis modules_activation) et IDs du menu
       // Les codes utilisent des tirets (ex: "gestion-projets", "gestion-equipe")
@@ -314,13 +314,30 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         }
       });
 
-      // Toujours afficher certains modules de base (dashboard, entreprises, settings)
-      activeModulesSet.add('dashboard');
-      activeModulesSet.add('entreprises');
-      activeModulesSet.add('settings');
+        // Toujours afficher certains modules de base (dashboard, entreprises, settings)
+        activeModulesSet.add('dashboard');
+        activeModulesSet.add('entreprises');
+        activeModulesSet.add('settings');
 
-      console.log(`✅ Modules actifs chargés pour le client: ${Array.from(activeModulesSet).join(', ')}`);
-      setActiveModules(activeModulesSet);
+        console.log(`✅ Modules actifs chargés pour le client: ${Array.from(activeModulesSet).join(', ')}`);
+        // ✅ IMPORTANT : Exclure les modules admin de la liste active
+        const filteredModules = Array.from(activeModulesSet).filter(id => {
+          const menuItem = menuItems.find(item => item.id === id);
+          return !menuItem?.superAdminOnly; // Exclure les modules admin
+        });
+        setActiveModules(new Set(filteredModules));
+        return;
+      }
+      
+      // ✅ Si ce n'est pas un client, vérifier si c'est un super admin plateforme
+      if (isSuperAdmin && !isClientSuperAdmin) {
+        // Super admin plateforme voit tout
+        setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'gestion-projets', 'documents', 'settings', 'abonnements', 'gestion-plans', 'modules']));
+        return;
+      }
+      
+      // Par défaut, modules de base
+      setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
     } catch (error) {
       console.error('Erreur chargement modules actifs:', error);
       // En cas d'erreur, afficher les modules de base
