@@ -143,6 +143,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'entreprises', label: 'Mon Entreprise', icon: Building2, moduleCode: 'entreprises' },
     { id: 'clients', label: 'Clients', icon: Users, moduleCode: 'clients' },
     { id: 'abonnements', label: 'Abonnements', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
+    { id: 'gestion-plans', label: 'Gestion Plans', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
     { id: 'factures', label: 'Facturation', icon: FileText, moduleCode: 'facturation' },
     { id: 'documents', label: 'Documents', icon: FolderOpen, moduleCode: 'documents' },
     { id: 'gestion-equipe', label: 'Gestion d\'Équipe', icon: UsersRound, superAdminOnly: true, moduleCode: 'gestion-equipe' },
