@@ -79,6 +79,15 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
   const [clients, setClients] = useState<Client[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [options, setOptions] = useState<Option[]>([]);
+  const [planModules, setPlanModules] = useState<Array<{
+    module_code: string;
+    module_nom: string;
+    module_id: string;
+    inclus: boolean;
+    prix_mensuel: number;
+    est_cree: boolean;
+    actif: boolean;
+  }>>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingAbonnement, setEditingAbonnement] = useState<Abonnement | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -193,6 +202,49 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       console.error('Erreur chargement données:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fonction pour charger les modules d'un plan
+  const loadPlanModules = async (planId: string) => {
+    if (!planId) {
+      setPlanModules([]);
+      return;
+    }
+
+    try {
+      const { data: modulesData, error: modulesError } = await supabase.rpc('get_plan_modules', {
+        p_plan_id: planId
+      });
+
+      if (modulesError) {
+        console.error('Erreur chargement modules du plan:', modulesError);
+        setPlanModules([]);
+        return;
+      }
+
+      if (modulesData && modulesData.length > 0) {
+        const modulesInclus = modulesData.filter((m: any) => {
+          const inclus = m.inclus === true || m.inclus === 'true' || String(m.inclus).toLowerCase() === 'true';
+          return inclus && m.est_cree && m.actif;
+        });
+
+        setPlanModules(modulesInclus);
+        console.log(`✅ ${modulesInclus.length} modules inclus chargés pour le plan ${planId}`);
+
+        // Pré-sélectionner les modules inclus dans le plan
+        const moduleIds = modulesInclus.map((m: any) => m.module_id || m.module_code);
+        setFormData(prev => ({
+          ...prev,
+          options_selected: [...new Set([...prev.options_selected, ...moduleIds])]
+        }));
+      } else {
+        setPlanModules([]);
+        console.log('⚠️ Aucun module inclus dans ce plan');
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des modules du plan:', error);
+      setPlanModules([]);
     }
   };
 
@@ -971,13 +1023,23 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                 <select
                   required
                   value={formData.plan_id}
-                  onChange={(e) => {
-                    const plan = plans.find(p => p.id === e.target.value);
+                  onChange={async (e) => {
+                    const planId = e.target.value;
+                    const plan = plans.find(p => p.id === planId);
+                    
                     setFormData({
                       ...formData,
-                      plan_id: e.target.value,
+                      plan_id: planId,
                       montant_mensuel: plan ? (formData.mode_paiement === 'mensuel' ? plan.prix_mensuel : plan.prix_annuel / 12) : 0,
+                      options_selected: [], // Réinitialiser la sélection
                     });
+
+                    // Charger les modules du plan sélectionné
+                    if (planId) {
+                      await loadPlanModules(planId);
+                    } else {
+                      setPlanModules([]);
+                    }
                   }}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
                 >
