@@ -1,16 +1,28 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Auth from './pages/Auth';
-import Dashboard from './pages/Dashboard';
-import Entreprises from './pages/Entreprises';
-import Clients from './pages/Clients';
-import Abonnements from './pages/Abonnements';
-import Factures from './pages/Factures';
-import Modules from './pages/Modules';
-import Collaborateurs from './pages/Collaborateurs';
-import Documents from './pages/Documents';
-import GestionEquipe from './pages/GestionEquipe';
+
+// Lazy loading des pages pour optimiser le code splitting
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Entreprises = lazy(() => import('./pages/Entreprises'));
+const Clients = lazy(() => import('./pages/Clients'));
+const Abonnements = lazy(() => import('./pages/Abonnements'));
+const Factures = lazy(() => import('./pages/Factures'));
+const Modules = lazy(() => import('./pages/Modules'));
+const Collaborateurs = lazy(() => import('./pages/Collaborateurs'));
+const Documents = lazy(() => import('./pages/Documents'));
+const GestionEquipe = lazy(() => import('./pages/GestionEquipe'));
+
+// Composant de chargement pour les pages lazy-loaded
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[400px]">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-500 mx-auto mb-4"></div>
+      <p className="text-gray-600 dark:text-gray-400">Chargement...</p>
+    </div>
+  </div>
+);
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -34,31 +46,71 @@ function AppContent() {
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard onNavigate={setCurrentPage} />;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Dashboard onNavigate={setCurrentPage} />
+          </Suspense>
+        );
       case 'entreprises':
-        return <Entreprises onNavigate={setCurrentPage} />;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Entreprises onNavigate={setCurrentPage} />
+          </Suspense>
+        );
       case 'clients':
-        return <Clients onNavigate={setCurrentPage} />;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Clients onNavigate={setCurrentPage} />
+          </Suspense>
+        );
       case 'abonnements':
-        return <Abonnements onNavigate={setCurrentPage} />;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Abonnements onNavigate={setCurrentPage} />
+          </Suspense>
+        );
       case 'factures':
-        return <Factures onNavigate={setCurrentPage} />;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Factures onNavigate={setCurrentPage} />
+          </Suspense>
+        );
       case 'comptabilite':
         return <div className="p-8 text-white">Module Comptabilité - À venir</div>;
       case 'finance':
         return <div className="p-8 text-white">Module Finance - À venir</div>;
       case 'modules':
-        return <Modules onNavigate={setCurrentPage} />;
-          case 'collaborateurs':
-            return <Collaborateurs onNavigate={setCurrentPage} />;
-          case 'documents':
-            return <Documents onNavigate={setCurrentPage} />;
-          case 'gestion-equipe':
-            return <GestionEquipe onNavigate={setCurrentPage} />;
-          case 'settings':
-            return <div className="p-8 text-white">Paramètres - À venir</div>;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Modules onNavigate={setCurrentPage} />
+          </Suspense>
+        );
+      case 'collaborateurs':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Collaborateurs onNavigate={setCurrentPage} />
+          </Suspense>
+        );
+      case 'documents':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Documents onNavigate={setCurrentPage} />
+          </Suspense>
+        );
+      case 'gestion-equipe':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <GestionEquipe onNavigate={setCurrentPage} />
+          </Suspense>
+        );
+      case 'settings':
+        return <div className="p-8 text-white">Paramètres - À venir</div>;
       default:
-        return <Dashboard onNavigate={setCurrentPage} />;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Dashboard onNavigate={setCurrentPage} />
+          </Suspense>
+        );
     }
   };
 
