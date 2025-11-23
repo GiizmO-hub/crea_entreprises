@@ -639,7 +639,7 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
       </div>
 
       {/* ✅ Contenu conditionnel selon l'onglet actif - Liste des Clients */}
-      {activeTab === 'liste' ? (
+      {activeTab === 'liste' && (
         <div className="space-y-6">
           {/* Sélection Entreprise */}
           {entreprises.length > 1 && (
@@ -905,10 +905,10 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                              Email requis pour créer un espace membre
                            </div>
                          )}
-                       </div>
-                     </div>
-                   ))}
-                 </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
                  {filteredClients.length === 0 && (
                    <div className="text-center py-12 bg-white/10 backdrop-blur-lg rounded-xl border border-white/20">
