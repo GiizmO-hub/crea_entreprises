@@ -17,7 +17,8 @@
     "db:migrate": "node scripts/auto-apply-migration.js",
     "db:apply-migrations": "node scripts/auto-apply-migrations.js",
     "test:generate-data": "node scripts/generate-test-data-supabase.js",
-    "test:generate-data-direct": "node scripts/generate-test-data.js"
+    "test:generate-data-direct": "node scripts/generate-test-data.js",
+    "test:generate-data:help": "echo 'Usage: npm run test:generate-data -- --user-id=xxx' && echo 'Ou ajoutez SUPER_ADMIN_ID=xxx dans .env'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",

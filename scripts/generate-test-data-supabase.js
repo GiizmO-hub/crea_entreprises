@@ -11,6 +11,11 @@
  * - Collaborateurs
  * - Équipes
  * - Abonnements
+ * 
+ * Usage:
+ *   npm run test:generate-data
+ *   npm run test:generate-data -- --user-id=xxx
+ *   node scripts/generate-test-data-supabase.js --user-id=xxx
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -24,6 +29,20 @@ const projectRoot = join(__dirname, '..');
 
 // Charger les variables d'environnement
 config({ path: join(projectRoot, '.env') });
+
+// Récupérer les paramètres de ligne de commande
+const args = process.argv.slice(2);
+let providedUserId = null;
+args.forEach(arg => {
+  if (arg.startsWith('--user-id=')) {
+    providedUserId = arg.split('=')[1];
+  } else if (arg.startsWith('--user-id')) {
+    const index = args.indexOf(arg);
+    if (args[index + 1] && !args[index + 1].startsWith('--')) {
+      providedUserId = args[index + 1];
+    }
+  }
+});
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -106,13 +125,27 @@ async function generateTestData() {
   console.log('🔧 Initialisation de la génération de données de test...\n');
 
   // Récupérer l'ID du super admin - Recherche automatique multi-méthodes
-  console.log('👤 Recherche automatique du super admin...\n');
+  console.log('👤 Recherche de l\'ID utilisateur pour générer les données...\n');
   let superAdminId = null;
   const knownAdminEmail = 'meddecyril@icloud.com';
   
-  console.log('📋 Méthodes de recherche:');
+  // Vérifier si l'ID est fourni en paramètre
+  if (providedUserId) {
+    superAdminId = providedUserId;
+    console.log(`✅ ID utilisateur fourni en paramètre: ${superAdminId}\n`);
+  } else {
+    // Vérifier si l'ID est dans .env
+    if (process.env.SUPER_ADMIN_ID) {
+      superAdminId = process.env.SUPER_ADMIN_ID;
+      console.log(`✅ ID utilisateur trouvé dans .env (SUPER_ADMIN_ID): ${superAdminId}\n`);
+    }
+  }
   
-  // Méthode 1: Chercher dans auth.users via RPC SQL direct (si disponible avec Service Role)
+  // Si l'ID n'est pas fourni, rechercher automatiquement
+  if (!superAdminId) {
+    console.log('📋 Recherche automatique du super admin...\n');
+  
+    // Méthode 1: Chercher dans auth.users via RPC SQL direct (si disponible avec Service Role)
   console.log('   1️⃣  Tentative via requête SQL directe...');
   try {
     // Utiliser une requête SQL directe via RPC pour accéder à auth.users
@@ -243,17 +276,21 @@ async function generateTestData() {
       // Ignorer les erreurs de test
     }
   } else {
-    console.error('\n❌❌❌ IMPOSSIBLE DE TROUVER LE SUPER ADMIN ❌❌❌\n');
-    console.error('📋 Options pour résoudre:');
-    console.error('\n   Option A - Ajouter SUPER_ADMIN_ID dans .env:');
+    console.error('\n❌❌❌ IMPOSSIBLE DE TROUVER L\'ID UTILISATEUR ❌❌❌\n');
+    console.error('📋 Options pour résoudre:\n');
+    console.error('   Option 1 - Fournir l\'ID en paramètre (RECOMMANDÉ):');
+    console.error('     npm run test:generate-data -- --user-id=votre-uuid-utilisateur');
+    console.error('     ou');
+    console.error('     node scripts/generate-test-data-supabase.js --user-id=votre-uuid-utilisateur\n');
+    console.error('   Option 2 - Ajouter SUPER_ADMIN_ID dans .env:');
     console.error('     1. Connectez-vous à l\'application');
     console.error('     2. Ouvrez la console (F12)');
-    console.error('     3. Exécutez: const { data: { user } } = await supabase.auth.getUser(); console.log(user.id);');
-    console.error('     4. Ajoutez dans .env: SUPER_ADMIN_ID=votre-uuid-utilisateur');
-    console.error('\n   Option B - Créer une entreprise dans l\'application:');
-    console.error('     1. L\'ID user_id de cette entreprise sera utilisé automatiquement');
-    console.error('\n   Option C - Créer une fonction RPC get_super_admin_user_id:');
-    console.error('     (Je peux créer cette fonction si vous le souhaitez)\n');
+    console.error('     3. Exécutez:');
+    console.error('        const { data: { user } } = await supabase.auth.getUser();');
+    console.error('        console.log("Votre ID:", user.id);');
+    console.error('     4. Ajoutez dans .env: SUPER_ADMIN_ID=votre-uuid-utilisateur\n');
+    console.error('   Option 3 - Créer une entreprise dans l\'application:');
+    console.error('     1. L\'ID user_id de cette entreprise sera utilisé automatiquement\n');
     
     // Afficher les IDs trouvés pour aider au diagnostic
     console.error('🔍 Diagnostic - IDs trouvés dans la base:');
@@ -284,12 +321,16 @@ async function generateTestData() {
         allEntreprises.forEach((e, i) => {
           console.error(`     ${i + 1}. Entreprise ID: ${e.id}, user_id: ${e.user_id || 'N/A'}`);
         });
-        console.error(`\n   💡 Suggestion: Utiliser le premier user_id: ${allEntreprises[0].user_id}`);
-        console.error(`      Ajoutez dans .env: SUPER_ADMIN_ID=${allEntreprises[0].user_id}\n`);
+        console.error(`\n   💡 Suggestion rapide:`);
+        console.error(`      npm run test:generate-data -- --user-id=${allEntreprises[0].user_id}\n`);
       }
     } catch (error) {
       // Ignorer
     }
+    
+    console.error('\n📖 Exemple d\'utilisation:\n');
+    console.error('   # Avec ID en paramètre:');
+    console.error('   npm run test:generate-data -- --user-id=12345678-1234-1234-1234-123456789abc\n');
     
     process.exit(1);
   }
