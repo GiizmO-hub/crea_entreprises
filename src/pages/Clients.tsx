@@ -589,92 +589,92 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
     );
   }
 
-         return (
-           <div className="p-8">
-             <div className="flex items-center justify-between mb-8">
-               <div>
-                 <h1 className="text-3xl font-bold text-white mb-2">Clients</h1>
-                 <p className="text-gray-300">Gérez vos clients et prospects</p>
-               </div>
-               {activeTab === 'liste' && (
-                 <button
-                   onClick={() => {
-                     resetForm();
-                     setShowForm(true);
-                   }}
-                   className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-                 >
-                   <Plus className="w-5 h-5" />
-                   Ajouter un client
-                 </button>
-               )}
-             </div>
+  return (
+    <div className="p-8">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Clients</h1>
+          <p className="text-gray-300">Gérez vos clients et prospects</p>
+        </div>
+        {activeTab === 'liste' && (
+          <button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            Ajouter un client
+          </button>
+        )}
+      </div>
 
-             {/* ✅ Onglets - Design amélioré */}
-             <div className="mb-8">
-               <div className="inline-flex rounded-lg bg-white/5 p-1 border border-white/10">
-                 <button
-                   onClick={() => setActiveTab('liste')}
-                   className={`px-6 py-3 font-semibold transition-all rounded-md flex items-center gap-2 ${
-                     activeTab === 'liste'
-                       ? 'bg-white/10 text-white shadow-lg'
-                       : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                   }`}
-                 >
-                   <Users className="w-5 h-5" />
-                   Liste des Clients
-                 </button>
-                 <button
-                   onClick={() => setActiveTab('super-admin')}
-                   className={`px-6 py-3 font-semibold transition-all rounded-md flex items-center gap-2 ${
-                     activeTab === 'super-admin'
-                       ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 shadow-lg'
-                       : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                   }`}
-                 >
-                   <Crown className="w-5 h-5" />
-                   Administration Super Admin
-                 </button>
-               </div>
-             </div>
+      {/* ✅ Onglets - Design amélioré */}
+      <div className="mb-8">
+        <div className="inline-flex rounded-lg bg-white/5 p-1 border border-white/10">
+          <button
+            onClick={() => setActiveTab('liste')}
+            className={`px-6 py-3 font-semibold transition-all rounded-md flex items-center gap-2 ${
+              activeTab === 'liste'
+                ? 'bg-white/10 text-white shadow-lg'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+          >
+            <Users className="w-5 h-5" />
+            Liste des Clients
+          </button>
+          <button
+            onClick={() => setActiveTab('super-admin')}
+            className={`px-6 py-3 font-semibold transition-all rounded-md flex items-center gap-2 ${
+              activeTab === 'super-admin'
+                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 shadow-lg'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+          >
+            <Crown className="w-5 h-5" />
+            Administration Super Admin
+          </button>
+        </div>
+      </div>
 
-             {/* ✅ Contenu conditionnel selon l'onglet actif - Liste des Clients */}
-             {activeTab === 'liste' && (
-               <div className="space-y-6">
-             {/* Sélection Entreprise */}
-             {entreprises.length > 1 && (
-               <div className="mb-6">
-                 <select
-                   value={selectedEntreprise}
-                   onChange={(e) => {
-                     setSelectedEntreprise(e.target.value);
-                     setFormData((prev) => ({ ...prev, entreprise_id: e.target.value }));
-                   }}
-                   className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                 >
-                   {entreprises.map((ent) => (
-                     <option key={ent.id} value={ent.id}>
-                       {ent.nom}
-                     </option>
-                   ))}
-                 </select>
-               </div>
-             )}
+      {/* ✅ Contenu conditionnel selon l'onglet actif - Liste des Clients */}
+      {activeTab === 'liste' ? (
+        <div className="space-y-6">
+          {/* Sélection Entreprise */}
+          {entreprises.length > 1 && (
+            <div className="mb-6">
+              <select
+                value={selectedEntreprise}
+                onChange={(e) => {
+                  setSelectedEntreprise(e.target.value);
+                  setFormData((prev) => ({ ...prev, entreprise_id: e.target.value }));
+                }}
+                className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {entreprises.map((ent) => (
+                  <option key={ent.id} value={ent.id}>
+                    {ent.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-             {/* Recherche */}
-             <div className="mb-6 relative">
-               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-               <input
-                 type="text"
-                 placeholder="Rechercher un client..."
-                 value={searchTerm}
-                 onChange={(e) => setSearchTerm(e.target.value)}
-                 className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-               />
-             </div>
+          {/* Recherche */}
+          <div className="mb-6 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher un client..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
 
-             {/* Liste des clients */}
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Liste des clients */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                {filteredClients.map((client) => (
                  <div
                    key={client.id}
@@ -766,18 +766,18 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                ))}
              </div>
 
-             {filteredClients.length === 0 && (
-               <div className="text-center py-12 bg-white/10 backdrop-blur-lg rounded-xl border border-white/20">
-                 <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                 <p className="text-gray-400">Aucun client trouvé pour cette entreprise.</p>
-               </div>
-             )}
-               </div>
-             )}
+          {filteredClients.length === 0 && (
+            <div className="text-center py-12 bg-white/10 backdrop-blur-lg rounded-xl border border-white/20">
+              <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+              <p className="text-gray-400">Aucun client trouvé pour cette entreprise.</p>
+            </div>
+          )}
+        </div>
+      )}
 
-             {/* ✅ Onglet Administration Super Admin */}
-             {activeTab === 'super-admin' && (
-               <div className="space-y-6">
+      {/* ✅ Onglet Administration Super Admin */}
+      {activeTab === 'super-admin' && (
+        <div className="space-y-6">
                  <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
                    <div className="flex items-start gap-3">
                      <Crown className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
