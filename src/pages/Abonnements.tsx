@@ -1012,15 +1012,20 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                 <p className="text-xs text-gray-400 mt-1">Laisser vide pour un abonnement sans limite</p>
               </div>
 
-              {/* Options supplémentaires */}
-              {options.length > 0 && (
+              {/* Modules créés disponibles comme options */}
+              {options.length > 0 ? (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">Options supplémentaires</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto bg-white/5 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                    Modules disponibles (options supplémentaires)
+                  </label>
+                  <p className="text-xs text-gray-400 mb-3">
+                    Sélectionnez les modules créés que vous souhaitez ajouter à cet abonnement
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto bg-white/5 rounded-lg p-4">
                     {options.map((option) => (
                       <label
                         key={option.id}
-                        className="flex items-start gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-all"
+                        className="flex items-start gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-all border border-white/10"
                       >
                         <input
                           type="checkbox"
@@ -1043,15 +1048,28 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
                             <span className="text-white font-medium">{option.nom}</span>
-                            <span className="text-green-400 font-semibold">+{option.prix_mensuel}€/mois</span>
+                            {option.prix_mensuel > 0 ? (
+                              <span className="text-green-400 font-semibold">+{option.prix_mensuel}€/mois</span>
+                            ) : (
+                              <span className="text-blue-400 font-semibold text-xs">Inclus</span>
+                            )}
                           </div>
                           {option.description && (
                             <p className="text-xs text-gray-400 mt-1">{option.description}</p>
+                          )}
+                          {option.code && (
+                            <p className="text-xs text-gray-500 mt-1">Code: {option.code}</p>
                           )}
                         </div>
                       </label>
                     ))}
                   </div>
+                </div>
+              ) : (
+                <div className="bg-gray-500/10 border border-gray-500/30 rounded-lg p-4">
+                  <p className="text-gray-400 text-sm">
+                    Aucun module créé disponible comme option. Les modules doivent être créés et avoir la catégorie "option" ou "premium" pour apparaître ici.
+                  </p>
                 </div>
               )}
 
