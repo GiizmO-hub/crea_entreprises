@@ -163,7 +163,7 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
               actif: mod.actif === true || mod.actif === 'true' || String(mod.actif).toLowerCase() === 'true',
             }));
             
-            console.log(`📦 Plan "${plan.nom}": ${normalizedModules.filter(m => m.inclus).length} modules inclus sur ${normalizedModules.length} modules chargés`);
+            console.log(`📦 Plan "${plan.nom}": ${normalizedModules.filter((m: PlanModule) => m.inclus).length} modules inclus sur ${normalizedModules.length} modules chargés`);
             
             return {
               ...plan,
