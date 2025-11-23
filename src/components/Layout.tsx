@@ -78,21 +78,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         return;
       }
 
-      // ✅ Utiliser une fonction RPC pour vérifier le statut super_admin (contourne RLS)
-      // Cette fonction permet au client de vérifier son propre statut
-      const { data: isSuperAdmin, error: rpcError } = await supabase.rpc(
+      // ✅ Utiliser une fonction RPC pour vérifier le statut client_super_admin (contourne RLS)
+      // Cette fonction permet au client de vérifier son propre statut avec le nouveau rôle spécifique
+      const { data: isSuperAdminResult, error: rpcError } = await supabase.rpc(
         'check_my_super_admin_status'
       );
 
-      if (!rpcError && isSuperAdmin === true) {
+      if (!rpcError && isSuperAdminResult === true) {
         setIsClientSuperAdmin(true);
-        console.log('👤 ✅ Client super_admin détecté via RPC:', true);
+        console.log('👤 ✅ Client super_admin détecté via RPC (rôle: client_super_admin):', true);
       } else {
         setIsClientSuperAdmin(false);
         if (rpcError) {
           console.warn('⚠️ Erreur RPC check_my_super_admin_status:', rpcError);
         } else {
-          console.log('👤 Client détecté mais pas super_admin');
+          console.log('👤 Client détecté mais pas client_super_admin');
         }
       }
     } catch (error) {
