@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, Users, Edit, Trash2, Search, Building2, X, Key, Mail, UserPlus, Copy, Check } from 'lucide-react';
+import { Plus, Users, Edit, Trash2, Search, Building2, X, Key, Mail, UserPlus, Copy, Check, Shield, ShieldOff } from 'lucide-react';
 
 interface Client {
   id: string;
@@ -36,6 +36,7 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
   const [clientCredentials, setClientCredentials] = useState<{ email: string; password: string } | null>(null);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
+  const [clientSuperAdminStatus, setClientSuperAdminStatus] = useState<Record<string, boolean>>({});
   const [espaceMembreData, setEspaceMembreData] = useState({
     password: '',
     plan_id: '',
@@ -338,6 +339,34 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
     }
   };
 
+  const handleToggleClientSuperAdmin = async (client: Client, isSuperAdmin: boolean) => {
+    try {
+      const { data, error } = await supabase.rpc('toggle_client_super_admin', {
+        p_client_id: client.id,
+        p_is_super_admin: isSuperAdmin,
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        // Mettre à jour le statut local
+        setClientSuperAdminStatus(prev => ({
+          ...prev,
+          [client.id]: data.is_super_admin,
+        }));
+        alert(`✅ ${data.message}`);
+        // Recharger les clients pour afficher les mises à jour
+        loadClients();
+        loadClientSuperAdminStatus();
+      } else {
+        alert('Erreur: ' + (data?.error || 'Erreur inconnue'));
+      }
+    } catch (error: any) {
+      console.error('Erreur toggle super_admin:', error);
+      alert(`Erreur: ${error.message || 'Erreur lors de la modification du statut super_admin'}`);
+    }
+  };
+
   const copyToClipboard = async (text: string, type: 'email' | 'password') => {
     try {
       await navigator.clipboard.writeText(text);
@@ -565,30 +594,56 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                 </button>
               </div>
               {client.email && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedClientForEspace(client);
-                      setEspaceMembreData({
-                        password: '',
-                        plan_id: plans.length > 0 ? plans[0].id : '',
-                        options_ids: [],
-                      });
-                      setShowEspaceMembreModal(true);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    Créer espace membre
-                  </button>
-                  <button
-                    onClick={() => handleGetCredentials(client)}
-                    className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg transition-all"
-                    title="Récupérer les identifiants"
-                  >
-                    <Key className="w-4 h-4" />
-                  </button>
-                </div>
+                <>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedClientForEspace(client);
+                        setEspaceMembreData({
+                          password: '',
+                          plan_id: plans.length > 0 ? plans[0].id : '',
+                          options_ids: [],
+                        });
+                        setShowEspaceMembreModal(true);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Créer espace membre
+                    </button>
+                    <button
+                      onClick={() => handleGetCredentials(client)}
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg transition-all"
+                      title="Récupérer les identifiants"
+                    >
+                      <Key className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {/* Bouton Super Admin */}
+                  {clientSuperAdminStatus[client.id] !== undefined && (
+                    <button
+                      onClick={() => handleToggleClientSuperAdmin(client, !clientSuperAdminStatus[client.id])}
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                        clientSuperAdminStatus[client.id]
+                          ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400'
+                          : 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-400'
+                      }`}
+                      title={clientSuperAdminStatus[client.id] ? 'Désactiver super_admin' : 'Activer super_admin'}
+                    >
+                      {clientSuperAdminStatus[client.id] ? (
+                        <>
+                          <ShieldOff className="w-4 h-4" />
+                          Retirer Super Admin
+                        </>
+                      ) : (
+                        <>
+                          <Shield className="w-4 h-4" />
+                          Définir Super Admin
+                        </>
+                      )}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

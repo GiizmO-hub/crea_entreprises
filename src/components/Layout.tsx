@@ -154,18 +154,32 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
 
       // ✅ Pour les clients, lire depuis espaces_membres_clients.modules_actifs
       // Cela contient les modules inclus dans leur abonnement
+      console.log('🔍 Chargement modules pour client, user_id:', user.id);
       const { data: espaceClient, error: espaceError } = await supabase
         .from('espaces_membres_clients')
-        .select('modules_actifs')
+        .select('modules_actifs, client_id, entreprise_id')
         .eq('user_id', user.id)
         .single();
 
-      if (espaceError || !espaceClient) {
+      if (espaceError) {
+        console.error('❌ Erreur chargement espace client:', espaceError);
         console.warn('⚠️ Espace client non trouvé, utilisation des modules par défaut');
         // Fallback : modules de base
         setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
         return;
       }
+
+      if (!espaceClient) {
+        console.warn('⚠️ Aucun espace client trouvé pour cet utilisateur');
+        setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
+        return;
+      }
+
+      console.log('✅ Espace client trouvé:', {
+        client_id: espaceClient.client_id,
+        entreprise_id: espaceClient.entreprise_id,
+        modules_actifs: espaceClient.modules_actifs,
+      });
 
       // Mapping complet entre codes de modules (depuis modules_activation) et IDs du menu
       // Les codes utilisent des tirets (ex: "gestion-projets", "gestion-equipe")
@@ -222,20 +236,29 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
 
       // Extraire les modules actifs depuis le JSON
       const modulesActifs = espaceClient.modules_actifs || {};
+      console.log('📦 Modules actifs depuis la base:', modulesActifs);
+      console.log('📋 Clés des modules:', Object.keys(modulesActifs));
       const activeModulesSet = new Set<string>();
 
       // Parcourir tous les modules dans modules_actifs
       Object.keys(modulesActifs).forEach((moduleCode) => {
+        const moduleValue = modulesActifs[moduleCode];
+        console.log(`🔍 Vérification module: ${moduleCode} = ${moduleValue} (type: ${typeof moduleValue})`);
+        
         // Vérifier si le module est actif (valeur true)
-        if (modulesActifs[moduleCode] === true || modulesActifs[moduleCode] === 'true') {
+        if (moduleValue === true || moduleValue === 'true' || moduleValue === 1) {
           // Mapper le code du module à l'ID du menu
           const menuId = moduleCodeToMenuId[moduleCode];
           if (menuId) {
             activeModulesSet.add(menuId);
-            console.log(`✅ Module actif trouvé: ${moduleCode} -> ${menuId}`);
+            console.log(`✅ Module actif trouvé et mappé: ${moduleCode} -> ${menuId}`);
           } else {
-            console.warn(`⚠️ Code de module non mappé: ${moduleCode}`);
+            console.warn(`⚠️ Code de module non mappé: ${moduleCode} (valeur: ${moduleValue})`);
+            // Afficher tous les codes disponibles pour débogage
+            console.log('📝 Codes de modules disponibles dans le mapping:', Object.keys(moduleCodeToMenuId));
           }
+        } else {
+          console.log(`⏭️ Module ${moduleCode} ignoré (valeur: ${moduleValue}, type: ${typeof moduleValue})`);
         }
       });
 
