@@ -43,29 +43,40 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
 
     try {
-      // Vérifier le rôle dans la table utilisateurs (source de vérité)
-      const { data: utilisateur, error } = await supabase
+      // Méthode 1 : Utiliser la fonction RPC qui contourne RLS
+      const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
+      
+      if (!rpcError && roleData) {
+        const isAdmin = roleData.is_super_admin === true || roleData.is_admin === true;
+        console.log('✅ Rôle vérifié via RPC:', roleData.role, '-> isSuperAdmin:', isAdmin);
+        setIsSuperAdmin(isAdmin);
+        return;
+      }
+
+      // Méthode 2 : Essayer de lire directement depuis la table utilisateurs
+      const { data: utilisateur, error: tableError } = await supabase
         .from('utilisateurs')
         .select('role')
         .eq('id', user.id)
         .single();
 
-      if (!error && utilisateur) {
+      if (!tableError && utilisateur) {
         const isAdmin = utilisateur.role === 'super_admin' || utilisateur.role === 'admin';
         console.log('✅ Rôle vérifié dans utilisateurs:', utilisateur.role, '-> isSuperAdmin:', isAdmin);
         setIsSuperAdmin(isAdmin);
         return;
       }
 
-      // Fallback: vérifier dans user_metadata si la table utilisateurs n'est pas accessible
-      console.warn('⚠️ Impossible de lire utilisateurs, fallback sur user_metadata:', error);
+      // Méthode 3 : Fallback sur user_metadata
+      console.warn('⚠️ Impossible de lire utilisateurs, fallback sur user_metadata. RPC error:', rpcError, 'Table error:', tableError);
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      const role = authUser?.user_metadata?.role;
+      const role = authUser?.user_metadata?.role || authUser?.app_metadata?.role;
       const isAdmin = role === 'super_admin' || role === 'admin';
       console.log('✅ Rôle vérifié dans user_metadata:', role, '-> isSuperAdmin:', isAdmin);
       setIsSuperAdmin(isAdmin);
     } catch (error) {
       console.error('❌ Erreur vérification super admin:', error);
+      // En cas d'erreur totale, supposer que ce n'est pas un admin
       setIsSuperAdmin(false);
     }
   };

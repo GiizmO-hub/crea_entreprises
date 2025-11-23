@@ -20,8 +20,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Vérifier la session actuelle
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Vérifier la session actuelle avec gestion d'erreur
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('❌ Erreur lors de la récupération de la session:', error);
+        // Si le refresh token est invalide, nettoyer la session
+        if (error.message?.includes('Invalid Refresh Token') || error.message?.includes('Refresh Token Not Found')) {
+          console.warn('⚠️ Refresh token invalide, nettoyage de la session');
+          supabase.auth.signOut();
+        }
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -30,9 +42,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Écouter les changements d'authentification
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Gérer les erreurs d'authentification
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' && !session) {
+        console.log('🔄 Session expirée ou invalidée');
+        setSession(null);
+        setUser(null);
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
       setLoading(false);
     });
 
