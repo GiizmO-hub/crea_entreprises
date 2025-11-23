@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, Users, Edit, Trash2, Search, Building2, X, Key, Mail, UserPlus, Copy, Check, Shield, ShieldOff } from 'lucide-react';
+import { Plus, Users, Edit, Trash2, Search, Building2, X, Key, Mail, UserPlus, Copy, Check, Shield, ShieldOff, Crown } from 'lucide-react';
 
 interface Client {
   id: string;
@@ -19,8 +19,11 @@ interface ClientsProps {
   onNavigate: (page: string) => void;
 }
 
+type TabType = 'liste' | 'super-admin';
+
 export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('liste'); // ✅ Nouvel état pour les onglets
   const [clients, setClients] = useState<Client[]>([]);
   const [entreprises, setEntreprises] = useState<Array<{ id: string; nom: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -575,24 +578,338 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
     );
   }
 
-  return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Clients</h1>
-          <p className="text-gray-300">Gérez vos clients et prospects</p>
-        </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-        >
-          <Plus className="w-5 h-5" />
-          Ajouter un client
-        </button>
-      </div>
+         return (
+           <div className="p-8">
+             <div className="flex items-center justify-between mb-8">
+               <div>
+                 <h1 className="text-3xl font-bold text-white mb-2">Clients</h1>
+                 <p className="text-gray-300">Gérez vos clients et prospects</p>
+               </div>
+               {activeTab === 'liste' && (
+                 <button
+                   onClick={() => {
+                     resetForm();
+                     setShowForm(true);
+                   }}
+                   className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+                 >
+                   <Plus className="w-5 h-5" />
+                   Ajouter un client
+                 </button>
+               )}
+             </div>
+
+             {/* ✅ Onglets */}
+             <div className="mb-6 flex gap-4 border-b border-white/10">
+               <button
+                 onClick={() => setActiveTab('liste')}
+                 className={`px-6 py-3 font-semibold transition-all relative ${
+                   activeTab === 'liste'
+                     ? 'text-white'
+                     : 'text-gray-400 hover:text-white'
+                 }`}
+               >
+                 <span className="flex items-center gap-2">
+                   <Users className="w-4 h-4" />
+                   Liste des Clients
+                 </span>
+                 {activeTab === 'liste' && (
+                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-purple-600"></div>
+                 )}
+               </button>
+               <button
+                 onClick={() => setActiveTab('super-admin')}
+                 className={`px-6 py-3 font-semibold transition-all relative ${
+                   activeTab === 'super-admin'
+                     ? 'text-white'
+                     : 'text-gray-400 hover:text-white'
+                 }`}
+               >
+                 <span className="flex items-center gap-2">
+                   <Crown className="w-4 h-4" />
+                   Administration Super Admin
+                 </span>
+                 {activeTab === 'super-admin' && (
+                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-yellow-600 to-orange-600"></div>
+                 )}
+               </button>
+             </div>
+
+             {/* ✅ Contenu conditionnel selon l'onglet actif */}
+             {activeTab === 'liste' && (
+               <>
+             {/* Sélection Entreprise */}
+             {entreprises.length > 1 && (
+               <div className="mb-6">
+                 <select
+                   value={selectedEntreprise}
+                   onChange={(e) => {
+                     setSelectedEntreprise(e.target.value);
+                     setFormData((prev) => ({ ...prev, entreprise_id: e.target.value }));
+                   }}
+                   className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 >
+                   {entreprises.map((ent) => (
+                     <option key={ent.id} value={ent.id}>
+                       {ent.nom}
+                     </option>
+                   ))}
+                 </select>
+               </div>
+             )}
+
+             {/* Recherche */}
+             <div className="mb-6 relative">
+               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+               <input
+                 type="text"
+                 placeholder="Rechercher un client..."
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+                 className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+               />
+             </div>
+
+             {/* Liste des clients */}
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+               {filteredClients.map((client) => (
+                 <div
+                   key={client.id}
+                   className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-all"
+                 >
+                   <div className="flex items-start justify-between mb-4">
+                     <div className="flex items-center gap-3">
+                       <div className="p-3 bg-green-500/20 rounded-lg">
+                         <Users className="w-6 h-6 text-green-400" />
+                       </div>
+                       <div>
+                         <h3 className="text-lg font-bold text-white">
+                           {client.entreprise_nom || `${client.prenom || ''} ${client.nom || ''}`.trim() || 'Client'}
+                         </h3>
+                         {client.prenom && client.nom && (
+                           <p className="text-sm text-gray-400">
+                             {client.prenom} {client.nom}
+                           </p>
+                         )}
+                       </div>
+                     </div>
+                     <span
+                       className={`px-3 py-1 rounded-full text-xs font-medium ${
+                         client.statut === 'actif'
+                           ? 'bg-green-500/20 text-green-400'
+                           : client.statut === 'prospect'
+                           ? 'bg-yellow-500/20 text-yellow-400'
+                           : 'bg-gray-500/20 text-gray-400'
+                       }`}
+                     >
+                       {client.statut}
+                     </span>
+                   </div>
+
+                   {client.email && (
+                     <p className="text-sm text-gray-300 mb-2">{client.email}</p>
+                   )}
+                   {client.telephone && (
+                     <p className="text-sm text-gray-300 mb-2">{client.telephone}</p>
+                   )}
+                   {client.ville && (
+                     <p className="text-sm text-gray-300 mb-2">{client.ville}</p>
+                   )}
+
+                   <div className="space-y-2 mt-4 pt-4 border-t border-white/10">
+                     <div className="flex items-center gap-2">
+                       <button
+                         onClick={() => handleEdit(client)}
+                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all"
+                       >
+                         <Edit className="w-4 h-4" />
+                         Modifier
+                       </button>
+                       <button
+                         onClick={() => handleDelete(client.id)}
+                         className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"
+                       >
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                     </div>
+                     {client.email && (
+                       <div className="flex items-center gap-2">
+                         <button
+                           onClick={() => {
+                             setSelectedClientForEspace(client);
+                             setEspaceMembreData({
+                               password: '',
+                               plan_id: plans.length > 0 ? plans[0].id : '',
+                               options_ids: [],
+                             });
+                             setShowEspaceMembreModal(true);
+                           }}
+                           className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all"
+                         >
+                           <UserPlus className="w-4 h-4" />
+                           Créer espace membre
+                         </button>
+                         <button
+                           onClick={() => handleGetCredentials(client)}
+                           className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg transition-all"
+                           title="Récupérer les identifiants"
+                         >
+                           <Key className="w-4 h-4" />
+                         </button>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               ))}
+             </div>
+
+             {filteredClients.length === 0 && (
+               <div className="text-center py-12 bg-white/10 backdrop-blur-lg rounded-xl border border-white/20">
+                 <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                 <p className="text-gray-400">Aucun client trouvé pour cette entreprise.</p>
+               </div>
+             )}
+               </>
+             )}
+
+             {/* ✅ Onglet Administration Super Admin */}
+             {activeTab === 'super-admin' && (
+               <div>
+                 <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                   <div className="flex items-start gap-3">
+                     <Crown className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                     <div>
+                       <h3 className="text-lg font-semibold text-yellow-400 mb-1">Administration Super Admin</h3>
+                       <p className="text-sm text-gray-300">
+                         Gérez les droits super admin de vos clients. Les clients super admin ont accès à tous les modules de leur espace (sauf la gestion des modules de la plateforme).
+                       </p>
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Sélection Entreprise */}
+                 {entreprises.length > 1 && (
+                   <div className="mb-6">
+                     <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
+                     <select
+                       value={selectedEntreprise}
+                       onChange={(e) => {
+                         setSelectedEntreprise(e.target.value);
+                       }}
+                       className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                     >
+                       {entreprises.map((ent) => (
+                         <option key={ent.id} value={ent.id}>
+                           {ent.nom}
+                         </option>
+                       ))}
+                     </select>
+                   </div>
+                 )}
+
+                 {/* Recherche */}
+                 <div className="mb-6 relative">
+                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                   <input
+                     type="text"
+                     placeholder="Rechercher un client..."
+                     value={searchTerm}
+                     onChange={(e) => setSearchTerm(e.target.value)}
+                     className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                   />
+                 </div>
+
+                 {/* Liste des clients avec statut super admin */}
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   {filteredClients.map((client) => (
+                     <div
+                       key={client.id}
+                       className={`bg-white/10 backdrop-blur-lg rounded-xl p-6 border transition-all ${
+                         clientSuperAdminStatus[client.id]
+                           ? 'border-yellow-500/50 bg-yellow-500/5'
+                           : 'border-white/20 hover:bg-white/15'
+                       }`}
+                     >
+                       <div className="flex items-start justify-between mb-4">
+                         <div className="flex items-center gap-3">
+                           <div className={`p-3 rounded-lg ${
+                             clientSuperAdminStatus[client.id]
+                               ? 'bg-yellow-500/20'
+                               : 'bg-gray-500/20'
+                           }`}>
+                             {clientSuperAdminStatus[client.id] ? (
+                               <Crown className="w-6 h-6 text-yellow-400" />
+                             ) : (
+                               <Users className="w-6 h-6 text-gray-400" />
+                             )}
+                           </div>
+                           <div className="flex-1">
+                             <h3 className="text-lg font-bold text-white">
+                               {client.entreprise_nom || `${client.prenom || ''} ${client.nom || ''}`.trim() || 'Client'}
+                             </h3>
+                             {client.prenom && client.nom && (
+                               <p className="text-sm text-gray-400">
+                                 {client.prenom} {client.nom}
+                               </p>
+                             )}
+                           </div>
+                         </div>
+                         {clientSuperAdminStatus[client.id] && (
+                           <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-xs font-medium border border-yellow-500/30">
+                             Super Admin
+                           </span>
+                         )}
+                       </div>
+
+                       {client.email && (
+                         <p className="text-sm text-gray-300 mb-2 flex items-center gap-2">
+                           <Mail className="w-4 h-4" />
+                           {client.email}
+                         </p>
+                       )}
+
+                       <div className="mt-4 pt-4 border-t border-white/10">
+                         {client.email ? (
+                           <button
+                             onClick={() => handleToggleClientSuperAdmin(client, !clientSuperAdminStatus[client.id])}
+                             className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition-all font-semibold ${
+                               clientSuperAdminStatus[client.id]
+                                 ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
+                                 : 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30'
+                             }`}
+                           >
+                             {clientSuperAdminStatus[client.id] ? (
+                               <>
+                                 <ShieldOff className="w-4 h-4" />
+                                 Retirer Super Admin
+                               </>
+                             ) : (
+                               <>
+                                 <Shield className="w-4 h-4" />
+                                 Définir Super Admin
+                               </>
+                             )}
+                           </button>
+                         ) : (
+                           <div className="text-center py-2 px-4 bg-gray-500/20 text-gray-400 rounded-lg text-sm">
+                             Email requis pour créer un espace membre
+                           </div>
+                         )}
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+
+                 {filteredClients.length === 0 && (
+                   <div className="text-center py-12 bg-white/10 backdrop-blur-lg rounded-xl border border-white/20">
+                     <Crown className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                     <p className="text-gray-400">Aucun client trouvé pour cette entreprise.</p>
+                   </div>
+                 )}
+               </div>
+             )}
+
+             {/* ✅ Modales communes aux deux onglets */}
 
       {/* Sélection Entreprise */}
       {entreprises.length > 1 && (
@@ -714,31 +1031,6 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                       <Key className="w-4 h-4" />
                     </button>
                   </div>
-                  {/* Bouton Super Admin - Afficher pour tous les clients avec email */}
-                  <button
-                    onClick={() => {
-                      const currentStatus = clientSuperAdminStatus[client.id] || false;
-                      handleToggleClientSuperAdmin(client, !currentStatus);
-                    }}
-                    className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                      clientSuperAdminStatus[client.id] === true
-                        ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30'
-                        : 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-400 border border-gray-500/30'
-                    }`}
-                    title={clientSuperAdminStatus[client.id] === true ? 'Désactiver super_admin' : 'Activer super_admin'}
-                  >
-                    {clientSuperAdminStatus[client.id] === true ? (
-                      <>
-                        <ShieldOff className="w-4 h-4" />
-                        Retirer Super Admin
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="w-4 h-4" />
-                        Définir Super Admin
-                      </>
-                    )}
-                  </button>
                 </>
               )}
             </div>
