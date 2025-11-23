@@ -906,6 +906,11 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                                </>
                              )}
                            </button>
+                           {clientSuperAdminStatus[client.id] && (
+                             <p className="text-xs text-yellow-400/70 mt-2 text-center">
+                               💡 Le client doit se reconnecter pour voir le badge dans son espace
+                             </p>
+                           )}
                          ) : (
                            <div className="text-center py-2 px-4 bg-gray-500/20 text-gray-400 rounded-lg text-sm">
                              Email requis pour créer un espace membre
