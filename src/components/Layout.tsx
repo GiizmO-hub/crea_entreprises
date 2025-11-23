@@ -36,7 +36,6 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   useEffect(() => {
     if (user) {
       checkSuperAdmin();
-      loadActiveModules();
       checkClientSuperAdmin();
     } else {
       setIsSuperAdmin(false);
@@ -44,6 +43,13 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       setActiveModules(new Set());
     }
   }, [user]); // ✅ Retirer isSuperAdmin des dépendances pour éviter boucle infinie
+
+  // Charger les modules actifs après avoir déterminé le statut super_admin
+  useEffect(() => {
+    if (user) {
+      loadActiveModules();
+    }
+  }, [user, isSuperAdmin, isClientSuperAdmin]);
 
   const checkClientSuperAdmin = async () => {
     if (!user) {
