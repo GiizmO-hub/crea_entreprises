@@ -252,8 +252,18 @@ export default function Clients({ onNavigate: _onNavigate }: ClientsProps) {
   useEffect(() => {
     if (selectedEntreprise) {
       loadClients();
+      // Recharger le statut super_admin à chaque changement d'entreprise
+      loadClientSuperAdminStatus();
     }
   }, [selectedEntreprise]);
+
+  // Recharger le statut super_admin quand les clients sont chargés
+  useEffect(() => {
+    if (clients.length > 0) {
+      console.log('🔄 Rechargement statut super_admin après chargement clients');
+      loadClientSuperAdminStatus();
+    }
+  }, [clients.length]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
