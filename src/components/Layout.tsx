@@ -46,26 +46,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
 
     try {
-      // Vérifier si l'utilisateur est un client super_admin (a un espace membre ET est super_admin dans utilisateurs)
-      const { data: espaceClient } = await supabase
-        .from('espaces_membres_clients')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .single();
+      // ✅ Utiliser une fonction RPC pour vérifier le statut super_admin (contourne RLS)
+      // Cette fonction permet au client de vérifier son propre statut
+      const { data: isSuperAdmin, error: rpcError } = await supabase.rpc(
+        'check_my_super_admin_status'
+      );
 
-      if (espaceClient) {
-        // C'est un client, vérifier s'il est super_admin
-        const { data: utilisateur } = await supabase
-          .from('utilisateurs')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-
-        const isClientAdmin = utilisateur?.role === 'super_admin';
-        setIsClientSuperAdmin(isClientAdmin);
-        console.log('👤 Client super_admin détecté:', isClientAdmin);
+      if (!rpcError && isSuperAdmin === true) {
+        setIsClientSuperAdmin(true);
+        console.log('👤 Client super_admin détecté via RPC:', true);
       } else {
         setIsClientSuperAdmin(false);
+        if (rpcError) {
+          // Si erreur, vérifier si c'est parce que ce n'est pas un client
+          console.warn('⚠️ Erreur RPC check_my_super_admin_status:', rpcError);
+        }
       }
     } catch (error) {
       console.error('Erreur vérification client super_admin:', error);
