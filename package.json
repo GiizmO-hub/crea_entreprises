@@ -15,7 +15,9 @@
     "db:fix-date": "node scripts/apply-fixes-via-rpc.js fix-date-activation",
     "db:fix-mode": "node scripts/apply-fixes-via-rpc.js fix-mode-paiement",
     "db:migrate": "node scripts/auto-apply-migration.js",
-    "db:apply-migrations": "node scripts/auto-apply-migrations.js"
+    "db:apply-migrations": "node scripts/auto-apply-migrations.js",
+    "test:generate-data": "node scripts/generate-test-data-supabase.js",
+    "test:generate-data-direct": "node scripts/generate-test-data.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",
