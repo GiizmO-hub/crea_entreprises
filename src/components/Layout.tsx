@@ -238,7 +238,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         });
 
       // Mapping complet entre codes de modules (depuis modules_activation) et IDs du menu
-      // Les codes utilisent des tirets (ex: "gestion-projets", "gestion-equipe")
+      // Les codes peuvent utiliser des tirets, underscores, ou autres formats
       const moduleCodeToMenuId: Record<string, string> = {
         // Modules de base
         'dashboard': 'dashboard',
@@ -253,6 +253,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         'gestion_clients': 'clients',
         'gestion-clients': 'clients',
         'gestion-des-clients': 'clients',
+        'gestion_des_clients': 'clients',
         
         // Modules facturation
         'facturation': 'factures',
@@ -263,17 +264,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         'gestion_documents': 'documents',
         'gestion-documents': 'documents',
         'gestion-de-documents': 'documents',
+        'gestion_de_documents': 'documents',
         
         // Modules gestion équipe
         'gestion-equipe': 'gestion-equipe',
         'gestion_equipe': 'gestion-equipe',
         'gestion-d-equipe': 'gestion-equipe',
         'gestion-d-équipe': 'gestion-equipe',
+        'gestion_dequipe': 'gestion-equipe',
+        'gestion_d_equipe': 'gestion-equipe',
         
         // Modules gestion projets
         'gestion-projets': 'gestion-projets',
         'gestion_projets': 'gestion-projets',
         'gestion-de-projets': 'gestion-projets',
+        'gestion_de_projets': 'gestion-projets',
         
         // Modules comptabilité
         'comptabilite': 'comptabilite',
@@ -288,11 +293,16 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         'gestion-collaborateurs': 'collaborateurs',
         'gestion_des_collaborateurs': 'collaborateurs',
         'gestion-des-collaborateurs': 'collaborateurs',
+        
+        // Modules paramètres
+        'parametres': 'settings',
+        'paramètres': 'settings',
+        'settings': 'settings',
       };
 
       // Extraire les modules actifs depuis le JSON
       const modulesActifs = espaceClient.modules_actifs || {};
-      console.log('📦 Modules actifs depuis la base:', modulesActifs);
+      console.log('📦 Modules actifs depuis la base:', JSON.stringify(modulesActifs, null, 2));
       console.log('📋 Clés des modules:', Object.keys(modulesActifs));
       const activeModulesSet = new Set<string>();
 
@@ -301,10 +311,24 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         const moduleValue = modulesActifs[moduleCode];
         console.log(`🔍 Vérification module: ${moduleCode} = ${moduleValue} (type: ${typeof moduleValue})`);
         
-        // Vérifier si le module est actif (valeur true)
-        if (moduleValue === true || moduleValue === 'true' || moduleValue === 1) {
-          // Mapper le code du module à l'ID du menu
-          const menuId = moduleCodeToMenuId[moduleCode];
+        // Vérifier si le module est actif (valeur true, 'true', 1, ou string '1')
+        const isActive = moduleValue === true || 
+                        moduleValue === 'true' || 
+                        moduleValue === 1 || 
+                        moduleValue === '1' ||
+                        (typeof moduleValue === 'string' && moduleValue.toLowerCase() === 'true');
+        
+        if (isActive) {
+          // Essayer de trouver le mapping exact
+          let menuId = moduleCodeToMenuId[moduleCode];
+          
+          // Si pas trouvé, essayer avec normalisation (remplacer underscores par tirets et vice versa)
+          if (!menuId) {
+            const normalizedCode1 = moduleCode.replace(/_/g, '-');
+            const normalizedCode2 = moduleCode.replace(/-/g, '_');
+            menuId = moduleCodeToMenuId[normalizedCode1] || moduleCodeToMenuId[normalizedCode2];
+          }
+          
           if (menuId) {
             activeModulesSet.add(menuId);
             console.log(`✅ Module actif trouvé et mappé: ${moduleCode} -> ${menuId}`);
