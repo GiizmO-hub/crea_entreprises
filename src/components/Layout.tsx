@@ -119,8 +119,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           .from('espaces_membres_clients')
           .select('id')
           .eq('user_id', user.id)
-          .limit(1)
-          .single();
+          .maybeSingle(); // ✅ Utiliser maybeSingle() pour éviter erreur si 0 lignes
 
         if (isClient) {
           // C'est un client, même si super_admin, il n'est pas super_admin plateforme
@@ -148,8 +147,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           .from('espaces_membres_clients')
           .select('id')
           .eq('user_id', user.id)
-          .limit(1)
-          .single();
+          .maybeSingle(); // ✅ Utiliser maybeSingle() pour éviter erreur si 0 lignes
 
         if (isClient) {
           // C'est un client, même si super_admin, il n'est pas super_admin plateforme
@@ -174,8 +172,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         .from('espaces_membres_clients')
         .select('id')
         .eq('user_id', user.id)
-        .limit(1)
-        .single();
+        .maybeSingle(); // ✅ Utiliser maybeSingle() pour éviter erreur si 0 lignes
 
       if (isClient) {
         console.log('✅ Utilisateur est un client (pas super_admin plateforme)');
