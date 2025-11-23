@@ -612,13 +612,13 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
 
              {/* ✅ Onglets - Design amélioré */}
              <div className="mb-8">
-               <div className="flex gap-2 border-b-2 border-white/10">
+               <div className="inline-flex rounded-lg bg-white/5 p-1 border border-white/10">
                  <button
                    onClick={() => setActiveTab('liste')}
-                   className={`px-6 py-4 font-semibold transition-all relative flex items-center gap-2 ${
+                   className={`px-6 py-3 font-semibold transition-all rounded-md flex items-center gap-2 ${
                      activeTab === 'liste'
-                       ? 'text-white border-b-2 border-blue-500 -mb-0.5'
-                       : 'text-gray-400 hover:text-gray-200'
+                       ? 'bg-white/10 text-white shadow-lg'
+                       : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                    }`}
                  >
                    <Users className="w-5 h-5" />
@@ -626,10 +626,10 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                  </button>
                  <button
                    onClick={() => setActiveTab('super-admin')}
-                   className={`px-6 py-4 font-semibold transition-all relative flex items-center gap-2 ${
+                   className={`px-6 py-3 font-semibold transition-all rounded-md flex items-center gap-2 ${
                      activeTab === 'super-admin'
-                       ? 'text-white border-b-2 border-yellow-500 -mb-0.5'
-                       : 'text-gray-400 hover:text-gray-200'
+                       ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 shadow-lg'
+                       : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                    }`}
                  >
                    <Crown className="w-5 h-5" />
@@ -773,11 +773,6 @@ ADD COLUMN IF NOT EXISTS date_activation date DEFAULT CURRENT_DATE;`;
                </div>
              )}
                </div>
-             )}
-
-             {/* ✅ Séparateur visuel entre les onglets (optionnel) */}
-             {activeTab === 'super-admin' && (
-               <div className="mb-0"></div>
              )}
 
              {/* ✅ Onglet Administration Super Admin */}
