@@ -1,27 +1,18 @@
 /*
-  # Suppression complète et définitive d'une entreprise
+  # Correction : Suppression conditionnelle dans delete_entreprise_complete
   
   PROBLÈME:
-  - Lorsqu'on supprime une entreprise, tout n'est pas supprimé définitivement
-  - Les auth.users restent parfois dans la base
-  - Certains éléments liés peuvent rester orphelins
+  - La fonction delete_entreprise_complete essaie de supprimer depuis invitations_clients
+  - Cette table peut ne pas exister dans certaines bases de données
+  - Erreur: "relation invitations_clients does not exist"
   
   SOLUTION:
-  - Créer une fonction qui supprime TOUT de manière séquentielle et complète
-  - Supprimer tous les auth.users associés
-  - Supprimer tous les abonnements
-  - Supprimer tous les clients, espaces membres, etc.
-  - Supprimer l'entreprise elle-même
+  - Ajouter des blocs TRY/CATCH pour toutes les tables optionnelles
+  - Vérifier l'existence des tables avant suppression
+  - Ignorer les erreurs si les tables n'existent pas
 */
 
--- ============================================================================
--- PARTIE 1 : Fonction complète de suppression d'entreprise
--- ============================================================================
-
--- Supprimer l'ancienne fonction
-DROP FUNCTION IF EXISTS delete_entreprise_complete(uuid);
-
--- Créer la nouvelle fonction complète qui supprime TOUT
+-- Modifier la fonction delete_entreprise_complete pour gérer les tables optionnelles
 CREATE OR REPLACE FUNCTION delete_entreprise_complete(p_entreprise_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -181,71 +172,86 @@ BEGIN
   WHERE entreprise_id = p_entreprise_id;
   
   -- ========================================================================
-  -- ÉTAPE 5 : Supprimer tous les autres éléments liés
+  -- ÉTAPE 5 : Supprimer tous les autres éléments liés (tables optionnelles)
   -- ========================================================================
   
   -- Supprimer les invitations clients (si table existe)
   BEGIN
-    DELETE FROM invitations_clients
-    WHERE entreprise_id = p_entreprise_id;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invitations_clients') THEN
+      DELETE FROM invitations_clients
+      WHERE entreprise_id = p_entreprise_id;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
-    -- Table peut ne pas exister
+    -- Ignorer si table n'existe pas ou erreur
     NULL;
   END;
   
   -- Supprimer les notifications espace client (si table existe)
   BEGIN
-    DELETE FROM notifications_espace_client
-    WHERE entreprise_id = p_entreprise_id;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'notifications_espace_client') THEN
+      DELETE FROM notifications_espace_client
+      WHERE entreprise_id = p_entreprise_id;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
     NULL;
   END;
   
   -- Supprimer les factures clients (si table existe)
   BEGIN
-    DELETE FROM factures_clients
-    WHERE entreprise_id = p_entreprise_id;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'factures_clients') THEN
+      DELETE FROM factures_clients
+      WHERE entreprise_id = p_entreprise_id;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
     NULL;
   END;
   
   -- Supprimer les avoirs clients (si table existe)
   BEGIN
-    DELETE FROM avoirs_clients
-    WHERE entreprise_id = p_entreprise_id;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'avoirs_clients') THEN
+      DELETE FROM avoirs_clients
+      WHERE entreprise_id = p_entreprise_id;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
     NULL;
   END;
   
   -- Supprimer les documents clients (si table existe)
   BEGIN
-    DELETE FROM documents_clients
-    WHERE entreprise_id = p_entreprise_id;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'documents_clients') THEN
+      DELETE FROM documents_clients
+      WHERE entreprise_id = p_entreprise_id;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
     NULL;
   END;
   
   -- Supprimer les demandes clients (si table existe)
   BEGIN
-    DELETE FROM demandes_clients
-    WHERE entreprise_id = p_entreprise_id;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'demandes_clients') THEN
+      DELETE FROM demandes_clients
+      WHERE entreprise_id = p_entreprise_id;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
     NULL;
   END;
   
   -- Supprimer les prévisionnels (si table existe)
   BEGIN
-    DELETE FROM previsionnels
-    WHERE entreprise_id = p_entreprise_id;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'previsionnels') THEN
+      DELETE FROM previsionnels
+      WHERE entreprise_id = p_entreprise_id;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
-    -- Table peut ne pas exister
     NULL;
   END;
   
   -- Supprimer les collaborateurs entreprise (si table existe)
   BEGIN
-    DELETE FROM collaborateurs_entreprise
-    WHERE entreprise_id = p_entreprise_id;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'collaborateurs_entreprise') THEN
+      DELETE FROM collaborateurs_entreprise
+      WHERE entreprise_id = p_entreprise_id;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
     NULL;
   END;
@@ -286,38 +292,7 @@ EXCEPTION
 END;
 $$;
 
-COMMENT ON FUNCTION delete_entreprise_complete(uuid) IS 'Supprime définitivement une entreprise et TOUT ce qui est lié : clients, espaces membres, abonnements, auth.users, invitations, notifications, factures, etc.';
+COMMENT ON FUNCTION delete_entreprise_complete(uuid) IS 'Supprime définitivement une entreprise et TOUT ce qui est lié. Vérifie l''existence des tables optionnelles avant suppression.';
 
 GRANT EXECUTE ON FUNCTION delete_entreprise_complete(uuid) TO authenticated;
-
--- ============================================================================
--- PARTIE 2 : Vérifier et corriger les contraintes CASCADE
--- ============================================================================
-
--- S'assurer que les contraintes CASCADE sont bien en place
--- (Déjà fait dans la migration précédente, mais on vérifie)
-
--- Vérifier que espaces_membres_clients a bien CASCADE sur entreprise_id
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_constraint 
-    WHERE conrelid = 'espaces_membres_clients'::regclass
-    AND conname LIKE '%entreprise_id%'
-    AND contype = 'f'
-  ) THEN
-    -- Vérifier si CASCADE est présent
-    -- (Si non, on le recrée avec CASCADE)
-    NULL; -- Déjà fait dans migration précédente
-  END IF;
-END $$;
-
--- ============================================================================
--- PARTIE 3 : Améliorer le trigger pour double sécurité
--- ============================================================================
-
--- Le trigger trigger_delete_entreprise_auth sera toujours appelé
--- en complément de la fonction pour s'assurer que tout est supprimé
-
-COMMENT ON FUNCTION delete_entreprise_complete(uuid) IS 'Supprime définitivement TOUT : entreprise, clients, espaces membres, abonnements, auth.users, invitations, notifications, factures clients, etc. Utilise CASCADE et suppressions explicites pour garantir la suppression complète.';
 
