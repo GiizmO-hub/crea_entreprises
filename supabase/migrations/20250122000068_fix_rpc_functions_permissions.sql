@@ -28,8 +28,9 @@ EXCEPTION
     NULL;
 END $$;
 
--- Créer la fonction avec paramètre optionnel
-CREATE OR REPLACE FUNCTION is_platform_super_admin(p_user_id uuid DEFAULT NULL)
+-- Créer la fonction sans paramètre (utilise auth.uid() automatiquement)
+-- Compatible avec la version existante dans 20250122000066
+CREATE OR REPLACE FUNCTION is_platform_super_admin()
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -37,14 +38,10 @@ SET search_path = public, auth
 STABLE
 AS $$
 DECLARE
-  target_user_id uuid;
   user_role text;
 BEGIN
-  -- Si aucun user_id fourni, utiliser l'utilisateur connecté
-  target_user_id := COALESCE(p_user_id, auth.uid());
-  
-  -- Si pas d'utilisateur, retourner false
-  IF target_user_id IS NULL THEN
+  -- Si pas d'utilisateur connecté, retourner false
+  IF auth.uid() IS NULL THEN
     RETURN false;
   END IF;
   
@@ -52,24 +49,25 @@ BEGIN
   -- Si c'est un client, il n'est JAMAIS super_admin plateforme
   IF EXISTS (
     SELECT 1 FROM espaces_membres_clients
-    WHERE user_id = target_user_id
+    WHERE user_id = auth.uid()
   ) THEN
     RETURN false;
   END IF;
   
-  -- Récupérer le rôle depuis utilisateurs ou auth.users
+  -- Vérifier le rôle dans auth.users
   SELECT COALESCE(
-    (SELECT role FROM utilisateurs WHERE id = target_user_id),
-    (SELECT (raw_user_meta_data->>'role')::text FROM auth.users WHERE id = target_user_id),
+    (raw_user_meta_data->>'role')::text,
     ''
-  ) INTO user_role;
+  ) INTO user_role
+  FROM auth.users
+  WHERE id = auth.uid();
   
   -- Retourner true seulement si c'est 'super_admin' (pas 'client_super_admin')
   RETURN user_role = 'super_admin';
 END;
 $$;
 
-COMMENT ON FUNCTION is_platform_super_admin(uuid) IS 'Vérifie si un utilisateur est super_admin de la plateforme (exclut les clients)';
+COMMENT ON FUNCTION is_platform_super_admin() IS 'Vérifie si l''utilisateur connecté est super_admin de la plateforme (exclut les clients)';
 
 -- ============================================================================
 -- PARTIE 2 : Corriger get_client_super_admin_status()
@@ -102,7 +100,7 @@ BEGIN
   END IF;
   
   -- Vérifier si l'utilisateur est super_admin plateforme
-  is_platform_admin := is_platform_super_admin(current_user_id);
+  is_platform_admin := is_platform_super_admin();
   
   -- Si ce n'est pas un super_admin plateforme, vérifier si c'est le propriétaire de l'entreprise
   IF NOT is_platform_admin THEN
