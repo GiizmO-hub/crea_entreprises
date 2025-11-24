@@ -328,14 +328,13 @@ export default function Parametres() {
               emailToRole[u.email] = u.role || 'client';
             });
 
-            // Mapper les rôles par email de client (remplace seulement si pas déjà défini ou si 'client')
+            // Mapper les rôles par email de client (remplace si le rôle via espace n'est pas client_super_admin)
             data.forEach((c: { id: string; email?: string }) => {
               if (c.email && emailToRole[c.email]) {
-                // Si le rôle n'a pas été défini via espace, utiliser celui de l'email
-                if (!rolesMap[c.id] || rolesMap[c.id] === 'client') {
-                  rolesMap[c.id] = emailToRole[c.email];
-                  console.log(`📌 Rôle récupéré via email pour client ${c.id} (${c.email}): ${emailToRole[c.email]}`);
-                }
+                // Toujours utiliser le rôle depuis utilisateurs (source de vérité)
+                // Cela garantit que les changements récents sont pris en compte
+                rolesMap[c.id] = emailToRole[c.email];
+                console.log(`📌 Rôle récupéré via email pour client ${c.id} (${c.email}): ${emailToRole[c.email]}`);
               }
             });
           }
@@ -548,7 +547,14 @@ export default function Parametres() {
             ? '✅ Client défini comme super admin de son espace.\n💡 Le client doit se déconnecter et se reconnecter pour voir le badge Super Admin.'
             : '✅ Statut super admin retiré du client.'
         );
+        // Attendre un peu pour que la base de données se mette à jour
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Recharger les clients avec force pour obtenir le nouveau rôle
         await loadAllClients();
+        // Forcer un deuxième rechargement après un court délai pour garantir la synchronisation
+        setTimeout(async () => {
+          await loadAllClients();
+        }, 1000);
       } else {
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
