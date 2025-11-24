@@ -67,6 +67,8 @@ DECLARE
   v_password text;
   v_email_final text;
   v_result jsonb;
+  v_auth_user_id uuid;
+  v_role text;
 BEGIN
   -- 1. Vérifier que l'utilisateur est connecté
   v_user_id := auth.uid();
@@ -149,12 +151,8 @@ BEGIN
     RETURNING id INTO v_client_id;
 
     -- Créer l'utilisateur auth pour le client
-    DECLARE
-      v_auth_user_id uuid;
-      v_role text;
-    BEGIN
-      v_auth_user_id := gen_random_uuid();
-      v_role := CASE WHEN p_creer_client_super_admin THEN 'client_super_admin' ELSE 'client' END;
+    v_auth_user_id := gen_random_uuid();
+    v_role := CASE WHEN p_creer_client_super_admin THEN 'client_super_admin' ELSE 'client' END;
       
       INSERT INTO auth.users (
         id,
