@@ -153,17 +153,17 @@ export default function Parametres() {
       console.log('🔄 loadEntrepriseConfig: Chargement des entreprises pour user:', user.id);
       
       // Récupérer TOUTES les entreprises de l'utilisateur connecté (pour gérer 50+ entreprises)
-      // Laisser RLS filtrer automatiquement (comme dans Entreprises.tsx)
-      // Ne pas filtrer par user_id ici car RLS le fait déjà
-      const { data: entreprisesData, error: entreprisesError } = await supabase
+      // Essayer d'abord sans filtre (RLS devrait filtrer automatiquement)
+      let { data: entreprisesData, error: entreprisesError } = await supabase
         .from('entreprises')
         .select('id, nom, statut, statut_paiement, created_at, user_id')
         .order('created_at', { ascending: false });
       
-      // Si pas d'entreprises mais qu'on est admin, peut-être que RLS bloque
-      // Essayer aussi avec le filtre explicite pour comparaison
-      if (!entreprisesData || entreprisesData.length === 0) {
-        console.log('⚠️ Aucune entreprise via RLS, tentative avec filtre explicite user_id:', user.id);
+      // Si pas d'entreprises ou erreur, essayer avec filtre explicite user_id
+      if ((!entreprisesData || entreprisesData.length === 0) || entreprisesError) {
+        console.log('⚠️ Aucune entreprise via RLS ou erreur, tentative avec filtre explicite user_id:', user.id);
+        console.log('❌ Erreur RLS:', entreprisesError);
+        
         const { data: entreprisesDataWithFilter, error: errorWithFilter } = await supabase
           .from('entreprises')
           .select('id, nom, statut, statut_paiement, created_at, user_id')
@@ -173,6 +173,10 @@ export default function Parametres() {
         if (!errorWithFilter && entreprisesDataWithFilter && entreprisesDataWithFilter.length > 0) {
           console.log('✅ Entreprises trouvées avec filtre explicite:', entreprisesDataWithFilter.length);
           entreprisesData = entreprisesDataWithFilter;
+          entreprisesError = null;
+        } else if (errorWithFilter) {
+          console.error('❌ Erreur même avec filtre explicite:', errorWithFilter);
+          entreprisesError = errorWithFilter;
         }
       }
 
