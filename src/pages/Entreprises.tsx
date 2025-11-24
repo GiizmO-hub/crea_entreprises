@@ -243,7 +243,7 @@ export default function Entreprises() {
               }
             } catch (espaceErr: unknown) {
               console.error('Erreur création espace membre:', espaceErr);
-              alert('⚠️ Entreprise et client créés mais erreur lors de la création de l'espace membre');
+              alert('⚠️ Entreprise et client créés mais erreur lors de la création de l\'espace membre');
             }
           } else {
             alert('✅ Entreprise et client créés avec succès!');
