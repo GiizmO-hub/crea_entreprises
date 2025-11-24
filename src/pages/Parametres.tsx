@@ -352,6 +352,8 @@ export default function Parametres() {
                 // Cela garantit que les changements récents (comme toggle Super Admin) sont pris en compte
                 const newRole = emailToRole[c.email];
                 const oldRole = rolesMap[c.id];
+                
+                // Toujours mettre à jour, même si identique, pour forcer le re-render
                 rolesMap[c.id] = newRole;
                 
                 if (oldRole !== newRole) {
@@ -359,6 +361,8 @@ export default function Parametres() {
                 } else {
                   console.log(`📌 Rôle récupéré via email pour client ${c.id} (${c.email}): ${newRole}`);
                 }
+              } else if (c.email) {
+                console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}) dans utilisateurs`);
               }
             });
           }
@@ -579,18 +583,32 @@ export default function Parametres() {
             ? '✅ Client défini comme super admin de son espace.\n💡 Le client doit se déconnecter et se reconnecter pour voir le badge Super Admin.'
             : '✅ Statut super admin retiré du client.'
         );
-        // Attendre un peu pour que la base de données se mette à jour
-        await new Promise(resolve => setTimeout(resolve, 500));
-        // Recharger les clients avec force pour obtenir le nouveau rôle
+        // Attendre pour que la base de données se synchronise
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Forcer un rechargement immédiat et forcer le re-render
         await loadAllClients();
-        // Forcer un deuxième rechargement après un court délai pour garantir la synchronisation
+        if (activeTab === 'entreprise') {
+          await loadEntrepriseConfig();
+        }
+        
+        // Forcer un deuxième rechargement après un délai pour garantir la synchronisation
         setTimeout(async () => {
+          console.log('🔄 Rechargement final après toggle Super Admin');
           await loadAllClients();
-          // Recharger aussi la config entreprise pour mettre à jour le compteur Super Admins
           if (activeTab === 'entreprise') {
             await loadEntrepriseConfig();
           }
-        }, 1500);
+        }, 3000);
+        
+        // Forcer un troisième rechargement pour être sûr
+        setTimeout(async () => {
+          console.log('🔄 Troisième rechargement après toggle Super Admin');
+          await loadAllClients();
+          if (activeTab === 'entreprise') {
+            await loadEntrepriseConfig();
+          }
+        }, 5000);
       } else {
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
