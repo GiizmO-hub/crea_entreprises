@@ -15,9 +15,18 @@
 -- PARTIE 1 : Créer/corriger is_platform_super_admin()
 -- ============================================================================
 
--- Supprimer toutes les versions existantes
-DROP FUNCTION IF EXISTS is_platform_super_admin(uuid) CASCADE;
-DROP FUNCTION IF EXISTS is_platform_super_admin() CASCADE;
+-- Supprimer toutes les versions existantes (avec IF EXISTS pour éviter erreurs)
+DO $$
+BEGIN
+  -- Supprimer toutes les signatures possibles
+  DROP FUNCTION IF EXISTS is_platform_super_admin(uuid) CASCADE;
+  DROP FUNCTION IF EXISTS is_platform_super_admin() CASCADE;
+  DROP FUNCTION IF EXISTS is_platform_super_admin(text) CASCADE;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Ignorer les erreurs si la fonction n'existe pas
+    NULL;
+END $$;
 
 -- Créer la fonction avec paramètre optionnel
 CREATE OR REPLACE FUNCTION is_platform_super_admin(p_user_id uuid DEFAULT NULL)
