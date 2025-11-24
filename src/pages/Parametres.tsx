@@ -375,21 +375,7 @@ export default function Parametres() {
         }
         
         // Toujours récupérer le rôle depuis rolesMap (qui est maintenant toujours mis à jour via email)
-        let clientRole = rolesMap[c.id] || 'client';
-        
-        // Si le rôle n'a pas été trouvé via email, essayer via l'espace si disponible
-        if (clientRole === 'client' && espace?.user_id) {
-          // Le rôle devrait déjà être dans rolesMap, mais double vérification
-          const { data: userRoleData } = await supabase
-            .from('utilisateurs')
-            .select('role')
-            .eq('id', espace.user_id)
-            .maybeSingle();
-          
-          if (userRoleData?.role) {
-            clientRole = userRoleData.role;
-          }
-        }
+        const clientRole = rolesMap[c.id] || 'client';
         
         const clientInfo: ClientInfo = {
           id: c.id,
