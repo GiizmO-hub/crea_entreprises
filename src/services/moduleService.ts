@@ -118,7 +118,7 @@ export function mapModuleCodeToMenuId(moduleCode: string): string | null {
  * Filtre les modules actifs pour ne garder que ceux mappés et non admin
  */
 export function filterActiveModules(
-  modulesActifs: Record<string, boolean>,
+  modulesActifs: Record<string, any>,
   menuItems: Array<{ id: string; superAdminOnly?: boolean }>
 ): string[] {
   const activeMenuIds = new Set<string>();
