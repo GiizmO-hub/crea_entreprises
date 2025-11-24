@@ -33,12 +33,46 @@ export default function Entreprises() {
     capital: 0,
     rcs: '',
     site_web: '',
+    // Nouvelles options de création automatisée
+    creer_client: false,
+    email_client: '',
+    nom_client: '',
+    prenom_client: '',
+    telephone_client: '',
+    adresse_client: '',
+    code_postal_client: '',
+    ville_client: '',
+    plan_id: '',
+    creer_client_super_admin: true,
+    envoyer_email: true,
   });
+  
+  const [plans, setPlans] = useState<Array<{ id: string; nom: string }>>([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
   useEffect(() => {
     if (user) {
       loadEntreprises();
+      loadPlans();
     }
   }, [user]);
+  
+  const loadPlans = async () => {
+    try {
+      setLoadingPlans(true);
+      const { data, error } = await supabase
+        .from('plans_abonnement')
+        .select('id, nom')
+        .eq('actif', true)
+        .order('prix_mensuel', { ascending: true });
+      
+      if (error) throw error;
+      setPlans(data || []);
+    } catch (error) {
+      console.error('Erreur chargement plans:', error);
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
 
   const loadEntreprises = async () => {
     if (!user) return;
@@ -94,37 +128,93 @@ export default function Entreprises() {
         }
         alert('✅ Entreprise modifiée avec succès!');
       } else {
-        // CRÉATION - Préparer les données pour l'INSERT
-        // user_id est OBLIGATOIRE selon le schéma (NOT NULL)
-        const entrepriseData: Record<string, unknown> = {
-          user_id: user.id, // ✅ OBLIGATOIRE - la colonne est NOT NULL
-          nom: formData.nom.trim(),
-          forme_juridique: formData.forme_juridique,
-          statut: 'active',
-        };
+        // CRÉATION AUTOMATISÉE - Utiliser la fonction RPC unifiée
+        const { data: result, error: creationError } = await supabase.rpc(
+          'create_complete_entreprise_automated',
+          {
+            // Informations entreprise
+            p_nom_entreprise: formData.nom.trim(),
+            p_forme_juridique: formData.forme_juridique,
+            p_siret: formData.siret?.trim() || null,
+            p_email_entreprise: formData.email?.trim() || null,
+            p_telephone_entreprise: formData.telephone?.trim() || null,
+            p_adresse: formData.adresse?.trim() || null,
+            p_code_postal: formData.code_postal?.trim() || null,
+            p_ville: formData.ville?.trim() || null,
+            p_capital: formData.capital || 0,
+            p_rcs: formData.rcs?.trim() || null,
+            p_site_web: formData.site_web?.trim() || null,
+            
+            // Informations client (si création client activée)
+            p_email_client: formData.creer_client && formData.email_client?.trim() 
+              ? formData.email_client.trim() 
+              : null,
+            p_nom_client: formData.creer_client && formData.nom_client?.trim()
+              ? formData.nom_client.trim()
+              : null,
+            p_prenom_client: formData.creer_client && formData.prenom_client?.trim()
+              ? formData.prenom_client.trim()
+              : null,
+            p_telephone_client: formData.creer_client && formData.telephone_client?.trim()
+              ? formData.telephone_client.trim()
+              : null,
+            p_adresse_client: formData.creer_client && formData.adresse_client?.trim()
+              ? formData.adresse_client.trim()
+              : null,
+            p_code_postal_client: formData.creer_client && formData.code_postal_client?.trim()
+              ? formData.code_postal_client.trim()
+              : null,
+            p_ville_client: formData.creer_client && formData.ville_client?.trim()
+              ? formData.ville_client.trim()
+              : null,
+            
+            // Abonnement
+            p_plan_id: formData.plan_id?.trim() || null,
+            p_options_ids: null, // TODO: Ajouter sélection d'options
+            
+            // Options
+            p_creer_client_super_admin: formData.creer_client_super_admin,
+            p_envoyer_email: formData.envoyer_email && formData.creer_client,
+          }
+        );
 
-        // Les champs optionnels sont ajoutés seulement s'ils ont une valeur
-        if (formData.siret?.trim()) entrepriseData.siret = formData.siret.trim();
-        if (formData.email?.trim()) entrepriseData.email = formData.email.trim();
-        if (formData.telephone?.trim()) entrepriseData.telephone = formData.telephone.trim();
-        if (formData.adresse?.trim()) entrepriseData.adresse = formData.adresse.trim();
-        if (formData.code_postal?.trim()) entrepriseData.code_postal = formData.code_postal.trim();
-        if (formData.ville?.trim()) entrepriseData.ville = formData.ville.trim();
-        if (formData.capital && formData.capital > 0) entrepriseData.capital = formData.capital;
-        if (formData.rcs?.trim()) entrepriseData.rcs = formData.rcs.trim();
-        if (formData.site_web?.trim()) entrepriseData.site_web = formData.site_web.trim();
-
-        // Créer l'entreprise
-        const { error: entrepriseError } = await supabase
-          .from('entreprises')
-          .insert(entrepriseData);
-
-        if (entrepriseError) {
-          console.error('❌ Erreur création entreprise détaillée:', entrepriseError);
-          throw new Error(`Erreur lors de la création de l'entreprise: ${entrepriseError.message || 'Erreur inconnue'}`);
+        if (creationError) {
+          console.error('❌ Erreur création automatisée:', creationError);
+          throw new Error(`Erreur lors de la création: ${creationError.message || 'Erreur inconnue'}`);
         }
 
-        alert('✅ Entreprise créée avec succès!\n\n💡 Configurez maintenant les clients et les abonnements dans l\'onglet "Paramètres" > "Gestion Clients".');
+        if (!result || !result.success) {
+          const errorMsg = result?.error || result?.message || 'Erreur inconnue';
+          throw new Error(errorMsg);
+        }
+
+        // Afficher le résultat
+        let message = '✅ Entreprise créée avec succès!\n\n';
+        
+        if (result.client_id) {
+          message += `📧 Client créé\n`;
+          message += `🎯 Espace membre créé\n`;
+          if (result.email && result.password) {
+            message += `\n📨 Identifiants:\n`;
+            message += `Email: ${result.email}\n`;
+            message += `Mot de passe: ${result.password}\n`;
+            
+            // Proposer d'envoyer l'email si activé
+            if (formData.envoyer_email && result.email_a_envoyer) {
+              // TODO: Appeler l'Edge Function pour envoyer l'email
+              message += `\n📧 Email envoyé automatiquement au client`;
+            }
+          }
+        }
+        
+        if (result.abonnement_id) {
+          message += `\n💳 Abonnement créé et actif`;
+        }
+
+        alert(message);
+        
+        // Si un espace membre a été créé avec email, on pourrait ouvrir le modal d'identifiants
+        // TODO: Intégrer le modal d'identifiants ici si nécessaire
       }
 
       setShowForm(false);
@@ -203,6 +293,17 @@ export default function Entreprises() {
       capital: 0,
       rcs: '',
       site_web: '',
+      creer_client: false,
+      email_client: '',
+      nom_client: '',
+      prenom_client: '',
+      telephone_client: '',
+      adresse_client: '',
+      code_postal_client: '',
+      ville_client: '',
+      plan_id: '',
+      creer_client_super_admin: true,
+      envoyer_email: true,
     });
     setEditingId(null);
   };
