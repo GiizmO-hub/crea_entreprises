@@ -256,21 +256,26 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Supprimer cette entreprise ?')) return;
+    if (!confirm('⚠️ Êtes-vous sûr de vouloir supprimer cette entreprise ?\n\nCette action supprimera également:\n- Tous les clients liés\n- Tous les espaces membres clients\n- Tous les abonnements\n\nCette action est irréversible.')) return;
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('entreprises')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+      // Utiliser la fonction RPC pour supprimer proprement avec cascade
+      const { data, error } = await supabase
+        .rpc('delete_entreprise_complete', { p_entreprise_id: id });
 
       if (error) throw error;
-      loadEntreprises();
-    } catch (error) {
+      
+      if (data?.success) {
+        alert(`✅ ${data.message || 'Entreprise supprimée avec succès'}`);
+      } else {
+        throw new Error(data?.error || 'Erreur lors de la suppression');
+      }
+      
+      await loadEntreprises();
+    } catch (error: any) {
       console.error('Erreur suppression:', error);
-      alert('Erreur lors de la suppression');
+      alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
     }
   };
 

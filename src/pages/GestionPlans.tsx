@@ -273,19 +273,30 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
   };
 
   const handleDelete = async (planId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce plan ? Les abonnements liés ne seront pas supprimés.')) {
+    if (!confirm('⚠️ Êtes-vous sûr de vouloir supprimer ce plan ?\n\nSi des abonnements actifs existent, le plan sera désactivé au lieu d\'être supprimé.')) {
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('plans_abonnement')
-        .delete()
-        .eq('id', planId);
+      // Utiliser la fonction RPC pour supprimer proprement
+      const { data, error } = await supabase
+        .rpc('delete_plan_abonnement_safe', { p_plan_id: planId });
 
       if (error) throw error;
-      alert('✅ Plan supprimé avec succès!');
-      loadData();
+      
+      if (data?.success) {
+        if (data.action === 'deleted') {
+          alert('✅ Plan supprimé avec succès!');
+        } else if (data.action === 'desactivated') {
+          alert(`⚠️ ${data.message || 'Plan désactivé (non supprimé car des abonnements actifs existent)'}`);
+        } else {
+          alert(`✅ ${data.message || 'Action effectuée avec succès'}`);
+        }
+      } else {
+        throw new Error(data?.error || 'Erreur lors de la suppression');
+      }
+      
+      await loadData();
     } catch (error: any) {
       console.error('Erreur suppression plan:', error);
       alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
