@@ -136,33 +136,74 @@ export default function Parametres() {
         return;
       }
 
-      // Récupérer les rôles séparément pour éviter les problèmes de RLS
-      const clientIds = (data || []).map((c: { id: string }) => c.id);
+      if (!data || data.length === 0) {
+        setClients([]);
+        setLoading(false);
+        return;
+      }
+
+      const clientIds = data.map((c: { id: string }) => c.id);
+      console.log('📦 Clients chargés:', clientIds.length);
+
+      // Récupérer TOUS les espaces membres pour ces clients (requête séparée - plus fiable)
+      const { data: espacesData, error: espacesError } = await supabase
+        .from('espaces_membres_clients')
+        .select('id, client_id, actif, user_id')
+        .in('client_id', clientIds);
+
+      if (espacesError) {
+        console.warn('⚠️ Erreur chargement espaces:', espacesError);
+      }
+
+      // Créer une map des espaces par client_id
+      const espacesMap: Record<string, { id: string; actif: boolean; user_id: string | null }> = {};
+      if (espacesData) {
+        espacesData.forEach((espace: { id: string; client_id: string; actif: boolean; user_id: string | null }) => {
+          espacesMap[espace.client_id] = {
+            id: espace.id,
+            actif: espace.actif,
+            user_id: espace.user_id,
+          };
+        });
+      }
+      console.log('📦 Espaces chargés:', Object.keys(espacesMap).length, 'espaces pour', clientIds.length, 'clients');
+
+      // Récupérer les rôles depuis utilisateurs via espaces_membres_clients
       let rolesMap: Record<string, string> = {};
       
-      if (clientIds.length > 0) {
-        try {
-          // Récupérer les rôles depuis utilisateurs via espaces_membres_clients
-          const { data: espaces } = await supabase
-            .from('espaces_membres_clients')
-            .select('user_id, client_id, utilisateurs(role)')
-            .in('client_id', clientIds);
-          
-          if (espaces) {
-            espaces.forEach((espace: { client_id: string; utilisateurs?: { role: string } | Array<{ role: string }> }) => {
-              const roleData = Array.isArray(espace.utilisateurs) 
-                ? espace.utilisateurs[0] 
-                : (espace.utilisateurs || { role: 'client' });
-              rolesMap[espace.client_id] = roleData.role || 'client';
-            });
+      if (espacesData && espacesData.length > 0) {
+        const userIds = espacesData
+          .map((e: { user_id: string | null }) => e.user_id)
+          .filter((uid: string | null): uid is string => uid !== null);
+
+        if (userIds.length > 0) {
+          try {
+            const { data: usersData } = await supabase
+              .from('utilisateurs')
+              .select('id, role')
+              .in('id', userIds);
+
+            if (usersData) {
+              const userIdToRole: Record<string, string> = {};
+              usersData.forEach((u: { id: string; role: string }) => {
+                userIdToRole[u.id] = u.role || 'client';
+              });
+
+              // Mapper les rôles par client_id
+              espacesData.forEach((espace: { client_id: string; user_id: string | null }) => {
+                if (espace.user_id && userIdToRole[espace.user_id]) {
+                  rolesMap[espace.client_id] = userIdToRole[espace.user_id];
+                }
+              });
+            }
+          } catch (roleError) {
+            console.warn('⚠️ Erreur récupération rôles:', roleError);
           }
-        } catch (roleError) {
-          console.warn('Erreur récupération rôles:', roleError);
         }
       }
 
       // Transformer les données pour correspondre à ClientInfo
-      const transformedClients: ClientInfo[] = clientsData.map((client: unknown) => {
+      const transformedClients: ClientInfo[] = data.map((client: unknown) => {
         const c = client as {
           id: string;
           entreprise_id: string;
@@ -170,10 +211,11 @@ export default function Parametres() {
           prenom?: string;
           email: string;
           created_at: string;
-          entreprises?: { nom: string } | Array<{ nom: string }>;
+          entreprises?: { nom: string } | null | Array<{ nom: string }>;
+          espaces_membres_clients?: Array<{ id: string; actif: boolean; user_id: string | null }> | null;
         };
         
-        // Récupérer l'espace depuis la map
+        // Récupérer l'espace depuis la map (plus fiable que le JOIN)
         const espace = espacesMap[c.id] || null;
         
         // Gérer le nom de l'entreprise (peut être array ou object)
