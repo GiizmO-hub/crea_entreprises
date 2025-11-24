@@ -54,12 +54,45 @@ BEGIN
 
   -- Créer ou mettre à jour le plan
   IF p_plan_id IS NULL THEN
-    -- Création
+    -- Création - Vérifier d'abord si un plan avec le même nom existe
+    SELECT id INTO v_new_plan_id
+    FROM plans_abonnement
+    WHERE nom = p_nom
+    LIMIT 1;
+    
+    IF v_new_plan_id IS NOT NULL THEN
+      -- Un plan avec ce nom existe déjà, retourner une erreur claire
+      RETURN jsonb_build_object(
+        'success', false,
+        'error', format('Un plan avec le nom "%s" existe déjà. Veuillez utiliser un nom différent ou modifier le plan existant.', p_nom)
+      );
+    END IF;
+    
+    -- Création du nouveau plan
     INSERT INTO plans_abonnement (nom, description, prix_mensuel, prix_annuel, actif, ordre)
     VALUES (p_nom, p_description, p_prix_mensuel, p_prix_annuel, p_actif, p_ordre)
     RETURNING id INTO v_new_plan_id;
   ELSE
-    -- Mise à jour
+    -- Mise à jour - Vérifier si le nouveau nom n'est pas déjà utilisé par un autre plan
+    DECLARE
+      v_existing_plan_id uuid;
+    BEGIN
+      SELECT id INTO v_existing_plan_id
+      FROM plans_abonnement
+      WHERE nom = p_nom
+        AND id != p_plan_id
+      LIMIT 1;
+      
+      IF v_existing_plan_id IS NOT NULL THEN
+        -- Un autre plan avec ce nom existe déjà
+        RETURN jsonb_build_object(
+          'success', false,
+          'error', format('Un autre plan avec le nom "%s" existe déjà. Veuillez utiliser un nom différent.', p_nom)
+        );
+      END IF;
+    END;
+    
+    -- Mise à jour du plan
     v_new_plan_id := p_plan_id;
     UPDATE plans_abonnement
     SET nom = p_nom,

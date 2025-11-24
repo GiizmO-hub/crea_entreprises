@@ -277,7 +277,20 @@ export default function GestionPlans() {
       }
     } catch (error: unknown) {
       console.error('Erreur sauvegarde plan:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      let errorMessage = 'Erreur inconnue';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        // Améliorer le message pour les erreurs de contrainte unique
+        if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
+          if (errorMessage.includes('plans_abonnement_nom_key')) {
+            errorMessage = `Un plan avec le nom "${formData.nom}" existe déjà. Veuillez utiliser un nom différent ou modifier le plan existant.`;
+          } else {
+            errorMessage = 'Cette valeur existe déjà dans la base de données. Veuillez utiliser une valeur différente.';
+          }
+        }
+      }
+      
       alert('❌ Erreur: ' + errorMessage);
     }
   };
