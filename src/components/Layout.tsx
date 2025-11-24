@@ -149,11 +149,20 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       } else if (isPlatformAdmin === true) {
         console.log('✅ Super admin plateforme détecté (accès complet)');
         setIsSuperAdmin(true);
+        setIsClient(false); // Forcer isClient à false pour super admin plateforme
         return;
       }
 
       // Méthode de fallback : Utiliser la fonction RPC qui contourne RLS
       const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
+      
+      // Si get_current_user_role indique is_platform_super_admin, utiliser cette info
+      if (!rpcError && roleData && roleData.is_platform_super_admin === true) {
+        console.log('✅ Super admin plateforme détecté via get_current_user_role');
+        setIsSuperAdmin(true);
+        setIsClient(false);
+        return;
+      }
       
       if (!rpcError && roleData) {
         // Vérifier si c'est un client (ne doit pas avoir accès aux modules)
