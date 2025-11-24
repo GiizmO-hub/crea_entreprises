@@ -346,10 +346,8 @@ export default function Parametres() {
           setShowCredentialsModal(true);
         }
         
-        // Attendre un peu avant de recharger pour s'assurer que la base est à jour
-        setTimeout(async () => {
-          await loadAllClients();
-        }, 500);
+        // Recharger immédiatement les clients
+        await loadAllClients();
       } else {
         const errorMsg = result.error || result.message || 'Erreur inconnue lors de la création';
         throw new Error(errorMsg);
