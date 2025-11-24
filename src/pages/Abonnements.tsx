@@ -260,7 +260,7 @@ export default function Abonnements() {
         // Pré-sélectionner les modules inclus dans le plan (uniquement les UUIDs valides)
         const moduleIds = modulesEnrichis
           .map((m: ModuleData) => m.module_id)
-          .filter((id): id is string => id !== null && typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+          .filter((id: string | null | undefined): id is string => id !== null && id !== undefined && typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 
         if (moduleIds.length > 0) {
           setFormData(prev => ({
@@ -406,11 +406,15 @@ export default function Abonnements() {
             .map((opt: OptionData) => opt.options_supplementaires)
             .filter((opt): opt is { id: string; nom: string; prix_mensuel: number; actif?: boolean } => opt !== null && opt !== undefined && opt.actif !== false);
 
-          console.log(`📋 Abonnement ${ab.plans_abonnement?.nom || 'Inconnu'}: ${planModules.length} modules inclus`);
+          const planNom = Array.isArray(ab.plans_abonnement) 
+            ? (ab.plans_abonnement[0]?.nom || 'Inconnu')
+            : (ab.plans_abonnement?.nom || 'Inconnu');
+          
+          console.log(`📋 Abonnement ${planNom}: ${planModules.length} modules inclus`);
 
           return {
             ...ab,
-            plan_nom: ab.plans_abonnement?.nom || 'Inconnu',
+            plan_nom: planNom,
             client_id: clientId || undefined,
             client_email: clientEmail,
             client_nom: clientNom,
@@ -934,22 +938,25 @@ export default function Abonnements() {
                 
                 {/* Modules inclus dans le plan */}
                 {(() => {
-                  interface ModuleDisplay {
-                    module_code?: string;
+                  type ModuleDisplay = {
+                    module_code: string;
                     module_nom?: string;
                     inclus?: boolean | string;
-                  }
+                    est_cree?: boolean | string;
+                    actif?: boolean | string;
+                    prix_mensuel?: number;
+                  };
                   
-                  const modulesInclus = (abonnement.modules as ModuleDisplay[] | undefined)?.filter((mod: ModuleDisplay) => {
-                    const inclus = mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true';
+                  const modulesInclus = (abonnement.modules || []).filter((mod) => {
+                    const inclus = mod.inclus === true || mod.inclus === 'true' || String(mod.inclus || '').toLowerCase() === 'true';
                     return inclus;
-                  }) || [];
+                  }) as ModuleDisplay[];
                   
                   return modulesInclus.length > 0 ? (
                     <div className="mt-3">
                       <p className="text-gray-400 text-sm mb-2">Modules inclus dans le plan ({modulesInclus.length}):</p>
                       <div className="flex flex-wrap gap-2">
-                        {modulesInclus.map((mod: { module_code: string; module_nom?: string; est_cree?: boolean | string; actif?: boolean | string; prix_mensuel?: number }) => {
+                        {modulesInclus.map((mod: ModuleDisplay) => {
                           const est_cree = mod.est_cree === true || mod.est_cree === 'true' || String(mod.est_cree || '').toLowerCase() === 'true';
                           const actif = mod.actif === true || mod.actif === 'true' || String(mod.actif || '').toLowerCase() === 'true';
                           const prix_mensuel = typeof mod.prix_mensuel === 'number' ? mod.prix_mensuel : parseFloat(String(mod.prix_mensuel || 0));
@@ -965,7 +972,7 @@ export default function Abonnements() {
                                   : 'bg-gray-500/20 text-gray-300'
                               }`}
                             >
-                              {mod.module_nom || mod.module_code}
+                              {mod.module_nom || mod.module_code || 'Module inconnu'}
                               {prix_mensuel > 0 && ` (+${prix_mensuel}€/mois)`}
                               {!est_cree && ' (À venir)'}
                               {est_cree && !actif && ' (Inactif)'}
