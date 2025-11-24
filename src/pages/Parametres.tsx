@@ -226,6 +226,7 @@ export default function Parametres() {
           entrepriseNom = (c.entreprises as { nom: string }).nom || 'N/A';
         }
         
+        const clientRole = rolesMap[c.id] || 'client';
         const clientInfo: ClientInfo = {
           id: c.id,
           entreprise_id: c.entreprise_id,
@@ -233,7 +234,7 @@ export default function Parametres() {
           client_nom: c.nom || 'N/A',
           client_prenom: c.prenom || '',
           email: c.email || '',
-          role: rolesMap[c.id] || 'client',
+          role: clientRole,
           espace_actif: espace?.actif ?? false,
           espace_id: espace?.id || null,
           user_id: espace?.user_id || null,
@@ -242,9 +243,14 @@ export default function Parametres() {
         
         // Log pour déboguer
         if (espace) {
-          console.log(`✅ Client ${c.id} (${c.email}): Espace trouvé - ID: ${espace.id}, Actif: ${espace.actif}`);
+          console.log(`✅ Client ${c.id} (${c.email}): Espace trouvé - ID: ${espace.id}, Actif: ${espace.actif}, Rôle: ${clientRole}`);
         } else {
-          console.log(`⚠️ Client ${c.id} (${c.email}): Aucun espace trouvé`);
+          console.log(`⚠️ Client ${c.id} (${c.email}): Aucun espace trouvé, Rôle: ${clientRole}`);
+        }
+        
+        // Log spécifique pour client_super_admin
+        if (clientRole === 'client_super_admin') {
+          console.log(`⭐⭐ Client Super Admin détecté: ${c.email} - Rôle: ${clientRole}`);
         }
         
         return clientInfo;
@@ -252,12 +258,15 @@ export default function Parametres() {
 
       setClients(transformedClients);
       console.log('✅ Clients chargés:', transformedClients.length);
-      console.log('📊 Détail des espaces:', transformedClients.map(c => ({
+      console.log('📊 Détail des clients:', transformedClients.map(c => ({
         id: c.id,
         email: c.email,
+        role: c.role,
         espace_id: c.espace_id,
         espace_actif: c.espace_actif
       })));
+      console.log('🔍 Rôles détectés:', rolesMap);
+      console.log('🔍 Espaces chargés:', Object.keys(espacesMap).length);
     } catch (error) {
       console.error('❌ Erreur chargement clients:', error);
       alert('Erreur lors du chargement des clients. Vérifiez la console pour plus de détails.');
