@@ -4,9 +4,9 @@
  * Affiche la liste des clients avec recherche et filtres
  */
 
-import { useState, useMemo } from 'react';
-import { Search, Users, Mail, Building2 } from 'lucide-react';
-import { Client } from './types';
+import { useMemo } from 'react';
+import { Search, Users } from 'lucide-react';
+import type { Client } from './types';
 import { ClientCard } from './ClientCard';
 
 interface ClientsListProps {

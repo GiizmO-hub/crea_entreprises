@@ -6,7 +6,7 @@
 
 import { X, Copy, Check, Mail } from 'lucide-react';
 import { useState } from 'react';
-import { ClientCredentials } from './types';
+import type { ClientCredentials } from './types';
 
 interface IdentifiantsModalProps {
   show: boolean;

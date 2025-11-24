@@ -5,7 +5,7 @@
  */
 
 import { X } from 'lucide-react';
-import { Client, ClientFormData } from './types';
+import type { ClientFormData } from './types';
 
 interface ClientFormProps {
   show: boolean;

@@ -5,7 +5,7 @@
  */
 
 import { X } from 'lucide-react';
-import { Client, EspaceMembreData, Plan, Option } from './types';
+import type { Client, EspaceMembreData, Plan, Option } from './types';
 
 interface EspaceMembreModalProps {
   show: boolean;

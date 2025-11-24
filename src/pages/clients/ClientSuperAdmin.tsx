@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 import { Crown, Shield, ShieldOff, Mail, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { Client } from './types';
+import type { Client } from './types';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface ClientSuperAdminProps {

@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { filterActiveModules, moduleCodeToMenuId, mapModuleCodeToMenuId } from '../services/moduleService';
+import { filterActiveModules } from '../services/moduleService';
 
 export interface MenuItem {
   id: string;

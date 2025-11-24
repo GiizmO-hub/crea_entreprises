@@ -4,6 +4,7 @@
 
 export interface Client {
   id: string;
+  entreprise_id?: string;
   nom?: string;
   prenom?: string;
   entreprise_nom?: string;

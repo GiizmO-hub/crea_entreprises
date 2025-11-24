@@ -63,7 +63,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   }, [user]);
 
   // ✅ Utiliser le hook personnalisé pour gérer les modules actifs (après la définition des états)
-  const { activeModules, loading: modulesLoading, isClient: isClientFromHook } = useClientModules({
+  const { activeModules, isClient: isClientFromHook } = useClientModules({
     menuItems,
     isSuperAdmin,
     isClientSuperAdmin,

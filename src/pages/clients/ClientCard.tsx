@@ -5,7 +5,7 @@
  */
 
 import { Users, Mail, Edit, Trash2, UserPlus } from 'lucide-react';
-import { Client } from './types';
+import type { Client } from './types';
 
 interface ClientCardProps {
   client: Client;

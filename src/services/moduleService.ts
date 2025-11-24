@@ -132,7 +132,9 @@ export function filterActiveModules(
                     moduleValue === 'true' || 
                     moduleValue === 1 || 
                     moduleValue === '1' ||
-                    (typeof moduleValue === 'string' && moduleValue.toLowerCase() === 'true');
+                    (typeof moduleValue === 'string' && moduleValue.toLowerCase() === 'true') ||
+                    (typeof moduleValue === 'boolean' && moduleValue === true) ||
+                    (typeof moduleValue === 'number' && moduleValue === 1);
     
     if (isActive) {
       // Mapper le code vers un ID de menu
