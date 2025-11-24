@@ -110,9 +110,6 @@ interface Tache {
   };
 }
 
-interface GestionProjetsProps {
-  onNavigate: (page: string) => void;
-}
 
 const STATUTS_PROJET = [
   { value: 'planifie', label: 'Planifié', color: 'blue', icon: Calendar },

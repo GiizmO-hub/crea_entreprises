@@ -78,9 +78,6 @@ interface Client {
   email?: string;
 }
 
-interface DocumentsProps {
-  onNavigate: (page: string) => void;
-}
 
 const CATEGORIES = [
   { value: 'facture', label: 'Facture', icon: FileText, color: 'purple' },
