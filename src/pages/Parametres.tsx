@@ -153,10 +153,10 @@ export default function Parametres() {
       console.log('🔄 loadEntrepriseConfig: Chargement des entreprises pour user:', user.id);
       
       // Récupérer TOUTES les entreprises de l'utilisateur connecté (pour gérer 50+ entreprises)
-      // Ne pas inclure statut_paiement car la colonne n'existe peut-être pas encore
+      // La colonne statut_paiement existe maintenant après la migration
       let { data: entreprisesData, error: entreprisesError } = await supabase
         .from('entreprises')
-        .select('id, nom, statut, created_at, user_id')
+        .select('id, nom, statut, statut_paiement, created_at, user_id')
         .order('created_at', { ascending: false });
       
       // Si pas d'entreprises ou erreur, essayer avec filtre explicite user_id
@@ -168,7 +168,7 @@ export default function Parametres() {
         
         const { data: entreprisesDataWithFilter, error: errorWithFilter } = await supabase
           .from('entreprises')
-          .select('id, nom, statut, created_at, user_id')
+          .select('id, nom, statut, statut_paiement, created_at, user_id')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false });
         
@@ -268,7 +268,7 @@ export default function Parametres() {
           return {
             id: entreprise.id,
             nom: entreprise.nom,
-            statut_paiement: (entreprise as { statut_paiement?: string }).statut_paiement || 'non_requis',
+            statut_paiement: entreprise.statut_paiement || 'non_requis',
             statut: entreprise.statut || 'active',
             clients: clientsCount || 0,
             espaces: espacesCount,
