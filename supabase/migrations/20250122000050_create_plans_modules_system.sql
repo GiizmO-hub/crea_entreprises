@@ -114,14 +114,23 @@ AS $$
 DECLARE
   v_new_plan_id uuid;
   v_module_item jsonb;
-  v_result jsonb;
+  v_user_role text;
 BEGIN
-  -- Vérifier que l'utilisateur est super admin
-  IF NOT EXISTS (
-    SELECT 1 FROM utilisateurs
+  -- Vérifier que l'utilisateur est super admin (utiliser LIMIT 1 pour éviter "more than one row")
+  SELECT role INTO v_user_role
+  FROM utilisateurs
+  WHERE id = auth.uid()
+  LIMIT 1;
+  
+  -- Vérifier aussi dans auth.users.raw_user_meta_data si pas trouvé dans utilisateurs
+  IF v_user_role IS NULL THEN
+    SELECT (raw_user_meta_data->>'role')::text INTO v_user_role
+    FROM auth.users
     WHERE id = auth.uid()
-    AND role = 'super_admin'
-  ) THEN
+    LIMIT 1;
+  END IF;
+  
+  IF v_user_role IS NULL OR v_user_role != 'super_admin' THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Accès refusé. Seul le super admin peut gérer les plans.'
