@@ -614,6 +614,9 @@ export default function Abonnements() {
       setShowForm(false);
       resetForm();
       await loadAbonnements();
+      
+      // Déclencher un événement personnalisé pour recharger la config entreprise dans Paramètres
+      window.dispatchEvent(new CustomEvent('abonnementUpdated'));
     } catch (error: unknown) {
       console.error('❌ Erreur modification abonnement:', error);
       let errorMessage = 'Erreur inconnue';

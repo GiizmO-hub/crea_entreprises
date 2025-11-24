@@ -76,12 +76,22 @@ export default function Parametres() {
     if (user && activeTab === 'entreprise') {
       loadEntrepriseConfig();
     }
-  }, [user, activeTab]);
-
-  useEffect(() => {
-    if (user && activeTab === 'entreprise') {
-      loadEntrepriseConfig();
-    }
+    
+    // Écouter les événements de mise à jour d'abonnement pour recharger la config
+    const handleAbonnementUpdate = () => {
+      if (activeTab === 'entreprise') {
+        console.log('🔄 Rechargement config entreprise après mise à jour abonnement');
+        setTimeout(() => {
+          loadEntrepriseConfig();
+        }, 500);
+      }
+    };
+    
+    window.addEventListener('abonnementUpdated', handleAbonnementUpdate);
+    
+    return () => {
+      window.removeEventListener('abonnementUpdated', handleAbonnementUpdate);
+    };
   }, [user, activeTab]);
 
   const loadPlans = async () => {
@@ -375,7 +385,17 @@ export default function Parametres() {
         }
         
         // Toujours récupérer le rôle depuis rolesMap (qui est maintenant toujours mis à jour via email)
-        const clientRole = rolesMap[c.id] || 'client';
+        // Si le rôle n'est pas trouvé via email, utiliser 'client' par défaut
+        let clientRole = rolesMap[c.id];
+        
+        // Si pas de rôle trouvé, essayer de le récupérer directement depuis utilisateurs via l'espace
+        if (!clientRole && espace?.user_id) {
+          // Le rôle devrait être dans rolesMap via l'email, mais double vérification
+          // On utilise déjà rolesMap qui est rempli avant cette boucle, donc clientRole devrait être défini
+          clientRole = 'client'; // Par défaut si rien trouvé
+        } else if (!clientRole) {
+          clientRole = 'client'; // Par défaut
+        }
         
         const clientInfo: ClientInfo = {
           id: c.id,
@@ -563,7 +583,11 @@ export default function Parametres() {
         // Forcer un deuxième rechargement après un court délai pour garantir la synchronisation
         setTimeout(async () => {
           await loadAllClients();
-        }, 1000);
+          // Recharger aussi la config entreprise pour mettre à jour le compteur Super Admins
+          if (activeTab === 'entreprise') {
+            await loadEntrepriseConfig();
+          }
+        }, 1500);
       } else {
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
