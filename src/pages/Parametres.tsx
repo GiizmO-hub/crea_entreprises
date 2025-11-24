@@ -7,6 +7,7 @@ import { sendClientCredentialsEmail } from '../services/emailService';
 import type { ClientCredentialsEmailData } from '../services/emailService';
 import { EspaceMembreModal } from '../pages/clients/EspaceMembreModal';
 import type { Client, EspaceMembreData, Plan, Option } from '../pages/clients/types';
+import { EntrepriseAccordion } from '../components/EntrepriseAccordion';
 
 interface ClientInfo {
   id: string;
@@ -49,13 +50,17 @@ export default function Parametres() {
   });
   const [plans, setPlans] = useState<Plan[]>([]);
   const [options, setOptions] = useState<Option[]>([]);
-  const [entrepriseConfig, setEntrepriseConfig] = useState<{
-    entreprise: { id: string; nom: string } | null;
+  const [entrepriseConfigs, setEntrepriseConfigs] = useState<Array<{
+    id: string;
+    nom: string;
+    statut_paiement?: string;
+    statut?: string;
     clients: number;
     espaces: number;
     abonnements: number;
     superAdmins: number;
-  } | null>(null);
+    created_at?: string;
+  }>>([]);
   const [loadingConfig, setLoadingConfig] = useState(false);
 
   useEffect(() => {
@@ -142,27 +147,30 @@ export default function Parametres() {
     
     setLoadingConfig(true);
     try {
-      // Récupérer l'entreprise de l'utilisateur connecté
+      // Récupérer TOUTES les entreprises de l'utilisateur connecté (pour gérer 50+ entreprises)
       const { data: entreprisesData, error: entreprisesError } = await supabase
         .from('entreprises')
-        .select('id, nom')
+        .select('id, nom, statut, statut_paiement, created_at')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
       if (entreprisesError) {
-        console.error('Erreur chargement entreprise:', entreprisesError);
-        setEntrepriseConfig(null);
+        console.error('Erreur chargement entreprises:', entreprisesError);
+        setEntrepriseConfigs([]);
         setLoadingConfig(false);
         return;
       }
 
-      if (!entreprisesData) {
-        setEntrepriseConfig(null);
+      if (!entreprisesData || entreprisesData.length === 0) {
+        setEntrepriseConfigs([]);
         setLoadingConfig(false);
         return;
       }
 
-      const entrepriseId = entreprisesData.id;
+      // Charger les configurations pour chaque entreprise
+      const configs = await Promise.all(
+        entreprisesData.map(async (entreprise) => {
+          const entrepriseId = entreprise.id;
 
       // Compter les clients
       const { count: clientsCount } = await supabase
