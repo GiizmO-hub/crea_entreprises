@@ -152,7 +152,7 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
             }
             
             // Normaliser les valeurs boolean et s'assurer que les modules retournés sont correctement typés
-            const normalizedModules = (planModulesData || []).map((mod: any) => ({
+            const normalizedModules = (planModulesData || []).map((mod: unknown) => ({
               module_code: mod.module_code || '',
               module_nom: mod.module_nom || '',
               module_description: mod.module_description || '',
@@ -205,7 +205,7 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
 
       alert(`✅ Plan ${!currentActif ? 'activé' : 'désactivé'} avec succès!`);
       loadData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur toggle plan:', error);
       alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
     }
@@ -252,7 +252,7 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
         p_prix_annuel: parseFloat(formData.prix_annuel.toString()),
         p_actif: formData.actif,
         p_ordre: formData.ordre,
-        p_modules: modulesJson as any,
+        p_modules: modulesJson as unknown,
         p_plan_id: editingPlan?.id || null,
       });
 
@@ -267,7 +267,7 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
       } else {
         throw new Error(data?.error || 'Erreur inconnue');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur sauvegarde plan:', error);
       alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
     }
@@ -298,7 +298,7 @@ export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansPr
       }
       
       await loadData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suppression plan:', error);
       alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
     }

@@ -210,7 +210,7 @@ export default function Clients({ onNavigate }: ClientsProps) {
       setEditingId(null);
       resetForm();
       loadClients();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur sauvegarde client:', error);
       alert(`Erreur: ${error?.message || 'Erreur lors de la sauvegarde'}`);
     }
@@ -265,7 +265,7 @@ export default function Clients({ onNavigate }: ClientsProps) {
       }
 
       loadClients();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suppression:', error);
       alert(`Erreur lors de la suppression: ${error.message || 'Erreur inconnue'}`);
     }
@@ -329,7 +329,7 @@ export default function Clients({ onNavigate }: ClientsProps) {
       } else {
         alert('Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création espace membre:', error);
       alert(`Erreur: ${error.message || 'Erreur lors de la création de l\'espace membre'}`);
     }

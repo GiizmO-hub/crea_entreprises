@@ -154,13 +154,13 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
       console.log('✅ Collaborateurs chargés:', data?.length || 0);
 
       // Enrichir avec le nom de l'entreprise
-      const collaborateursEnriched = (data || []).map((c: any) => ({
+      const collaborateursEnriched = (data || []).map((c: unknown) => ({
         ...c,
         entreprise_nom: c.entreprise?.nom,
       }));
 
       setCollaborateurs(collaborateursEnriched || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Erreur chargement collaborateurs:', error);
       alert('Erreur lors du chargement des collaborateurs: ' + (error.message || 'Erreur inconnue'));
       setCollaborateurs([]);
@@ -214,7 +214,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
         salaire: '',
       });
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création collaborateur:', error);
       alert('❌ Erreur lors de la création: ' + (error.message || 'Erreur inconnue'));
     }
@@ -228,7 +228,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
       nom: collaborateur.nom || '',
       prenom: collaborateur.prenom || '',
       telephone: collaborateur.telephone || '',
-      role: collaborateur.role as any,
+      role: collaborateur.role as unknown,
       entreprise_id: collaborateur.entreprise_id || '',
       departement: collaborateur.departement || '',
       poste: collaborateur.poste || '',
@@ -267,7 +267,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
       setShowEditForm(false);
       setEditingCollaborateur(null);
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur modification:', error);
       alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
     }
@@ -290,7 +290,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
 
       alert('✅ Collaborateur suspendu avec succès');
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suspension:', error);
       alert('❌ Erreur lors de la suspension: ' + (error.message || 'Erreur inconnue'));
     }
@@ -313,7 +313,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
 
       alert('✅ Collaborateur activé avec succès');
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur activation:', error);
       alert('❌ Erreur lors de l\'activation: ' + (error.message || 'Erreur inconnue'));
     }
@@ -336,7 +336,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
 
       alert('✅ Collaborateur supprimé avec succès');
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suppression:', error);
       alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
     }
@@ -890,7 +890,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
                 <select
                   required
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as unknown })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
                 >
                   <option value="collaborateur">Collaborateur</option>
@@ -1057,7 +1057,7 @@ export default function Collaborateurs({ onNavigate: _onNavigate }: Collaborateu
                 <select
                   required
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as unknown })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
                 >
                   <option value="collaborateur">Collaborateur</option>

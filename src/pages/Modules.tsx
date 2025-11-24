@@ -137,7 +137,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
       setLoading(true);
 
       // Charger les modules depuis la table modules_activation avec leurs métiers
-      let modulesFromDB: any[] = [];
+      let modulesFromDB: unknown[] = [];
       
       try {
         // Récupérer tous les modules avec leurs informations complètes
@@ -242,7 +242,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
       }
 
       // Mapper les modules depuis la DB
-      const modulesWithStatus: Module[] = modulesFromDB.map((mod: any) => {
+      const modulesWithStatus: Module[] = modulesFromDB.map((mod: unknown) => {
         let disponible = isSuperAdmin;
         const active = mod.actif === true;
         
@@ -332,7 +332,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
       await loadModules();
       
       alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur toggle module:', error);
       alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
     }

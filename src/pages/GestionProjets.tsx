@@ -381,7 +381,7 @@ export default function GestionProjets({ onNavigate }: GestionProjetsProps) {
         entreprise_id: selectedEntreprise,
       });
       loadProjets(selectedEntreprise);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur sauvegarde projet:', error);
       alert('❌ Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
     }
@@ -419,7 +419,7 @@ export default function GestionProjets({ onNavigate }: GestionProjetsProps) {
       if (error) throw error;
       alert('✅ Projet supprimé avec succès!');
       loadProjets(selectedEntreprise);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suppression projet:', error);
       alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
     }
@@ -1104,7 +1104,7 @@ export default function GestionProjets({ onNavigate }: GestionProjetsProps) {
                       </div>
                       <div>
                         <p className="text-gray-400 text-sm">Heures estimées</p>
-                        <p className="text-white text-2xl font-bold">{(selectedProjet.stats as any).total_heures_estimees || 0}h</p>
+                        <p className="text-white text-2xl font-bold">{(selectedProjet.stats as unknown).total_heures_estimees || 0}h</p>
                       </div>
                     </div>
                   </div>

@@ -267,7 +267,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
         !c.statut || c.statut === 'actif' || c.statut === 'active'
       );
       setCollaborateurs(actifs);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur chargement collaborateurs:', error);
       alert('Erreur lors du chargement des collaborateurs: ' + (error.message || 'Erreur inconnue'));
       setCollaborateurs([]);
@@ -355,7 +355,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
         actif: true,
       });
       await loadEquipes();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur sauvegarde équipe:', error);
       alert('Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
     }
@@ -408,7 +408,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
         can_share: false,
       });
       await loadPermissions();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur sauvegarde permission:', error);
       alert('Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
     }
@@ -587,7 +587,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
       });
       await loadCollaborateurs();
       await loadPermissions();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création membre:', error);
       alert('❌ Erreur lors de la création: ' + (error.message || 'Erreur inconnue'));
     } finally {
@@ -625,7 +625,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     });
   };
 
-  const handleUpdateDossierPermissions = (folderId: string, field: string, value: any) => {
+  const handleUpdateDossierPermissions = (folderId: string, field: string, value: unknown) => {
     setMembreFormData((prev) => {
       const currentPerms = prev.permissionsParDossier[folderId] || {
         niveau_acces: 'lecture',
@@ -724,7 +724,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
       }
 
       // 5. Filtrer à nouveau en excluant ceux trouvés dans la DB
-      const membresActifsIds = (membresActifs || []).map((m: any) => m.collaborateur_id);
+      const membresActifsIds = (membresActifs || []).map((m: unknown) => m.collaborateur_id);
       const collaborateursFinal = collaborateursAInserer.filter(
         (collabId) => !membresActifsIds.includes(collabId)
       );
@@ -761,7 +761,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
       setSelectedCollaborateurs([]);
       await loadEquipes(); // Recharger les équipes pour mettre à jour le compteur de membres
       await loadCollaborateurs(); // Recharger aussi les collaborateurs pour mettre à jour la liste disponible
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur ajout membres:', error);
       alert('❌ Erreur lors de l\'ajout des membres: ' + (error.message || 'Erreur inconnue'));
     } finally {
@@ -793,7 +793,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
           return;
         }
 
-        const membresActuels = (membresData || []).map((m: any) => m.collaborateur_id);
+        const membresActuels = (membresData || []).map((m: unknown) => m.collaborateur_id);
         
         // Filtrer les collaborateurs pour exclure ceux déjà dans l'équipe
         const disponibles = collaborateurs.filter((collab) => !membresActuels.includes(collab.id));
@@ -1609,7 +1609,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                     </label>
                     <select
                       value={membreFormData.role}
-                      onChange={(e) => setMembreFormData({ ...membreFormData, role: e.target.value as any })}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, role: e.target.value as unknown })}
                       required
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >

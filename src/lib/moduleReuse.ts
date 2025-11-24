@@ -67,7 +67,12 @@ export async function canActivateModule(moduleCode: string): Promise<{
       };
     }
 
-    return (data || { can_activate: false, message: 'Erreur inconnue' }) as any;
+    return (data || { can_activate: false, message: 'Erreur inconnue' }) as {
+      can_activate: boolean;
+      message: string;
+      missing?: string[];
+      inactive?: string[];
+    };
   } catch (error) {
     console.error(`Erreur vérification activation pour ${moduleCode}:`, error);
     return {

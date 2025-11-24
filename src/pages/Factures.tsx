@@ -350,7 +350,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       setShowMRAForm(false);
       setFacturePourMRA(null);
       alert(`✅ Relance ${nextType} créée avec succès!`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création relance:', error);
       alert('❌ Erreur lors de la création de la relance: ' + (error.message || 'Erreur inconnue'));
     }
@@ -511,7 +511,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       resetForm();
       await loadFactures();
       await loadAvoirs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur sauvegarde facture:', error);
       alert('Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
     }
@@ -556,7 +556,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       taux_tva: facture.taux_tva || (facture.montant_tva ? (facture.montant_tva / facture.montant_ht) * 100 : 20),
       statut: facture.statut,
       motif: '',
-      notes: (facture as any).notes || '',
+      notes: (facture as unknown).notes || '',
     });
     
     // Charger les lignes de la facture
@@ -639,7 +639,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       await loadFactures();
       await loadAvoirs();
       alert('✅ Avoir créé avec succès et facture supprimée!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création avoir:', error);
       alert('❌ Erreur lors de la création de l\'avoir: ' + (error.message || 'Erreur inconnue'));
     }
@@ -679,7 +679,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
 
       await loadFactures();
       await loadAvoirs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur changement statut:', error);
       alert('❌ Erreur lors du changement de statut: ' + (error.message || 'Erreur inconnue'));
     }
@@ -721,7 +721,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         .eq('facture_id', doc.id)
         .order('ordre');
       
-      const lignesArray = (lignesData || []).map((ligne: any) => ({
+      const lignesArray = (lignesData || []).map((ligne: unknown) => ({
         description: ligne.description,
         quantite: ligne.quantite,
         prix_unitaire_ht: ligne.prix_unitaire_ht,
@@ -736,7 +736,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
       generatePDF({
         type: (doc.type || (isAvoir ? 'avoir' : 'facture')) as 'facture' | 'proforma' | 'avoir',
         numero: doc.numero,
-        date_emission: doc.date_facturation || (doc as any).date_emission || doc.created_at,
+        date_emission: doc.date_facturation || (doc as unknown).date_emission || doc.created_at,
         date_echeance: doc.date_echeance,
         client: {
           nom: clientData?.nom,
@@ -761,11 +761,11 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
         montant_ttc: doc.montant_ttc,
         taux_tva: doc.taux_tva || 20,
         lignes: lignesArray.length > 0 ? lignesArray : undefined,
-        motif: isAvoir ? (documentData as any).motif : undefined,
+        motif: isAvoir ? (documentData as unknown).motif : undefined,
         notes: documentData.notes,
         statut: doc.statut,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur génération PDF:', error);
       alert('❌ Erreur lors de la génération du PDF: ' + (error.message || 'Erreur inconnue'));
     }
@@ -819,7 +819,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
 
   const allDocuments: Array<Facture & { docType: string; date_emission?: string }> = [
     ...factures.map(f => ({ ...f, docType: 'facture' })),
-    ...avoirs.map(a => ({ ...a, docType: 'avoir', date_facturation: a.date_facturation || (a as any).date_emission || new Date().toISOString() }))
+    ...avoirs.map(a => ({ ...a, docType: 'avoir', date_facturation: a.date_facturation || (a as unknown).date_emission || new Date().toISOString() }))
   ];
 
   const filteredDocuments = allDocuments.filter((doc) => {
@@ -1027,7 +1027,7 @@ export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
                     </div>
                     <p className="text-sm text-gray-300 mb-1">Client: {doc.client_nom}</p>
                     <div className="flex items-center gap-4 text-sm text-gray-400">
-                      <span>Date: {new Date(doc.date_facturation || (doc as any).date_emission || doc.created_at).toLocaleDateString('fr-FR')}</span>
+                      <span>Date: {new Date(doc.date_facturation || (doc as unknown).date_emission || doc.created_at).toLocaleDateString('fr-FR')}</span>
                       {doc.date_echeance && (
                         <span>Échéance: {new Date(doc.date_echeance).toLocaleDateString('fr-FR')}</span>
                       )}

@@ -225,13 +225,13 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       }
 
       if (modulesData && modulesData.length > 0) {
-        const modulesInclus = modulesData.filter((m: any) => {
+        const modulesInclus = modulesData.filter((m: unknown) => {
           const inclus = m.inclus === true || m.inclus === 'true' || String(m.inclus).toLowerCase() === 'true';
           return inclus && m.est_cree && m.actif;
         });
 
         // Enrichir les modules avec leurs UUIDs réels depuis modules_activation
-        const moduleCodes = modulesInclus.map((m: any) => m.module_code);
+        const moduleCodes = modulesInclus.map((m: unknown) => m.module_code);
         const { data: modulesActivation } = await supabase
           .from('modules_activation')
           .select('id, module_code')
@@ -246,7 +246,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
         });
 
         // Enrichir les modules inclus avec leurs UUIDs
-        const modulesEnrichis = modulesInclus.map((m: any) => ({
+        const modulesEnrichis = modulesInclus.map((m: unknown) => ({
           ...m,
           module_id: m.module_id || codeToUuidMap.get(m.module_code) || null
         }));
@@ -256,7 +256,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
 
         // Pré-sélectionner les modules inclus dans le plan (uniquement les UUIDs valides)
         const moduleIds = modulesEnrichis
-          .map((m: any) => m.module_id)
+          .map((m: unknown) => m.module_id)
           .filter((id: string | null) => id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 
         if (moduleIds.length > 0) {
@@ -326,7 +326,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
 
       // Enrichir avec les informations client et options
       const enrichedAbonnements = await Promise.all(
-        (abonnementsData || []).map(async (ab: any) => {
+        (abonnementsData || []).map(async (ab: unknown) => {
           // Récupérer les informations client via entreprise_id
           let clientEmail = '';
           let clientNom = '';
@@ -351,14 +351,14 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
           }
 
           // Récupérer les modules inclus dans le plan (nouveau système)
-          let planModules: any[] = [];
+          let planModules: unknown[] = [];
           if (ab.plan_id) {
             const { data: modulesData, error: modulesError } = await supabase.rpc('get_plan_modules', {
               p_plan_id: ab.plan_id
             });
             
             if (!modulesError && modulesData) {
-              planModules = modulesData.filter((m: any) => m.inclus === true || m.inclus === 'true');
+              planModules = modulesData.filter((m: unknown) => m.inclus === true || m.inclus === 'true');
             }
           }
 
@@ -378,8 +378,8 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
             .eq('actif', true);
 
           const optionsActives = (optionsData || [])
-            .map((opt: any) => opt.options_supplementaires)
-            .filter((opt: any) => opt && opt.actif !== false);
+            .map((opt: unknown) => opt.options_supplementaires)
+            .filter((opt: unknown) => opt && opt.actif !== false);
 
           console.log(`📋 Abonnement ${ab.plans_abonnement?.nom || 'Inconnu'}: ${planModules.length} modules inclus`);
 
@@ -475,7 +475,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       setShowForm(false);
       resetForm();
       await loadAbonnements();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création abonnement:', error);
       alert('❌ Erreur lors de la création: ' + (error.message || 'Erreur inconnue'));
     }
@@ -555,7 +555,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       setShowForm(false);
       resetForm();
       await loadAbonnements();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur modification abonnement:', error);
       alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
     }
@@ -589,7 +589,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
 
       alert('✅ Abonnement supprimé avec succès!');
       await loadAbonnements();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suppression abonnement:', error);
       alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
     }
@@ -722,7 +722,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
 
       setSelectedAbonnementForLink(abonnement);
       setShowLinkModal(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur génération lien:', error);
       alert('❌ Erreur lors de la génération du lien: ' + (error.message || 'Erreur inconnue'));
     }
@@ -905,7 +905,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                 
                 {/* Modules inclus dans le plan */}
                 {(() => {
-                  const modulesInclus = abonnement.modules?.filter((mod: any) => {
+                  const modulesInclus = abonnement.modules?.filter((mod: unknown) => {
                     const inclus = mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true';
                     return inclus;
                   }) || [];
@@ -914,7 +914,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                     <div className="mt-3">
                       <p className="text-gray-400 text-sm mb-2">Modules inclus dans le plan ({modulesInclus.length}):</p>
                       <div className="flex flex-wrap gap-2">
-                        {modulesInclus.map((mod: any) => (
+                        {modulesInclus.map((mod: unknown) => (
                           <span
                             key={mod.module_code}
                             className={`px-3 py-1 rounded-full text-xs font-semibold ${
