@@ -239,12 +239,13 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       console.log('🔄 Déconnexion en cours...');
       await signOut();
       console.log('✅ Déconnexion réussie');
-      // Rediriger vers la page de connexion après déconnexion
-      window.location.href = '/login';
+      // L'App.tsx affichera automatiquement la page Auth quand user devient null
+      // Forcer un rechargement pour s'assurer que tout est nettoyé
+      window.location.reload();
     } catch (error) {
       console.error('❌ Erreur lors de la déconnexion:', error);
-      // Même en cas d'erreur, forcer la redirection
-      window.location.href = '/login';
+      // Même en cas d'erreur, forcer le rechargement pour nettoyer la session
+      window.location.reload();
     }
   };
 
