@@ -797,8 +797,6 @@ export default function Parametres() {
             />
           </div>
         );
-          </div>
-        );
 
       case 'facturation':
         return (
