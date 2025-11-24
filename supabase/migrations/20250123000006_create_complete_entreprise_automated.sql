@@ -256,16 +256,14 @@ BEGIN
         plan_id,
         date_debut,
         date_fin,
-        statut,
-        actif
+        statut
       )
       VALUES (
         v_entreprise_id,
         p_plan_id,
-        now(),
-        now() + interval '1 year',
-        'actif',
-        true
+        CURRENT_DATE,
+        (CURRENT_DATE + interval '1 year')::date,
+        'actif'
       )
       RETURNING id INTO v_abonnement_id;
 
