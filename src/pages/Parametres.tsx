@@ -170,22 +170,28 @@ export default function Parametres() {
           prenom?: string;
           email: string;
           created_at: string;
-          entreprises?: { nom: string } | null;
+          entreprises?: { nom: string } | null | Array<{ nom: string }>;
           espaces_membres_clients?: Array<{ id: string; actif: boolean; user_id: string | null }> | null;
         };
         
-        const espace = Array.isArray(c.espaces_membres_clients) && c.espaces_membres_clients.length > 0
-          ? c.espaces_membres_clients[0] 
+        // Gérer l'espace membre (peut être array ou null)
+        const espaces = c.espaces_membres_clients;
+        const espace = Array.isArray(espaces) && espaces.length > 0
+          ? espaces[0] 
           : null;
         
-        const entrepriseNom = Array.isArray(c.entreprises) 
-          ? c.entreprises[0]?.nom 
-          : (c.entreprises as { nom: string } | null)?.nom;
+        // Gérer le nom de l'entreprise (peut être array ou object ou null)
+        let entrepriseNom = 'N/A';
+        if (Array.isArray(c.entreprises) && c.entreprises.length > 0) {
+          entrepriseNom = c.entreprises[0]?.nom || 'N/A';
+        } else if (c.entreprises && typeof c.entreprises === 'object' && 'nom' in c.entreprises) {
+          entrepriseNom = (c.entreprises as { nom: string }).nom || 'N/A';
+        }
         
-        return {
+        const clientInfo: ClientInfo = {
           id: c.id,
           entreprise_id: c.entreprise_id,
-          entreprise_nom: entrepriseNom || 'N/A',
+          entreprise_nom: entrepriseNom,
           client_nom: c.nom || 'N/A',
           client_prenom: c.prenom || '',
           email: c.email || '',
@@ -195,10 +201,25 @@ export default function Parametres() {
           user_id: espace?.user_id || null,
           created_at: c.created_at,
         };
+        
+        // Log pour déboguer
+        if (espace) {
+          console.log(`✅ Client ${c.id}: Espace trouvé - ID: ${espace.id}, Actif: ${espace.actif}`);
+        } else {
+          console.log(`⚠️ Client ${c.id}: Aucun espace trouvé`);
+        }
+        
+        return clientInfo;
       });
 
       setClients(transformedClients);
       console.log('✅ Clients chargés:', transformedClients.length);
+      console.log('📊 Détail des espaces:', transformedClients.map(c => ({
+        id: c.id,
+        email: c.email,
+        espace_id: c.espace_id,
+        espace_actif: c.espace_actif
+      })));
     } catch (error) {
       console.error('❌ Erreur chargement clients:', error);
       alert('Erreur lors du chargement des clients. Vérifiez la console pour plus de détails.');
@@ -286,7 +307,11 @@ export default function Parametres() {
           // Ouvrir le modal credentials qui permettra d'envoyer l'email
           setShowCredentialsModal(true);
         }
-        await loadAllClients();
+        
+        // Attendre un peu avant de recharger pour s'assurer que la base est à jour
+        setTimeout(async () => {
+          await loadAllClients();
+        }, 500);
       } else {
         const errorMsg = result.error || result.message || 'Erreur inconnue lors de la création';
         throw new Error(errorMsg);
