@@ -144,13 +144,14 @@ export default function Entreprises() {
         }
 
         // Préparer les données pour l'INSERT
+        // user_id est OBLIGATOIRE selon le schéma (NOT NULL)
         const entrepriseData: Record<string, unknown> = {
+          user_id: user.id, // ✅ OBLIGATOIRE - la colonne est NOT NULL
           nom: formData.nom.trim(),
           forme_juridique: formData.forme_juridique,
           statut: 'active',
         };
 
-        // Ajouter user_id si la colonne existe (géré par RLS sinon)
         // Les champs optionnels sont ajoutés seulement s'ils ont une valeur
         if (formData.siret?.trim()) entrepriseData.siret = formData.siret.trim();
         if (formData.email?.trim()) entrepriseData.email = formData.email.trim();
