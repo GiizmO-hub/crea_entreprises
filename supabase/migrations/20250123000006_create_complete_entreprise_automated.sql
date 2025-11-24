@@ -251,7 +251,10 @@ BEGIN
   IF p_plan_id IS NOT NULL THEN
     -- Vérifier que le plan existe et est actif
     IF EXISTS (SELECT 1 FROM plans_abonnement WHERE id = p_plan_id AND actif = true) THEN
+      -- La table abonnements nécessite user_id (NOT NULL)
+      -- Utiliser v_user_id (créateur de l'entreprise)
       INSERT INTO abonnements (
+        user_id,
         entreprise_id,
         plan_id,
         date_debut,
@@ -259,12 +262,14 @@ BEGIN
         statut
       )
       VALUES (
+        v_user_id,
         v_entreprise_id,
         p_plan_id,
         CURRENT_DATE,
         (CURRENT_DATE + interval '1 year')::date,
         'actif'
       )
+      RETURNING id INTO v_abonnement_id;
       RETURNING id INTO v_abonnement_id;
 
       -- Lier l'abonnement à l'espace membre si créé
