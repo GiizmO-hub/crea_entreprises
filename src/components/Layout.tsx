@@ -1,6 +1,7 @@
 import { type ReactNode, useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useClientModules } from '../hooks/useClientModules';
 import {
   LayoutDashboard,
   Building2,
@@ -31,8 +32,24 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isClientSuperAdmin, setIsClientSuperAdmin] = useState(false);
-  const [isClient, setIsClient] = useState(false); // ✅ Nouvel état pour détecter si c'est un client
-  const [activeModules, setActiveModules] = useState<Set<string>>(new Set());
+  const [isClient, setIsClient] = useState(false);
+
+  // Définir menuItems (constante, pas de dépendances)
+  const menuItems = [
+    { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, moduleCode: 'dashboard' },
+    { id: 'entreprises', label: 'Mon Entreprise', icon: Building2, moduleCode: 'entreprises' },
+    { id: 'clients', label: 'Clients', icon: Users, moduleCode: 'clients' },
+    { id: 'abonnements', label: 'Abonnements', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
+    { id: 'gestion-plans', label: 'Gestion Plans', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
+    { id: 'factures', label: 'Facturation', icon: FileText, moduleCode: 'facturation' },
+    { id: 'documents', label: 'Documents', icon: FolderOpen, moduleCode: 'documents' },
+    { id: 'gestion-equipe', label: 'Gestion d\'Équipe', icon: UsersRound, superAdminOnly: true, moduleCode: 'gestion-equipe' },
+    { id: 'comptabilite', label: 'Comptabilité', icon: Calculator, moduleCode: 'comptabilite' },
+    { id: 'finance', label: 'Finance', icon: TrendingUp, moduleCode: 'finance' },
+    { id: 'gestion-projets', label: 'Gestion Projets', icon: Package, moduleCode: 'gestion-projets' },
+    { id: 'modules', label: 'Modules', icon: Package, superAdminOnly: true, moduleCode: 'modules' },
+    { id: 'settings', label: 'Paramètres', icon: Settings, moduleCode: 'settings' },
+  ];
 
   useEffect(() => {
     if (user) {
@@ -42,20 +59,20 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       setIsSuperAdmin(false);
       setIsClientSuperAdmin(false);
       setIsClient(false);
-      setActiveModules(new Set());
     }
-  }, [user]); // ✅ Retirer isSuperAdmin des dépendances pour éviter boucle infinie
+  }, [user]);
 
-  // Charger les modules actifs après avoir déterminé le statut super_admin
+  // ✅ Utiliser le hook personnalisé pour gérer les modules actifs (après la définition des états)
+  const { activeModules, loading: modulesLoading, isClient: isClientFromHook } = useClientModules({
+    menuItems,
+    isSuperAdmin,
+    isClientSuperAdmin,
+  });
+
+  // Mettre à jour isClient depuis le hook
   useEffect(() => {
-    if (user) {
-      // Attendre un court délai pour s'assurer que checkClientSuperAdmin a terminé
-      const timer = setTimeout(() => {
-        loadActiveModules();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [user, isSuperAdmin, isClientSuperAdmin, isClient]);
+    setIsClient(isClientFromHook);
+  }, [isClientFromHook]);
 
   const checkClientSuperAdmin = async () => {
     if (!user) {
@@ -209,208 +226,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
   };
 
-  const loadActiveModules = async () => {
-    if (!user) {
-      setActiveModules(new Set());
-      return;
-    }
-
-    try {
-      // ✅ Vérifier d'abord si c'est un client (a un espace membre)
-      const { data: espaceClientCheck } = await supabase
-        .from('espaces_membres_clients')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      // ✅ Si c'est un client, charger uniquement les modules de son abonnement (pas les modules admin)
-      if (espaceClientCheck) {
-        // C'est un client, charger uniquement les modules de son abonnement depuis espaces_membres_clients
-        console.log('👤 Client détecté, chargement modules depuis abonnement uniquement (pas modules admin)');
-        
-        const { data: espaceClient, error: espaceError } = await supabase
-          .from('espaces_membres_clients')
-          .select('modules_actifs, client_id, entreprise_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (espaceError || !espaceClient) {
-          console.warn('⚠️ Erreur chargement espace client, modules de base uniquement');
-          setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
-          return;
-        }
-
-        console.log('✅ Espace client trouvé:', {
-          client_id: espaceClient.client_id,
-          entreprise_id: espaceClient.entreprise_id,
-          modules_actifs: espaceClient.modules_actifs,
-        });
-
-      // Mapping complet entre codes de modules (depuis modules_activation) et IDs du menu
-      // Les codes peuvent utiliser des tirets, underscores, ou autres formats
-      const moduleCodeToMenuId: Record<string, string> = {
-        // Modules de base
-        'dashboard': 'dashboard',
-        'tableau_de_bord': 'dashboard',
-        'tableau-de-bord': 'dashboard',
-        'mon_entreprise': 'entreprises',
-        'mon-entreprise': 'entreprises',
-        'entreprises': 'entreprises',
-        
-        // Modules clients
-        'clients': 'clients',
-        'gestion_clients': 'clients',
-        'gestion-clients': 'clients',
-        'gestion-des-clients': 'clients',
-        'gestion_des_clients': 'clients',
-        
-        // Modules facturation
-        'facturation': 'factures',
-        'factures': 'factures',
-        
-        // Modules documents
-        'documents': 'documents',
-        'gestion_documents': 'documents',
-        'gestion-documents': 'documents',
-        'gestion-de-documents': 'documents',
-        'gestion_de_documents': 'documents',
-        
-        // Modules gestion équipe
-        'gestion-equipe': 'gestion-equipe',
-        'gestion_equipe': 'gestion-equipe',
-        'gestion-d-equipe': 'gestion-equipe',
-        'gestion-d-équipe': 'gestion-equipe',
-        'gestion_dequipe': 'gestion-equipe',
-        'gestion_d_equipe': 'gestion-equipe',
-        
-        // Modules gestion projets
-        'gestion-projets': 'gestion-projets',
-        'gestion_projets': 'gestion-projets',
-        'gestion-de-projets': 'gestion-projets',
-        'gestion_de_projets': 'gestion-projets',
-        
-        // Modules comptabilité
-        'comptabilite': 'comptabilite',
-        'comptabilité': 'comptabilite',
-        
-        // Modules finance
-        'finance': 'finance',
-        'finances': 'finance',
-        
-        // Modules collaborateurs
-        'collaborateurs': 'collaborateurs',
-        'gestion-collaborateurs': 'collaborateurs',
-        'gestion_des_collaborateurs': 'collaborateurs',
-        'gestion-des-collaborateurs': 'collaborateurs',
-        
-        // Modules paramètres
-        'parametres': 'settings',
-        'paramètres': 'settings',
-        'settings': 'settings',
-      };
-
-      // Extraire les modules actifs depuis le JSON
-      const modulesActifs = espaceClient.modules_actifs || {};
-      console.log('📦 Modules actifs depuis la base:', JSON.stringify(modulesActifs, null, 2));
-      console.log('📋 Clés des modules:', Object.keys(modulesActifs));
-      const activeModulesSet = new Set<string>();
-
-      // Parcourir tous les modules dans modules_actifs
-      Object.keys(modulesActifs).forEach((moduleCode) => {
-        const moduleValue = modulesActifs[moduleCode];
-        console.log(`🔍 Vérification module: ${moduleCode} = ${moduleValue} (type: ${typeof moduleValue})`);
-        
-        // Vérifier si le module est actif (valeur true, 'true', 1, ou string '1')
-        const isActive = moduleValue === true || 
-                        moduleValue === 'true' || 
-                        moduleValue === 1 || 
-                        moduleValue === '1' ||
-                        (typeof moduleValue === 'string' && moduleValue.toLowerCase() === 'true');
-        
-        if (isActive) {
-          // Essayer de trouver le mapping exact
-          let menuId = moduleCodeToMenuId[moduleCode];
-          
-          // Si pas trouvé, essayer avec normalisation (remplacer underscores par tirets et vice versa)
-          if (!menuId) {
-            const normalizedCode1 = moduleCode.replace(/_/g, '-');
-            const normalizedCode2 = moduleCode.replace(/-/g, '_');
-            menuId = moduleCodeToMenuId[normalizedCode1] || moduleCodeToMenuId[normalizedCode2];
-          }
-          
-          if (menuId) {
-            activeModulesSet.add(menuId);
-            console.log(`✅ Module actif trouvé et mappé: ${moduleCode} -> ${menuId}`);
-          } else {
-            console.warn(`⚠️ Code de module non mappé: ${moduleCode} (valeur: ${moduleValue})`);
-            // Afficher tous les codes disponibles pour débogage
-            console.log('📝 Codes de modules disponibles dans le mapping:', Object.keys(moduleCodeToMenuId));
-          }
-        } else {
-          console.log(`⏭️ Module ${moduleCode} ignoré (valeur: ${moduleValue}, type: ${typeof moduleValue})`);
-        }
-      });
-
-        // Toujours afficher certains modules de base (dashboard, entreprises, settings)
-        activeModulesSet.add('dashboard');
-        activeModulesSet.add('entreprises');
-        activeModulesSet.add('settings');
-
-        console.log(`✅ Modules actifs chargés pour le client (avant filtre): ${Array.from(activeModulesSet).join(', ')}`);
-        
-        // ✅ IMPORTANT : Exclure les modules admin de la liste active
-        const filteredModules = Array.from(activeModulesSet).filter(id => {
-          const menuItem = menuItems.find(item => item.id === id);
-          const isAdminModule = menuItem?.superAdminOnly === true;
-          if (isAdminModule) {
-            console.log(`⚠️ Module admin exclu: ${id}`);
-          }
-          return !isAdminModule; // Exclure les modules admin
-        });
-        
-        console.log(`✅ Modules actifs finaux pour le client (après filtre): ${Array.from(filteredModules).join(', ')}`);
-        console.log(`📊 Nombre de modules actifs: ${filteredModules.length}`);
-        
-        // ✅ Toujours s'assurer que les modules de base sont présents
-        if (filteredModules.length === 0) {
-          console.warn('⚠️ Aucun module trouvé, utilisation des modules de base par défaut');
-          setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
-        } else {
-          setActiveModules(new Set(filteredModules));
-        }
-        return;
-      }
-      
-      // ✅ Si ce n'est pas un client, vérifier si c'est un super admin plateforme
-      if (isSuperAdmin && !isClientSuperAdmin) {
-        // Super admin plateforme voit tout
-        setActiveModules(new Set(['dashboard', 'entreprises', 'clients', 'factures', 'comptabilite', 'finance', 'gestion-equipe', 'gestion-projets', 'documents', 'settings', 'abonnements', 'gestion-plans', 'modules']));
-        return;
-      }
-      
-      // Par défaut, modules de base
-      setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
-    } catch (error) {
-      console.error('Erreur chargement modules actifs:', error);
-      // En cas d'erreur, afficher les modules de base
-      setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
-    }
-  };
-
-  const menuItems = [
-    { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, moduleCode: 'dashboard' },
-    { id: 'entreprises', label: 'Mon Entreprise', icon: Building2, moduleCode: 'entreprises' },
-    { id: 'clients', label: 'Clients', icon: Users, moduleCode: 'clients' },
-    { id: 'abonnements', label: 'Abonnements', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
-    { id: 'gestion-plans', label: 'Gestion Plans', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
-    { id: 'factures', label: 'Facturation', icon: FileText, moduleCode: 'facturation' },
-    { id: 'documents', label: 'Documents', icon: FolderOpen, moduleCode: 'documents' },
-    { id: 'gestion-equipe', label: 'Gestion d\'Équipe', icon: UsersRound, superAdminOnly: true, moduleCode: 'gestion-equipe' },
-    { id: 'comptabilite', label: 'Comptabilité', icon: Calculator, moduleCode: 'comptabilite' },
-    { id: 'finance', label: 'Finance', icon: TrendingUp, moduleCode: 'finance' },
-    { id: 'modules', label: 'Modules', icon: Package, superAdminOnly: true, moduleCode: 'modules' },
-    { id: 'settings', label: 'Paramètres', icon: Settings, moduleCode: 'settings' },
-  ];
+  // ✅ La fonction loadActiveModules a été remplacée par le hook useClientModules ci-dessus
 
   const handleSignOut = async () => {
     await signOut();
