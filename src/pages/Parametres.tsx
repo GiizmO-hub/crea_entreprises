@@ -143,25 +143,59 @@ export default function Parametres() {
   };
 
   const loadEntrepriseConfig = async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('⚠️ loadEntrepriseConfig: Pas d\'utilisateur connecté');
+      return;
+    }
     
     setLoadingConfig(true);
     try {
+      console.log('🔄 loadEntrepriseConfig: Chargement des entreprises pour user:', user.id);
+      
       // Récupérer TOUTES les entreprises de l'utilisateur connecté (pour gérer 50+ entreprises)
+      // Laisser RLS filtrer automatiquement (comme dans Entreprises.tsx)
+      // Ne pas filtrer par user_id ici car RLS le fait déjà
       const { data: entreprisesData, error: entreprisesError } = await supabase
         .from('entreprises')
-        .select('id, nom, statut, statut_paiement, created_at')
-        .eq('user_id', user.id)
+        .select('id, nom, statut, statut_paiement, created_at, user_id')
         .order('created_at', { ascending: false });
+      
+      // Si pas d'entreprises mais qu'on est admin, peut-être que RLS bloque
+      // Essayer aussi avec le filtre explicite pour comparaison
+      if (!entreprisesData || entreprisesData.length === 0) {
+        console.log('⚠️ Aucune entreprise via RLS, tentative avec filtre explicite user_id:', user.id);
+        const { data: entreprisesDataWithFilter, error: errorWithFilter } = await supabase
+          .from('entreprises')
+          .select('id, nom, statut, statut_paiement, created_at, user_id')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        
+        if (!errorWithFilter && entreprisesDataWithFilter && entreprisesDataWithFilter.length > 0) {
+          console.log('✅ Entreprises trouvées avec filtre explicite:', entreprisesDataWithFilter.length);
+          entreprisesData = entreprisesDataWithFilter;
+        }
+      }
 
       if (entreprisesError) {
-        console.error('Erreur chargement entreprises:', entreprisesError);
+        console.error('❌ Erreur chargement entreprises:', entreprisesError);
+        console.error('❌ Détails erreur:', JSON.stringify(entreprisesError, null, 2));
         setEntrepriseConfigs([]);
         setLoadingConfig(false);
         return;
       }
 
+      console.log('📦 Entreprises récupérées:', entreprisesData?.length || 0);
+      if (entreprisesData && entreprisesData.length > 0) {
+        console.log('📦 Détails entreprises:', entreprisesData.map(e => ({
+          id: e.id,
+          nom: e.nom,
+          user_id: e.user_id,
+          statut: e.statut
+        })));
+      }
+
       if (!entreprisesData || entreprisesData.length === 0) {
+        console.log('⚠️ Aucune entreprise trouvée pour l\'utilisateur:', user.id);
         setEntrepriseConfigs([]);
         setLoadingConfig(false);
         return;
@@ -239,12 +273,15 @@ export default function Parametres() {
         })
       );
 
+      console.log('✅ Configurations chargées:', configs.length);
       setEntrepriseConfigs(configs);
     } catch (error) {
-      console.error('Erreur chargement config entreprises:', error);
+      console.error('❌ Erreur chargement config entreprises:', error);
+      console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'N/A');
       setEntrepriseConfigs([]);
     } finally {
       setLoadingConfig(false);
+      console.log('✅ loadEntrepriseConfig terminé');
     }
   };
 
