@@ -203,6 +203,7 @@ export default function Entreprises() {
                 const { sendClientCredentialsEmail } = await import('../services/emailService');
                 
                 await sendClientCredentialsEmail({
+                  clientEmail: result.email,
                   email: result.email,
                   password: result.password,
                   clientName: formData.nom_client || 'Client',
