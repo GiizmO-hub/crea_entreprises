@@ -55,10 +55,11 @@ export default function Entreprises() {
     if (!user) return;
 
     try {
+      // Utiliser RLS pour filtrer automatiquement les entreprises de l'utilisateur
+      // Ne plus dépendre de la colonne user_id
       const { data, error } = await supabase
         .from('entreprises')
         .select('*')
-        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -116,8 +117,7 @@ export default function Entreprises() {
             ...formData,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', editingId)
-          .eq('user_id', user.id);
+          .eq('id', editingId);
 
         if (error) throw error;
         alert('✅ Entreprise modifiée avec succès!');
@@ -128,11 +128,10 @@ export default function Entreprises() {
           return;
         }
 
-        // Créer l'entreprise
+        // Créer l'entreprise (sans user_id, RLS gère l'association)
         const { data: entrepriseData, error: entrepriseError } = await supabase
           .from('entreprises')
           .insert({
-            user_id: user.id,
             nom: formData.nom,
             forme_juridique: formData.forme_juridique,
             siret: formData.siret || null,
@@ -753,4 +752,3 @@ export default function Entreprises() {
     </div>
   );
 }
-
