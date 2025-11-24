@@ -56,7 +56,6 @@ export default function Entreprises() {
 
     try {
       // Utiliser RLS pour filtrer automatiquement les entreprises de l'utilisateur
-      // Ne plus dépendre de la colonne user_id
       const { data, error } = await supabase
         .from('entreprises')
         .select('*')
@@ -106,7 +105,10 @@ export default function Entreprises() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      alert('❌ Vous devez être connecté pour créer une entreprise');
+      return;
+    }
 
     try {
       if (editingId) {
@@ -114,24 +116,6 @@ export default function Entreprises() {
         const { error } = await supabase
           .from('entreprises')
           .update({
-            ...formData,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingId);
-
-        if (error) throw error;
-        alert('✅ Entreprise modifiée avec succès!');
-      } else {
-        // Création avec option automatique client + espace membre
-        if (createClientAuto && !formData.email) {
-          alert('❌ L\'email est obligatoire pour créer automatiquement le client et l\'espace membre');
-          return;
-        }
-
-        // Créer l'entreprise (sans user_id, RLS gère l'association)
-        const { data: entrepriseData, error: entrepriseError } = await supabase
-          .from('entreprises')
-          .insert({
             nom: formData.nom,
             forme_juridique: formData.forme_juridique,
             siret: formData.siret || null,
@@ -143,37 +127,83 @@ export default function Entreprises() {
             capital: formData.capital || 0,
             rcs: formData.rcs || null,
             site_web: formData.site_web || null,
-            statut: 'active',
+            updated_at: new Date().toISOString(),
           })
+          .eq('id', editingId);
+
+        if (error) {
+          console.error('Erreur détaillée UPDATE:', error);
+          throw error;
+        }
+        alert('✅ Entreprise modifiée avec succès!');
+      } else {
+        // CRÉATION - Vérifications préalables
+        if (createClientAuto && !formData.email) {
+          alert('❌ L\'email est obligatoire pour créer automatiquement le client et l\'espace membre');
+          return;
+        }
+
+        // Préparer les données pour l'INSERT
+        const entrepriseData: Record<string, unknown> = {
+          nom: formData.nom.trim(),
+          forme_juridique: formData.forme_juridique,
+          statut: 'active',
+        };
+
+        // Ajouter user_id si la colonne existe (géré par RLS sinon)
+        // Les champs optionnels sont ajoutés seulement s'ils ont une valeur
+        if (formData.siret?.trim()) entrepriseData.siret = formData.siret.trim();
+        if (formData.email?.trim()) entrepriseData.email = formData.email.trim();
+        if (formData.telephone?.trim()) entrepriseData.telephone = formData.telephone.trim();
+        if (formData.adresse?.trim()) entrepriseData.adresse = formData.adresse.trim();
+        if (formData.code_postal?.trim()) entrepriseData.code_postal = formData.code_postal.trim();
+        if (formData.ville?.trim()) entrepriseData.ville = formData.ville.trim();
+        if (formData.capital && formData.capital > 0) entrepriseData.capital = formData.capital;
+        if (formData.rcs?.trim()) entrepriseData.rcs = formData.rcs.trim();
+        if (formData.site_web?.trim()) entrepriseData.site_web = formData.site_web.trim();
+
+        // Créer l'entreprise
+        const { data: createdEntreprise, error: entrepriseError } = await supabase
+          .from('entreprises')
+          .insert(entrepriseData)
           .select()
           .single();
 
-        if (entrepriseError) throw entrepriseError;
+        if (entrepriseError) {
+          console.error('❌ Erreur création entreprise détaillée:', entrepriseError);
+          throw new Error(`Erreur lors de la création de l'entreprise: ${entrepriseError.message || 'Erreur inconnue'}`);
+        }
+
+        if (!createdEntreprise) {
+          throw new Error('Aucune entreprise créée (pas de données retournées)');
+        }
 
         // Créer client et espace membre automatiquement si demandé
-        if (createClientAuto && formData.email && entrepriseData) {
+        if (createClientAuto && formData.email && createdEntreprise) {
           // Créer le client avec les mêmes informations
-          const { data: clientData, error: clientError } = await supabase
+          const clientData = {
+            entreprise_id: createdEntreprise.id,
+            nom: formData.nom.trim(),
+            prenom: '',
+            entreprise_nom: formData.nom.trim(),
+            email: formData.email.trim(),
+            telephone: formData.telephone?.trim() || null,
+            adresse: formData.adresse?.trim() || null,
+            code_postal: formData.code_postal?.trim() || null,
+            ville: formData.ville?.trim() || null,
+            statut: 'actif',
+          };
+
+          const { data: clientDataResult, error: clientError } = await supabase
             .from('clients')
-            .insert({
-              entreprise_id: entrepriseData.id,
-              nom: formData.nom,
-              prenom: '',
-              entreprise_nom: formData.nom,
-              email: formData.email,
-              telephone: formData.telephone || null,
-              adresse: formData.adresse || null,
-              code_postal: formData.code_postal || null,
-              ville: formData.ville || null,
-              statut: 'actif',
-            })
+            .insert(clientData)
             .select()
             .single();
 
           if (clientError) {
             console.error('Erreur création client:', clientError);
-            alert('⚠️ Entreprise créée mais erreur lors de la création du client: ' + clientError.message);
-          } else if (createEspaceMembre && clientData) {
+            alert(`⚠️ Entreprise créée mais erreur lors de la création du client: ${clientError.message}`);
+          } else if (createEspaceMembre && clientDataResult) {
             // Créer l'espace membre avec abonnement si demandé
             try {
               const password = Math.random().toString(36).slice(-12) + 'A1!';
@@ -186,8 +216,8 @@ export default function Entreprises() {
               const { data: espaceResult, error: espaceError } = await supabase.rpc(
                 'create_espace_membre_from_client_unified',
                 {
-                  p_client_id: clientData.id,
-                  p_entreprise_id: entrepriseData.id,
+                  p_client_id: clientDataResult.id,
+                  p_entreprise_id: createdEntreprise.id,
                   p_password: password,
                   p_plan_id: planId || null,
                   p_options_ids: selectedOptions.length > 0 ? selectedOptions : null,
@@ -196,15 +226,15 @@ export default function Entreprises() {
 
               if (espaceError) {
                 console.error('Erreur création espace membre:', espaceError);
-                alert('⚠️ Entreprise et client créés mais erreur lors de la création de l\'espace membre: ' + espaceError.message);
+                alert(`⚠️ Entreprise et client créés mais erreur lors de la création de l'espace membre: ${espaceError.message}`);
               } else if (espaceResult?.success) {
                 // Si l'espace membre existait déjà
                 if (espaceResult.already_exists) {
-                  alert('✅ Entreprise et client créés ! ' + (espaceResult.message || 'Un espace membre existe déjà pour ce client. Les identifiants peuvent être récupérés depuis la fiche client.'));
+                  alert('✅ Entreprise et client créés ! ' + (espaceResult.message || 'Un espace membre existe déjà pour ce client.'));
                 } else {
                   // Afficher les identifiants pour un nouvel espace membre
                   setClientCredentials({
-                    email: formData.email,
+                    email: formData.email.trim(),
                     password: espaceResult.password || password,
                   });
                   setShowCredentialsModal(true);
@@ -212,7 +242,7 @@ export default function Entreprises() {
               }
             } catch (espaceErr: unknown) {
               console.error('Erreur création espace membre:', espaceErr);
-              alert('⚠️ Entreprise et client créés mais erreur lors de la création de l\'espace membre');
+              alert('⚠️ Entreprise et client créés mais erreur lors de la création de l'espace membre');
             }
           } else {
             alert('✅ Entreprise et client créés avec succès!');
@@ -227,9 +257,19 @@ export default function Entreprises() {
       resetForm();
       await loadEntreprises();
     } catch (error: unknown) {
-      console.error('Erreur sauvegarde entreprise:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      alert('❌ Erreur lors de la sauvegarde: ' + errorMessage);
+      console.error('❌ Erreur complète sauvegarde entreprise:', error);
+      
+      // Message d'erreur détaillé pour le débogage
+      let errorMessage = 'Erreur inconnue';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        const errObj = error as { message?: string; error?: string; details?: string };
+        errorMessage = errObj.message || errObj.error || errObj.details || 'Erreur inconnue';
+      }
+      
+      alert(`❌ Erreur lors de la sauvegarde: ${errorMessage}`);
     }
   };
 
@@ -256,7 +296,6 @@ export default function Entreprises() {
     if (!user) return;
 
     try {
-      // Utiliser la fonction RPC pour supprimer proprement avec cascade
       const { data, error } = await supabase
         .rpc('delete_entreprise_complete', { p_entreprise_id: id });
 
@@ -462,11 +501,14 @@ export default function Entreprises() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Email {createClientAuto && !editingId && '*'}
+                  </label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    required={createClientAuto && !editingId}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="contact@entreprise.fr"
                   />
