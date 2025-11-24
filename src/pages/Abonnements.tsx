@@ -71,8 +71,7 @@ interface Client {
   entreprise_nom?: string;
 }
 
-export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProps) {
-  // onNavigate non utilisé dans ce composant
+export default function Abonnements() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -225,13 +224,21 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       }
 
       if (modulesData && modulesData.length > 0) {
-        const modulesInclus = modulesData.filter((m: unknown) => {
+        interface ModuleData {
+          module_code: string;
+          module_id?: string | null;
+          inclus?: boolean | string;
+          est_cree?: boolean;
+          actif?: boolean;
+        }
+        
+        const modulesInclus = modulesData.filter((m: ModuleData) => {
           const inclus = m.inclus === true || m.inclus === 'true' || String(m.inclus).toLowerCase() === 'true';
           return inclus && m.est_cree && m.actif;
         });
 
         // Enrichir les modules avec leurs UUIDs réels depuis modules_activation
-        const moduleCodes = modulesInclus.map((m: unknown) => m.module_code);
+        const moduleCodes = modulesInclus.map((m: ModuleData) => m.module_code);
         const { data: modulesActivation } = await supabase
           .from('modules_activation')
           .select('id, module_code')
@@ -246,7 +253,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
         });
 
         // Enrichir les modules inclus avec leurs UUIDs
-        const modulesEnrichis = modulesInclus.map((m: unknown) => ({
+        const modulesEnrichis = modulesInclus.map((m: ModuleData) => ({
           ...m,
           module_id: m.module_id || codeToUuidMap.get(m.module_code) || null
         }));
@@ -256,8 +263,8 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
 
         // Pré-sélectionner les modules inclus dans le plan (uniquement les UUIDs valides)
         const moduleIds = modulesEnrichis
-          .map((m: unknown) => m.module_id)
-          .filter((id: string | null) => id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+          .map((m: ModuleData) => m.module_id)
+          .filter((id): id is string => id !== null && typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 
         if (moduleIds.length > 0) {
           setFormData(prev => ({
@@ -324,9 +331,23 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
 
       console.log('Abonnements chargés:', abonnementsData?.length || 0, 'abonnement(s)');
 
-      // Enrichir avec les informations client et options
+          // Enrichir avec les informations client et options
+      interface AbonnementData {
+        id: string;
+        entreprise_id: string;
+        plan_id: string;
+        statut: string;
+        plans_abonnement?: { nom: string };
+      }
+      
+      interface ModuleData {
+        module_code: string;
+        module_id?: string;
+        inclus?: boolean | string;
+      }
+      
       const enrichedAbonnements = await Promise.all(
-        (abonnementsData || []).map(async (ab: unknown) => {
+        (abonnementsData || []).map(async (ab: AbonnementData) => {
           // Récupérer les informations client via entreprise_id
           let clientEmail = '';
           let clientNom = '';
@@ -351,14 +372,14 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
           }
 
           // Récupérer les modules inclus dans le plan (nouveau système)
-          let planModules: unknown[] = [];
+          let planModules: ModuleData[] = [];
           if (ab.plan_id) {
             const { data: modulesData, error: modulesError } = await supabase.rpc('get_plan_modules', {
               p_plan_id: ab.plan_id
             });
             
             if (!modulesError && modulesData) {
-              planModules = modulesData.filter((m: unknown) => m.inclus === true || m.inclus === 'true');
+              planModules = (modulesData as ModuleData[]).filter((m: ModuleData) => m.inclus === true || m.inclus === 'true');
             }
           }
 
@@ -377,9 +398,13 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
             .eq('abonnement_id', ab.id)
             .eq('actif', true);
 
+          interface OptionData {
+            options_supplementaires?: { id: string; nom: string; prix_mensuel: number; actif?: boolean };
+          }
+          
           const optionsActives = (optionsData || [])
-            .map((opt: unknown) => opt.options_supplementaires)
-            .filter((opt: unknown) => opt && opt.actif !== false);
+            .map((opt: OptionData) => opt.options_supplementaires)
+            .filter((opt) => opt && opt.actif !== false);
 
           console.log(`📋 Abonnement ${ab.plans_abonnement?.nom || 'Inconnu'}: ${planModules.length} modules inclus`);
 
@@ -477,7 +502,8 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       await loadAbonnements();
     } catch (error: unknown) {
       console.error('Erreur création abonnement:', error);
-      alert('❌ Erreur lors de la création: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la création: ' + errorMessage);
     }
   };
 
@@ -557,7 +583,8 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       await loadAbonnements();
     } catch (error: unknown) {
       console.error('Erreur modification abonnement:', error);
-      alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la modification: ' + errorMessage);
     }
   };
 
@@ -591,7 +618,8 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       await loadAbonnements();
     } catch (error: unknown) {
       console.error('Erreur suppression abonnement:', error);
-      alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la suppression: ' + errorMessage);
     }
   };
 
@@ -724,7 +752,8 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
       setShowLinkModal(true);
     } catch (error: unknown) {
       console.error('Erreur génération lien:', error);
-      alert('❌ Erreur lors de la génération du lien: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la génération du lien: ' + errorMessage);
     }
   };
 
@@ -905,7 +934,13 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                 
                 {/* Modules inclus dans le plan */}
                 {(() => {
-                  const modulesInclus = abonnement.modules?.filter((mod: unknown) => {
+                  interface ModuleDisplay {
+                    module_code?: string;
+                    module_nom?: string;
+                    inclus?: boolean | string;
+                  }
+                  
+                  const modulesInclus = (abonnement.modules as ModuleDisplay[] | undefined)?.filter((mod: ModuleDisplay) => {
                     const inclus = mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true';
                     return inclus;
                   }) || [];
@@ -914,7 +949,7 @@ export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProp
                     <div className="mt-3">
                       <p className="text-gray-400 text-sm mb-2">Modules inclus dans le plan ({modulesInclus.length}):</p>
                       <div className="flex flex-wrap gap-2">
-                        {modulesInclus.map((mod: unknown) => (
+                        {modulesInclus.map((mod: ModuleDisplay) => (
                           <span
                             key={mod.module_code}
                             className={`px-3 py-1 rounded-full text-xs font-semibold ${

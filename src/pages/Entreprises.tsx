@@ -19,8 +19,7 @@ interface EntreprisesProps {
   onNavigate: (page: string) => void;
 }
 
-export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProps) {
-  // onNavigate non utilisé dans ce composant
+export default function Entreprises() {
   const { user } = useAuth();
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,7 +215,7 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
                   setShowCredentialsModal(true);
                 }
               }
-            } catch (espaceErr: unknown) {
+            } catch (espaceErr: any) {
               console.error('Erreur création espace membre:', espaceErr);
               alert('⚠️ Entreprise et client créés mais erreur lors de la création de l\'espace membre');
             }
@@ -232,7 +231,7 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
       setEditingId(null);
       resetForm();
       await loadEntreprises();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Erreur sauvegarde entreprise:', error);
       alert('❌ Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
     }
@@ -274,7 +273,7 @@ export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProp
       }
       
       await loadEntreprises();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Erreur suppression:', error);
       alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
     }

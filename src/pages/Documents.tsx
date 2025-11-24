@@ -229,7 +229,7 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
             p_entreprise_id: selectedEntreprise,
           });
 
-        const accessibleFolderIds = accessibleFolders?.map((f: unknown) => f.folder_id) || [];
+        const accessibleFolderIds = accessibleFolders?.map((f: any) => f.folder_id) || [];
 
         // Filtrer les dossiers selon les permissions
         if (accessibleFolderIds.length > 0) {
@@ -281,7 +281,7 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
             p_entreprise_id: selectedEntreprise,
           });
 
-        const accessibleFolderIds = accessibleFolders?.map((f: unknown) => f.folder_id) || [];
+        const accessibleFolderIds = accessibleFolders?.map((f: any) => f.folder_id) || [];
 
         // Filtrer les documents par dossiers accessibles
         if (accessibleFolderIds.length > 0) {
@@ -385,7 +385,7 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
 
       // Préparer les données du document - TOUTES les colonnes avec valeurs par défaut
       // Note: La table peut avoir des colonnes "url" et "mime_type" en plus de "chemin_fichier"
-      const documentData: Record<string, any> = {
+      const documentData: Record<string, unknown> = {
         entreprise_id: selectedEntreprise,
         nom: formData.nom,
         description: formData.description && formData.description.trim() ? formData.description.trim() : null,
@@ -421,10 +421,10 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         if (currentDoc) {
           // Utiliser les valeurs existantes du document
           documentData.chemin_fichier = currentDoc.chemin_fichier || '';
-          documentData.url = (currentDoc as unknown).url || currentDoc.chemin_fichier || '';
+          documentData.url = (currentDoc as any).url || currentDoc.chemin_fichier || '';
           documentData.type_fichier = currentDoc.type_fichier || 'autre';
           documentData.taille = currentDoc.taille || 0;
-          documentData.mime_type = (currentDoc as unknown).mime_type || null;
+          documentData.mime_type = (currentDoc as any).mime_type || null;
         }
         // Sinon, garder les valeurs par défaut définies ci-dessus
       }
@@ -487,7 +487,7 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
       setEditingId(null);
       resetForm();
       await loadDocuments();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Erreur sauvegarde document:', error);
       alert('Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
       setUploading(false);
@@ -653,7 +653,7 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
     }
 
     try {
-      const folderData: Record<string, any> = {
+      const folderData: Record<string, unknown> = {
         entreprise_id: selectedEntreprise,
         nom: folderFormData.nom,
         description: folderFormData.description || null,
@@ -700,7 +700,7 @@ export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
         couleur: '#3B82F6',
       });
       await loadFolders();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Erreur sauvegarde dossier:', error);
       alert('Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
     }

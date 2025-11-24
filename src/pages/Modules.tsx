@@ -23,7 +23,7 @@ interface Module {
 }
 
 // Mapping des secteurs d'activité vers icônes
-const secteurIcons: Record<string, any> = {
+const secteurIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   'transversal': Package,
   'btp_construction': Hammer,
   'services_conseil': Briefcase,
@@ -137,7 +137,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
       setLoading(true);
 
       // Charger les modules depuis la table modules_activation avec leurs métiers
-      let modulesFromDB: unknown[] = [];
+      let modulesFromDB: any[] = [];
       
       try {
         // Récupérer tous les modules avec leurs informations complètes
@@ -242,7 +242,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
       }
 
       // Mapper les modules depuis la DB
-      const modulesWithStatus: Module[] = modulesFromDB.map((mod: unknown) => {
+      const modulesWithStatus: Module[] = modulesFromDB.map((mod: any) => {
         let disponible = isSuperAdmin;
         const active = mod.actif === true;
         
@@ -332,7 +332,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
       await loadModules();
       
       alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Erreur toggle module:', error);
       alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
     }
