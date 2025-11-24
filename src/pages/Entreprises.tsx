@@ -15,10 +15,6 @@ interface Entreprise {
   created_at: string;
 }
 
-interface EntreprisesProps {
-  onNavigate: (page: string) => void;
-}
-
 export default function Entreprises() {
   const { user } = useAuth();
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);

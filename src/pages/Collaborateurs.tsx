@@ -3,10 +3,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Users, Shield, Plus, X, Building2, Mail, Trash2, Crown, Search, Filter, Grid, List, Edit, Ban, CheckCircle } from 'lucide-react';
 
-interface CollaborateursProps {
-  onNavigate: (page: string) => void;
-}
-
 interface Collaborateur {
   id: string;
   user_id: string;

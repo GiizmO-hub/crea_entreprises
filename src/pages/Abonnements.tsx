@@ -3,10 +3,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { CreditCard, Plus, X, DollarSign, Package, CheckCircle, AlertCircle, Edit, Search, Filter, ExternalLink, Copy, Check, Mail, Trash2 } from 'lucide-react';
 
-interface AbonnementsProps {
-  onNavigate: (page: string) => void;
-}
-
 interface Plan {
   id: string;
   nom: string;

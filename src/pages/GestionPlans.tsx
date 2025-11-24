@@ -16,10 +16,6 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-interface GestionPlansProps {
-  onNavigate: (page: string) => void;
-}
-
 interface Plan {
   id: string;
   nom: string;
@@ -151,7 +147,19 @@ export default function GestionPlans() {
             }
             
             // Normaliser les valeurs boolean et s'assurer que les modules retournés sont correctement typés
-            const normalizedModules = (planModulesData || []).map((mod: any) => ({
+            interface ModuleData {
+              module_code?: string;
+              module_nom?: string;
+              module_description?: string;
+              categorie?: string;
+              inclus?: boolean | string;
+              prix_mensuel?: number | string;
+              prix_annuel?: number | string;
+              est_cree?: boolean | string;
+              actif?: boolean | string;
+            }
+            
+            const normalizedModules = (planModulesData || []).map((mod: ModuleData) => ({
               module_code: mod.module_code || '',
               module_nom: mod.module_nom || '',
               module_description: mod.module_description || '',
@@ -204,9 +212,10 @@ export default function GestionPlans() {
 
       alert(`✅ Plan ${!currentActif ? 'activé' : 'désactivé'} avec succès!`);
       loadData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur toggle plan:', error);
-      alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur: ' + errorMessage);
     }
   };
 
@@ -251,7 +260,7 @@ export default function GestionPlans() {
         p_prix_annuel: parseFloat(formData.prix_annuel.toString()),
         p_actif: formData.actif,
         p_ordre: formData.ordre,
-        p_modules: modulesJson as any,
+        p_modules: modulesJson,
         p_plan_id: editingPlan?.id || null,
       });
 
@@ -266,9 +275,10 @@ export default function GestionPlans() {
       } else {
         throw new Error(data?.error || 'Erreur inconnue');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur sauvegarde plan:', error);
-      alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur: ' + errorMessage);
     }
   };
 
