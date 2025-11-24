@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Settings, Building2, Mail, Shield, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users } from 'lucide-react';
+import { Settings, Building2, Mail, Shield, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users, ShieldOff, Crown } from 'lucide-react';
 import CredentialsModal from '../components/CredentialsModal';
 import { sendClientCredentialsEmail } from '../services/emailService';
 import type { ClientCredentialsEmailData } from '../services/emailService';
+import { EspaceMembreModal } from '../pages/clients/EspaceMembreModal';
+import type { Client, EspaceMembreData, Plan, Option } from '../pages/clients/types';
 
 interface ClientInfo {
   id: string;
@@ -38,6 +40,15 @@ export default function Parametres() {
     clientPrenom?: string;
   } | null>(null);
   const [resendingEmail, setResendingEmail] = useState<string | null>(null);
+  const [showEspaceModal, setShowEspaceModal] = useState(false);
+  const [selectedClientForEspace, setSelectedClientForEspace] = useState<ClientInfo | null>(null);
+  const [espaceMembreData, setEspaceMembreData] = useState<EspaceMembreData>({
+    password: '',
+    plan_id: '',
+    options_ids: [],
+  });
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [options, setOptions] = useState<Option[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -48,8 +59,40 @@ export default function Parametres() {
   useEffect(() => {
     if (user && isSuperAdmin && activeTab === 'clients') {
       loadAllClients();
+      loadPlans();
+      loadOptions();
     }
   }, [user, isSuperAdmin, activeTab]);
+
+  const loadPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('plans_abonnement')
+        .select('id, nom, description, prix_mensuel, prix_annuel')
+        .eq('actif', true)
+        .order('ordre');
+
+      if (error) throw error;
+      setPlans(data || []);
+    } catch (error) {
+      console.error('Erreur chargement plans:', error);
+    }
+  };
+
+  const loadOptions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('options_supplementaires')
+        .select('id, nom, prix_mensuel')
+        .eq('actif', true)
+        .order('nom');
+
+      if (error) throw error;
+      setOptions(data || []);
+    } catch (error) {
+      console.error('Erreur chargement options:', error);
+    }
+  };
 
   const checkSuperAdmin = async () => {
     if (!user) return;
@@ -164,25 +207,51 @@ export default function Parametres() {
     }
   };
 
-  const handleCreateEspace = async (client: ClientInfo) => {
+  const handleCreateEspaceClick = (client: ClientInfo) => {
     if (!client.email) {
       alert('❌ Le client doit avoir un email pour créer un espace membre');
       return;
     }
 
+    // Convertir ClientInfo en Client pour le modal
+    const clientForModal: Client = {
+      id: client.id,
+      entreprise_id: client.entreprise_id,
+      entreprise_nom: client.entreprise_nom,
+      nom: client.client_nom,
+      prenom: client.client_prenom,
+      email: client.email,
+    };
+
+    setSelectedClientForEspace(clientForModal);
+    setEspaceMembreData({
+      password: '',
+      plan_id: plans.length > 0 ? plans[0].id : '',
+      options_ids: [],
+    });
+    setShowEspaceModal(true);
+  };
+
+  const handleCreateEspace = async () => {
+    if (!selectedClientForEspace) return;
+    if (!espaceMembreData.plan_id) {
+      alert('❌ Veuillez sélectionner un plan d\'abonnement');
+      return;
+    }
+
     try {
-      // Générer un mot de passe temporaire
-      const password = Math.random().toString(36).slice(-12) + 'A1!';
+      // Générer un mot de passe temporaire si non fourni
+      const password = espaceMembreData.password.trim() || Math.random().toString(36).slice(-12) + 'A1!';
       
       // Utiliser la fonction RPC unifiée
       const { data: result, error } = await supabase.rpc(
         'create_espace_membre_from_client_unified',
         {
-          p_client_id: client.id,
-          p_entreprise_id: client.entreprise_id,
+          p_client_id: selectedClientForEspace.id,
+          p_entreprise_id: selectedClientForEspace.entreprise_id,
           p_password: password,
-          p_plan_id: null,
-          p_options_ids: null,
+          p_plan_id: espaceMembreData.plan_id || null,
+          p_options_ids: espaceMembreData.options_ids.length > 0 ? espaceMembreData.options_ids : null,
         }
       );
 
@@ -200,15 +269,21 @@ export default function Parametres() {
           alert('✅ Un espace membre existe déjà pour ce client.\n\n' + (result.message || ''));
         } else {
           const finalPassword = result.password || password;
-          const finalEmail = result.email || client.email;
+          const finalEmail = result.email || selectedClientForEspace.email;
           
           setClientCredentials({
             email: finalEmail,
             password: finalPassword,
-            clientName: client.client_nom || '',
-            clientPrenom: client.client_prenom || undefined,
-            entrepriseNom: client.entreprise_nom || '',
+            clientName: selectedClientForEspace.nom || '',
+            clientPrenom: selectedClientForEspace.prenom || undefined,
+            entrepriseNom: selectedClientForEspace.entreprise_nom || '',
           });
+          
+          // Fermer le modal espace
+          setShowEspaceModal(false);
+          setSelectedClientForEspace(null);
+          
+          // Ouvrir le modal credentials qui permettra d'envoyer l'email
           setShowCredentialsModal(true);
         }
         await loadAllClients();
@@ -231,6 +306,44 @@ export default function Parametres() {
       }
       
       alert(`❌ Erreur lors de la création de l'espace membre: ${errorMessage}`);
+    }
+  };
+
+  const handleToggleSuperAdmin = async (client: ClientInfo) => {
+    if (!client.email) {
+      alert('❌ Le client doit avoir un email pour définir le statut super admin');
+      return;
+    }
+
+    const isCurrentlySuperAdmin = client.role === 'client_super_admin';
+    const newStatus = !isCurrentlySuperAdmin;
+
+    try {
+      const { data, error } = await supabase.rpc('toggle_client_super_admin', {
+        p_client_id: client.id,
+        p_is_super_admin: newStatus,
+      });
+
+      if (error) {
+        console.error('Erreur toggle super admin:', error);
+        alert('❌ Erreur: ' + error.message);
+        return;
+      }
+
+      if (data?.success) {
+        alert(
+          newStatus
+            ? '✅ Client défini comme super admin de son espace.\n💡 Le client doit se déconnecter et se reconnecter pour voir le badge Super Admin.'
+            : '✅ Statut super admin retiré du client.'
+        );
+        await loadAllClients();
+      } else {
+        alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
+      }
+    } catch (error: unknown) {
+      console.error('Erreur toggle super admin:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur: ' + errorMessage);
     }
   };
 
@@ -631,15 +744,37 @@ export default function Parametres() {
                                 </>
                               ) : (
                                 <button
-                                  onClick={() => handleCreateEspace(client)}
+                                  onClick={() => handleCreateEspaceClick(client)}
                                   disabled={!client.email}
                                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                  title={!client.email ? 'Le client doit avoir un email' : 'Créer l\'espace membre'}
+                                  title={!client.email ? 'Le client doit avoir un email' : 'Créer l\'espace membre avec abonnement'}
                                 >
                                   <Plus className="w-3 h-3" />
                                   Créer
                                 </button>
                               )}
+                              <button
+                                onClick={() => handleToggleSuperAdmin(client)}
+                                disabled={!client.espace_id}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                                  client.role === 'client_super_admin'
+                                    ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30'
+                                    : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30'
+                                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                title={!client.espace_id ? 'L\'espace membre doit être créé d\'abord' : client.role === 'client_super_admin' ? 'Retirer le statut super admin' : 'Définir comme super admin'}
+                              >
+                                {client.role === 'client_super_admin' ? (
+                                  <>
+                                    <ShieldOff className="w-3 h-3" />
+                                    Retirer SA
+                                  </>
+                                ) : (
+                                  <>
+                                    <Crown className="w-3 h-3" />
+                                    Super Admin
+                                  </>
+                                )}
+                              </button>
                               <button
                                 onClick={() => handleDeleteClient(client)}
                                 className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 transition-all flex items-center gap-1"
@@ -710,6 +845,33 @@ export default function Parametres() {
             setClientCredentials(null);
           }}
           credentials={clientCredentials}
+        />
+      )}
+
+      {/* Modal création espace membre */}
+      {showEspaceModal && selectedClientForEspace && (
+        <EspaceMembreModal
+          show={showEspaceModal}
+          client={selectedClientForEspace}
+          plans={plans}
+          options={options}
+          data={espaceMembreData}
+          onClose={() => {
+            setShowEspaceModal(false);
+            setSelectedClientForEspace(null);
+            setEspaceMembreData({
+              password: '',
+              plan_id: '',
+              options_ids: [],
+            });
+          }}
+          onSubmit={handleCreateEspace}
+          onChange={(newData) => {
+            setEspaceMembreData({
+              ...espaceMembreData,
+              ...newData,
+            });
+          }}
         />
       )}
     </div>
