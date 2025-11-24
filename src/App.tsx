@@ -15,6 +15,7 @@ const Documents = lazy(() => import('./pages/Documents'));
 const GestionEquipe = lazy(() => import('./pages/GestionEquipe'));
 const GestionProjets = lazy(() => import('./pages/GestionProjets'));
 const GestionPlans = lazy(() => import('./pages/GestionPlans'));
+const Parametres = lazy(() => import('./pages/Parametres'));
 
 // Composant de chargement pour les pages lazy-loaded
 const PageLoader = () => (
@@ -118,7 +119,11 @@ function AppContent() {
           </Suspense>
         );
       case 'settings':
-        return <div className="p-8 text-white">Paramètres - À venir</div>;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Parametres onNavigate={setCurrentPage} />
+          </Suspense>
+        );
       default:
         return (
           <Suspense fallback={<PageLoader />}>
