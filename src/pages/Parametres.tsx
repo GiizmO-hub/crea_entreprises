@@ -42,11 +42,14 @@ export default function Parametres() {
   useEffect(() => {
     if (user) {
       checkSuperAdmin();
-      if (activeTab === 'clients') {
-        loadAllClients();
-      }
     }
-  }, [user, activeTab]);
+  }, [user]);
+
+  useEffect(() => {
+    if (user && isSuperAdmin && activeTab === 'clients') {
+      loadAllClients();
+    }
+  }, [user, isSuperAdmin, activeTab]);
 
   const checkSuperAdmin = async () => {
     if (!user) return;
@@ -62,33 +65,57 @@ export default function Parametres() {
   };
 
   const loadAllClients = async () => {
-    if (!user || !isSuperAdmin) return;
+    if (!user) return;
     
     try {
       setLoading(true);
       
+      // Requête plus simple qui fonctionne mieux avec RLS
       const { data, error } = await supabase
         .from('clients')
         .select(`
           id,
           entreprise_id,
-          nom:client_nom,
-          prenom:client_prenom,
+          nom,
+          prenom,
           email,
-          entreprise_nom,
           created_at,
-          entreprises!inner(nom),
+          entreprises(nom),
           espaces_membres_clients(
             id,
             actif,
             user_id
-          ),
-          utilisateurs(role)
+          )
         `);
 
       if (error) {
         console.error('Erreur chargement clients:', error);
         return;
+      }
+
+      // Récupérer les rôles séparément pour éviter les problèmes de RLS
+      const clientIds = (data || []).map((c: { id: string }) => c.id);
+      let rolesMap: Record<string, string> = {};
+      
+      if (clientIds.length > 0) {
+        try {
+          // Récupérer les rôles depuis utilisateurs via espaces_membres_clients
+          const { data: espaces } = await supabase
+            .from('espaces_membres_clients')
+            .select('user_id, client_id, utilisateurs(role)')
+            .in('client_id', clientIds);
+          
+          if (espaces) {
+            espaces.forEach((espace: { client_id: string; utilisateurs?: { role: string } | Array<{ role: string }> }) => {
+              const roleData = Array.isArray(espace.utilisateurs) 
+                ? espace.utilisateurs[0] 
+                : (espace.utilisateurs || { role: 'client' });
+              rolesMap[espace.client_id] = roleData.role || 'client';
+            });
+          }
+        } catch (roleError) {
+          console.warn('Erreur récupération rôles:', roleError);
+        }
       }
 
       // Transformer les données pour correspondre à ClientInfo
@@ -99,29 +126,27 @@ export default function Parametres() {
           nom?: string;
           prenom?: string;
           email: string;
-          entreprise_nom?: string;
           created_at: string;
-          entreprises?: { nom: string };
-          espaces_membres_clients?: Array<{ id: string; actif: boolean; user_id: string | null }>;
-          utilisateurs?: Array<{ role: string }> | { role: string };
+          entreprises?: { nom: string } | null;
+          espaces_membres_clients?: Array<{ id: string; actif: boolean; user_id: string | null }> | null;
         };
         
-        const espace = Array.isArray(c.espaces_membres_clients) 
+        const espace = Array.isArray(c.espaces_membres_clients) && c.espaces_membres_clients.length > 0
           ? c.espaces_membres_clients[0] 
           : null;
         
-        const roleData = Array.isArray(c.utilisateurs) 
-          ? c.utilisateurs[0] 
-          : (c.utilisateurs || { role: 'client' });
+        const entrepriseNom = Array.isArray(c.entreprises) 
+          ? c.entreprises[0]?.nom 
+          : (c.entreprises as { nom: string } | null)?.nom;
         
         return {
           id: c.id,
           entreprise_id: c.entreprise_id,
-          entreprise_nom: c.entreprise_nom || c.entreprises?.nom || 'N/A',
+          entreprise_nom: entrepriseNom || 'N/A',
           client_nom: c.nom || 'N/A',
           client_prenom: c.prenom || '',
           email: c.email || '',
-          role: roleData.role || 'client',
+          role: rolesMap[c.id] || 'client',
           espace_actif: espace?.actif ?? false,
           espace_id: espace?.id || null,
           user_id: espace?.user_id || null,
@@ -130,8 +155,10 @@ export default function Parametres() {
       });
 
       setClients(transformedClients);
+      console.log('✅ Clients chargés:', transformedClients.length);
     } catch (error) {
-      console.error('Erreur chargement clients:', error);
+      console.error('❌ Erreur chargement clients:', error);
+      alert('Erreur lors du chargement des clients. Vérifiez la console pour plus de détails.');
     } finally {
       setLoading(false);
     }
