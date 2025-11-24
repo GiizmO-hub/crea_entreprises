@@ -530,13 +530,137 @@ export default function Entreprises() {
                 </div>
               </div>
 
-              {/* Message informatif pour la configuration */}
+              {/* Section création automatique du client */}
               {!editingId && (
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mt-4">
-                  <p className="text-sm text-blue-300">
-                    💡 <strong>Note :</strong> Une fois l'entreprise créée, configurez les clients, espaces membres et abonnements depuis l'onglet <strong>"Paramètres" &gt; "Gestion Clients"</strong>.
-                  </p>
-                </div>
+                <>
+                  <div className="pt-6 border-t border-white/10">
+                    <div className="flex items-center gap-3 mb-4">
+                      <input
+                        type="checkbox"
+                        id="creer_client"
+                        checked={formData.creer_client}
+                        onChange={(e) => setFormData({ ...formData, creer_client: e.target.checked })}
+                        className="w-5 h-5 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                      />
+                      <label htmlFor="creer_client" className="text-lg font-semibold text-white cursor-pointer">
+                        🚀 Créer automatiquement le client et l'espace membre
+                      </label>
+                    </div>
+                    <p className="text-sm text-gray-400 ml-8 mb-4">
+                      Activez cette option pour créer automatiquement le client, l'espace membre, l'abonnement et envoyer les identifiants par email.
+                    </p>
+                  </div>
+
+                  {formData.creer_client && (
+                    <div className="space-y-4 p-4 bg-white/5 rounded-lg border border-white/10">
+                      <h3 className="text-lg font-semibold text-white mb-4">Informations du client</h3>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Email client *
+                          </label>
+                          <input
+                            type="email"
+                            value={formData.email_client}
+                            onChange={(e) => setFormData({ ...formData, email_client: e.target.value })}
+                            required={formData.creer_client}
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="client@example.com"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Nom client *
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.nom_client}
+                            onChange={(e) => setFormData({ ...formData, nom_client: e.target.value })}
+                            required={formData.creer_client}
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Dupont"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Prénom client *
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.prenom_client}
+                            onChange={(e) => setFormData({ ...formData, prenom_client: e.target.value })}
+                            required={formData.creer_client}
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Jean"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Téléphone client
+                          </label>
+                          <input
+                            type="tel"
+                            value={formData.telephone_client}
+                            onChange={(e) => setFormData({ ...formData, telephone_client: e.target.value })}
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="+33 6 12 34 56 78"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-white/10">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Plan d'abonnement (optionnel)
+                        </label>
+                        <select
+                          value={formData.plan_id}
+                          onChange={(e) => setFormData({ ...formData, plan_id: e.target.value })}
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={loadingPlans}
+                        >
+                          <option value="">Aucun plan (modules de base uniquement)</option>
+                          {plans.map((plan) => (
+                            <option key={plan.id} value={plan.id}>
+                              {plan.nom}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-6 pt-4">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="creer_client_super_admin"
+                            checked={formData.creer_client_super_admin}
+                            onChange={(e) => setFormData({ ...formData, creer_client_super_admin: e.target.checked })}
+                            className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                          />
+                          <label htmlFor="creer_client_super_admin" className="text-sm text-gray-300 cursor-pointer">
+                            Créer le client comme Super Admin
+                          </label>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="envoyer_email"
+                            checked={formData.envoyer_email}
+                            onChange={(e) => setFormData({ ...formData, envoyer_email: e.target.checked })}
+                            className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                          />
+                          <label htmlFor="envoyer_email" className="text-sm text-gray-300 cursor-pointer">
+                            Envoyer les identifiants par email
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="flex gap-4 pt-4">
