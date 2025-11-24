@@ -178,12 +178,19 @@ export default function Parametres() {
         espacesCount = count || 0;
       }
 
-      // Compter les abonnements actifs
-      const { count: abonnementsCount } = await supabase
+      // Compter les abonnements actifs (ou avec statut 'actif')
+      const { data: abonnementsData, error: abonnementsError } = await supabase
         .from('abonnements')
-        .select('*', { count: 'exact', head: true })
-        .eq('entreprise_id', entrepriseId)
-        .eq('actif', true);
+        .select('id, statut, actif')
+        .eq('entreprise_id', entrepriseId);
+      
+      let abonnementsCount = 0;
+      if (!abonnementsError && abonnementsData) {
+        // Compter les abonnements actifs (soit actif=true, soit statut='actif')
+        abonnementsCount = abonnementsData.filter((ab: { actif?: boolean; statut?: string }) => 
+          ab.actif === true || ab.statut === 'actif'
+        ).length;
+      }
 
       // Compter les clients super admins
       let superAdminsCount = 0;
@@ -367,7 +374,23 @@ export default function Parametres() {
           entrepriseNom = (c.entreprises as { nom: string }).nom || 'N/A';
         }
         
-        const clientRole = rolesMap[c.id] || 'client';
+        // Toujours récupérer le rôle depuis rolesMap (qui est maintenant toujours mis à jour via email)
+        let clientRole = rolesMap[c.id] || 'client';
+        
+        // Si le rôle n'a pas été trouvé via email, essayer via l'espace si disponible
+        if (clientRole === 'client' && espace?.user_id) {
+          // Le rôle devrait déjà être dans rolesMap, mais double vérification
+          const { data: userRoleData } = await supabase
+            .from('utilisateurs')
+            .select('role')
+            .eq('id', espace.user_id)
+            .maybeSingle();
+          
+          if (userRoleData?.role) {
+            clientRole = userRoleData.role;
+          }
+        }
+        
         const clientInfo: ClientInfo = {
           id: c.id,
           entreprise_id: c.entreprise_id,

@@ -516,6 +516,8 @@ export default function Abonnements() {
     if (!editingAbonnement || !user) return;
 
     try {
+      console.log('🔧 Début modification abonnement:', editingAbonnement.id);
+      
       // Calculer le montant total
       const plan = plans.find(p => p.id === formData.plan_id);
       if (!plan) {
@@ -535,22 +537,49 @@ export default function Abonnements() {
 
       const montantTotal = montantPlan + montantOptions;
 
+      console.log('💰 Montant calculé:', montantTotal);
+
+      // Vérifier que l'abonnement a un entreprise_id
+      if (!editingAbonnement.entreprise_id) {
+        // Essayer de récupérer l'entreprise_id depuis le client
+        const { data: clientData } = await supabase
+          .from('clients')
+          .select('entreprise_id')
+          .eq('id', formData.client_id)
+          .single();
+        
+        if (!clientData?.entreprise_id) {
+          throw new Error('Impossible de trouver l\'entreprise associée à cet abonnement');
+        }
+      }
+
       // Mettre à jour l'abonnement
-      const { error: updateError } = await supabase
+      const updateData: Record<string, unknown> = {
+        plan_id: formData.plan_id,
+        mode_paiement: formData.mode_paiement,
+        date_debut: formData.date_debut,
+        montant_mensuel: montantTotal,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (formData.date_fin) {
+        updateData.date_fin = formData.date_fin;
+      }
+
+      console.log('📝 Données à mettre à jour:', updateData);
+
+      const { data: updateDataResult, error: updateError } = await supabase
         .from('abonnements')
-        .update({
-          plan_id: formData.plan_id,
-          mode_paiement: formData.mode_paiement,
-          date_debut: formData.date_debut,
-          date_fin: formData.date_fin || null,
-          montant_mensuel: montantTotal,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editingAbonnement.id);
+        .update(updateData)
+        .eq('id', editingAbonnement.id)
+        .select();
 
       if (updateError) {
-        throw updateError;
+        console.error('❌ Erreur UPDATE abonnement:', updateError);
+        throw new Error(`Erreur lors de la mise à jour: ${updateError.message} (Code: ${updateError.code})`);
       }
+
+      console.log('✅ Abonnement mis à jour:', updateDataResult);
 
       // Mettre à jour les options de l'abonnement
       // Supprimer les anciennes options
@@ -560,7 +589,7 @@ export default function Abonnements() {
         .eq('abonnement_id', editingAbonnement.id);
 
       if (deleteOptionsError) {
-        console.error('Erreur suppression options:', deleteOptionsError);
+        console.warn('⚠️ Erreur suppression options (non bloquant):', deleteOptionsError);
       }
 
       // Ajouter les nouvelles options
@@ -577,7 +606,7 @@ export default function Abonnements() {
           .insert(optionsToInsert);
 
         if (insertOptionsError) {
-          console.error('Erreur insertion options:', insertOptionsError);
+          console.warn('⚠️ Erreur insertion options (non bloquant):', insertOptionsError);
         }
       }
 
@@ -586,8 +615,19 @@ export default function Abonnements() {
       resetForm();
       await loadAbonnements();
     } catch (error: unknown) {
-      console.error('Erreur modification abonnement:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      console.error('❌ Erreur modification abonnement:', error);
+      let errorMessage = 'Erreur inconnue';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        const errObj = error as { message?: string; error?: string; details?: string; code?: string };
+        errorMessage = errObj.message || errObj.error || errObj.details || errorMessage;
+        if (errObj.code) {
+          errorMessage += ` (Code: ${errObj.code})`;
+        }
+      }
+      
       alert('❌ Erreur lors de la modification: ' + errorMessage);
     }
   };
