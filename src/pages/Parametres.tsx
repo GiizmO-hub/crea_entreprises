@@ -197,9 +197,43 @@ export default function Parametres() {
               });
             }
           } catch (roleError) {
-            console.warn('⚠️ Erreur récupération rôles:', roleError);
+            console.warn('⚠️ Erreur récupération rôles via espaces:', roleError);
           }
         }
+      }
+      
+      // Récupérer les rôles pour TOUS les clients via email (y compris ceux sans espace)
+      try {
+        const clientEmails = data
+          .map((c: { email?: string }) => c.email)
+          .filter((email: string | undefined): email is string => !!email);
+
+        if (clientEmails.length > 0) {
+          const { data: usersByEmailData } = await supabase
+            .from('utilisateurs')
+            .select('email, role')
+            .in('email', clientEmails);
+
+          if (usersByEmailData) {
+            const emailToRole: Record<string, string> = {};
+            usersByEmailData.forEach((u: { email: string; role: string }) => {
+              emailToRole[u.email] = u.role || 'client';
+            });
+
+            // Mapper les rôles par email de client (remplace seulement si pas déjà défini ou si 'client')
+            data.forEach((c: { id: string; email?: string }) => {
+              if (c.email && emailToRole[c.email]) {
+                // Si le rôle n'a pas été défini via espace, utiliser celui de l'email
+                if (!rolesMap[c.id] || rolesMap[c.id] === 'client') {
+                  rolesMap[c.id] = emailToRole[c.email];
+                  console.log(`📌 Rôle récupéré via email pour client ${c.id} (${c.email}): ${emailToRole[c.email]}`);
+                }
+              }
+            });
+          }
+        }
+      } catch (emailRoleError) {
+        console.warn('⚠️ Erreur récupération rôles via email:', emailRoleError);
       }
 
       // Transformer les données pour correspondre à ClientInfo
