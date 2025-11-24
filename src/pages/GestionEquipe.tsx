@@ -247,14 +247,30 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
       const { data, error } = await supabase
         .from('collaborateurs')
         .select('id, user_id, email, role, nom, prenom, poste, statut, entreprise_id')
-        .eq('statut', 'active')
         .eq('entreprise_id', entrepriseToUse)
         .order('nom');
 
-      if (error) throw error;
-      setCollaborateurs(data || []);
-    } catch (error) {
+      if (error) {
+        console.error('Erreur chargement collaborateurs:', error);
+        // Si c'est une erreur de récursion, afficher un message plus clair
+        if (error.message?.includes('recursion') || error.code === 'P0001') {
+          alert('⚠️ Erreur de chargement (récursion infinie détectée). Veuillez contacter l\'administrateur.');
+        } else {
+          alert('Erreur lors du chargement des collaborateurs: ' + (error.message || 'Erreur inconnue'));
+        }
+        setCollaborateurs([]);
+        return;
+      }
+      
+      // Filtrer les collaborateurs actifs côté client si nécessaire
+      const actifs = (data || []).filter((c: Collaborateur) => 
+        !c.statut || c.statut === 'actif' || c.statut === 'active'
+      );
+      setCollaborateurs(actifs);
+    } catch (error: any) {
       console.error('Erreur chargement collaborateurs:', error);
+      alert('Erreur lors du chargement des collaborateurs: ' + (error.message || 'Erreur inconnue'));
+      setCollaborateurs([]);
     }
   };
 
@@ -482,8 +498,17 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     setCreatingMembre(true);
 
     try {
-      // 1. Créer le collaborateur via la fonction RPC
-      const { data: createResult, error: createError } = await supabase.rpc('create_collaborateur', {
+      // 1. Vérifier d'abord si l'email existe déjà
+      const { data: emailCheck, error: emailCheckError } = await supabase.rpc('check_email_exists', {
+        p_email: membreFormData.email
+      });
+
+      if (!emailCheckError && emailCheck?.exists) {
+        throw new Error(emailCheck.message || 'Cet email est déjà utilisé');
+      }
+
+      // 2. Créer le collaborateur via la fonction RPC avec vérification email
+      const { data: createResult, error: createError } = await supabase.rpc('create_collaborateur_with_email_check', {
         p_email: membreFormData.email,
         p_password: membreFormData.password,
         p_nom: membreFormData.nom,
@@ -500,7 +525,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
       if (createError) throw createError;
 
       if (createResult && !createResult.success) {
-        throw new Error(createResult.error || 'Erreur lors de la création du collaborateur');
+        throw new Error(createResult.error || createResult.details || 'Erreur lors de la création du collaborateur');
       }
 
       const collaborateurId = createResult?.collaborateur_id;
