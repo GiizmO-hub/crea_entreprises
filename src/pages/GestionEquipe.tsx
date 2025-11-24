@@ -755,8 +755,20 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
       }
 
       try {
-        // Charger les membres actuels de l'équipe
-        const membresActuels = await loadMembresEquipe(equipePourAjoutMembres);
+        // Charger les membres actuels de l'équipe directement
+        const { data: membresData, error: membresError } = await supabase
+          .from('collaborateurs_equipes')
+          .select('collaborateur_id')
+          .eq('equipe_id', equipePourAjoutMembres)
+          .is('date_sortie', null);
+
+        if (membresError) {
+          console.error('Erreur chargement membres équipe:', membresError);
+          setCollaborateursDisponibles(collaborateurs);
+          return;
+        }
+
+        const membresActuels = (membresData || []).map((m: any) => m.collaborateur_id);
         
         // Filtrer les collaborateurs pour exclure ceux déjà dans l'équipe
         const disponibles = collaborateurs.filter((collab) => !membresActuels.includes(collab.id));
@@ -784,7 +796,8 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
     };
 
     loadCollaborateursDisponibles();
-  }, [showAjoutMembresForm, equipePourAjoutMembres, selectedEntreprise, collaborateurs, loadMembresEquipe]);
+    // ✅ Retirer loadMembresEquipe des dépendances pour éviter boucle infinie
+  }, [showAjoutMembresForm, equipePourAjoutMembres, selectedEntreprise, collaborateurs]);
 
   if (loading) {
     return (
