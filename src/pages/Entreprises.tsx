@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Plus, Building2, Edit, Trash2, X, Copy, Mail } from 'lucide-react';
 
@@ -185,7 +185,7 @@ export default function Entreprises() {
               }
 
               const { data: espaceResult, error: espaceError } = await supabase.rpc(
-                'create_espace_membre_from_client',
+                'create_espace_membre_from_client_unified',
                 {
                   p_client_id: clientData.id,
                   p_entreprise_id: entrepriseData.id,

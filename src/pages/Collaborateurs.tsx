@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Users, Shield, Plus, X, Building2, Mail, Trash2, Crown, Search, Filter, Grid, List, Edit, Ban, CheckCircle } from 'lucide-react';
 
