@@ -78,6 +78,12 @@ export default function Parametres() {
     }
   }, [user, activeTab]);
 
+  useEffect(() => {
+    if (user && activeTab === 'entreprise') {
+      loadEntrepriseConfig();
+    }
+  }, [user, activeTab]);
+
   const loadPlans = async () => {
     try {
       const { data, error } = await supabase
@@ -118,6 +124,94 @@ export default function Parametres() {
       }
     } catch (error) {
       console.error('Erreur vérification super admin:', error);
+    }
+  };
+
+  const loadEntrepriseConfig = async () => {
+    if (!user) return;
+    
+    setLoadingConfig(true);
+    try {
+      // Récupérer l'entreprise de l'utilisateur connecté
+      const { data: entreprisesData, error: entreprisesError } = await supabase
+        .from('entreprises')
+        .select('id, nom')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (entreprisesError) {
+        console.error('Erreur chargement entreprise:', entreprisesError);
+        setEntrepriseConfig(null);
+        setLoadingConfig(false);
+        return;
+      }
+
+      if (!entreprisesData) {
+        setEntrepriseConfig(null);
+        setLoadingConfig(false);
+        return;
+      }
+
+      const entrepriseId = entreprisesData.id;
+
+      // Compter les clients
+      const { count: clientsCount } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .eq('entreprise_id', entrepriseId);
+
+      // Récupérer les IDs des clients pour compter les espaces
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('id, email')
+        .eq('entreprise_id', entrepriseId);
+
+      const clientIds = clientsData?.map((c: { id: string }) => c.id) || [];
+
+      // Compter les espaces membres
+      let espacesCount = 0;
+      if (clientIds.length > 0) {
+        const { count } = await supabase
+          .from('espaces_membres_clients')
+          .select('*', { count: 'exact', head: true })
+          .in('client_id', clientIds);
+        espacesCount = count || 0;
+      }
+
+      // Compter les abonnements actifs
+      const { count: abonnementsCount } = await supabase
+        .from('abonnements')
+        .select('*', { count: 'exact', head: true })
+        .eq('entreprise_id', entrepriseId)
+        .eq('actif', true);
+
+      // Compter les clients super admins
+      let superAdminsCount = 0;
+      if (clientsData && clientsData.length > 0) {
+        const clientEmails = clientsData.map((c: { email?: string }) => c.email).filter(Boolean) as string[];
+        if (clientEmails.length > 0) {
+          const { data: usersData } = await supabase
+            .from('utilisateurs')
+            .select('email, role')
+            .in('email', clientEmails)
+            .eq('role', 'client_super_admin');
+
+          superAdminsCount = usersData?.length || 0;
+        }
+      }
+
+      setEntrepriseConfig({
+        entreprise: entreprisesData,
+        clients: clientsCount || 0,
+        espaces: espacesCount,
+        abonnements: abonnementsCount || 0,
+        superAdmins: superAdminsCount,
+      });
+    } catch (error) {
+      console.error('Erreur chargement config entreprise:', error);
+      setEntrepriseConfig(null);
+    } finally {
+      setLoadingConfig(false);
     }
   };
 
