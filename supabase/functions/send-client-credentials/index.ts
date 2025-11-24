@@ -187,44 +187,92 @@ serve(async (req) => {
 
     // Generate HTML email
     const emailHTML = generateProfessionalEmailHTML(emailData);
+    const subject = `Bienvenue sur votre espace client - ${emailData.entreprise_nom}`;
 
-    // TODO: In production, integrate with a real email service like Resend, SendGrid, etc.
-    // For now, we'll log the email (in production, replace this with actual email sending)
-    console.log('📧 Email à envoyer:');
-    console.log('   À:', emailData.client_email);
-    console.log('   Sujet: Bienvenue sur votre espace client - ' + emailData.entreprise_nom);
-    console.log('   HTML:', emailHTML.substring(0, 200) + '...');
-
-    // Example with Resend (uncomment and configure):
-    /*
+    // ✅ Tenter d'envoyer l'email via Resend si configuré
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+    const RESEND_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'onboarding@resend.dev';
+    const IS_LOCAL = Deno.env.get('ENVIRONMENT') === 'local' || !Deno.env.get('SUPABASE_URL')?.includes('supabase.co');
+
+    let emailSent = false;
+    let emailProvider = 'none';
+
     if (RESEND_API_KEY) {
-      const resendResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'noreply@votredomaine.com',
-          to: emailData.client_email,
-          subject: `Bienvenue sur votre espace client - ${emailData.entreprise_nom}`,
-          html: emailHTML,
-        }),
-      });
-      
-      if (!resendResponse.ok) {
-        throw new Error('Failed to send email via Resend');
+      try {
+        console.log('📧 Tentative d\'envoi via Resend...');
+        
+        const resendResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: RESEND_FROM_EMAIL,
+            to: emailData.client_email,
+            subject: subject,
+            html: emailHTML,
+          }),
+        });
+
+        const resendData = await resendResponse.json();
+
+        if (resendResponse.ok && resendData.id) {
+          emailSent = true;
+          emailProvider = 'resend';
+          console.log('✅ Email envoyé via Resend:', resendData.id);
+        } else {
+          console.error('❌ Erreur Resend:', resendData);
+          throw new Error(resendData.message || 'Erreur lors de l\'envoi via Resend');
+        }
+      } catch (resendError: unknown) {
+        const errorMsg = resendError instanceof Error ? resendError.message : 'Erreur inconnue Resend';
+        console.error('❌ Erreur envoi Resend:', errorMsg);
+        
+        // En développement local, continuer avec le fallback
+        if (!IS_LOCAL) {
+          throw new Error(`Erreur envoi email via Resend: ${errorMsg}`);
+        }
+        // En local, on continue avec le fallback
       }
     }
-    */
+
+    // ✅ Fallback pour développement local ou si Resend n'est pas configuré
+    if (!emailSent) {
+      if (IS_LOCAL) {
+        console.log('📧 Mode développement local - Email simulé:');
+        console.log('   À:', emailData.client_email);
+        console.log('   Sujet:', subject);
+        console.log('   📄 Email HTML généré (preview):', emailHTML.substring(0, 200) + '...');
+        console.log('   💡 Pour activer l\'envoi réel, configurez RESEND_API_KEY dans .env');
+        
+        // En local, considérer comme "envoyé" pour permettre les tests
+        emailSent = true;
+        emailProvider = 'local-simulated';
+      } else {
+        // En production sans Resend, retourner une erreur
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Service d\'email non configuré. Veuillez configurer RESEND_API_KEY.',
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    }
 
     // Return success response
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Email envoyé avec succès à ${emailData.client_email}`,
-        preview: emailHTML.substring(0, 500), // Preview for debugging
+        message: emailSent 
+          ? `Email envoyé avec succès à ${emailData.client_email} via ${emailProvider}`
+          : `Email préparé pour ${emailData.client_email} (mode simulation)`,
+        email_provider: emailProvider,
+        preview: IS_LOCAL ? emailHTML.substring(0, 500) : undefined, // Preview seulement en local
       }),
       {
         status: 200,
