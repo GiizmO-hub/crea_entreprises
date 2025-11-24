@@ -117,15 +117,17 @@ export function mapModuleCodeToMenuId(moduleCode: string): string | null {
 /**
  * Filtre les modules actifs pour ne garder que ceux mappés et non admin
  */
+type ModuleValue = boolean | string | number;
+
 export function filterActiveModules(
-  modulesActifs: Record<string, any>,
+  modulesActifs: Record<string, ModuleValue>,
   menuItems: Array<{ id: string; superAdminOnly?: boolean }>
 ): string[] {
   const activeMenuIds = new Set<string>();
   
   // Parcourir tous les modules actifs
   Object.keys(modulesActifs).forEach((moduleCode) => {
-    const moduleValue: any = modulesActifs[moduleCode];
+    const moduleValue: ModuleValue = modulesActifs[moduleCode];
     
     // Vérifier si le module est actif (gérer tous les types possibles)
     let isActive = false;
@@ -164,7 +166,7 @@ export function filterActiveModules(
 /**
  * Extrait les modules actifs depuis le JSON de modules_actifs
  */
-export function extractActiveModules(modulesActifs: Record<string, any>): Set<string> {
+export function extractActiveModules(modulesActifs: Record<string, ModuleValue>): Set<string> {
   const active = new Set<string>();
   
   Object.keys(modulesActifs).forEach((moduleCode) => {

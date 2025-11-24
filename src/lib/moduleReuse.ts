@@ -14,14 +14,14 @@ export interface ModuleDependency {
   description: string;
   actif: boolean;
   est_cree: boolean;
-  configuration: Record<string, any>;
+  configuration: Record<string, unknown>;
 }
 
 export interface ReusableModuleFeature {
   module: string;
   feature: string;
   enabled: boolean;
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
 }
 
 /**

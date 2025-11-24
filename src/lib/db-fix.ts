@@ -16,7 +16,7 @@ interface DatabaseError {
 /**
  * Détecter le type d'erreur et retourner la solution
  */
-export function detectDatabaseError(error: any): DatabaseError | null {
+export function detectDatabaseError(error: unknown): DatabaseError | null {
   const errorMessage = error?.message || error?.toString() || '';
 
   // Erreur: colonne manquante
@@ -100,7 +100,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 /**
  * Afficher un message d'erreur avec la solution
  */
-export function showDatabaseErrorFix(error: any): string {
+export function showDatabaseErrorFix(error: unknown): string {
   const dbError = detectDatabaseError(error);
 
   if (!dbError) {
@@ -156,17 +156,18 @@ export async function checkDatabaseStructure(): Promise<{
         fixes.push('Ajoutez: ALTER TABLE abonnements ADD COLUMN mode_paiement text DEFAULT \'mensuel\';');
       }
     }
-  } catch (error: any) {
-    errors.push(`Erreur vérification abonnements: ${error.message}`);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    errors.push(`Erreur vérification abonnements: ${errorMessage}`);
   }
 
   // Vérifier la fonction create_espace_membre_from_client
   try {
     const { error } = await supabase.rpc('create_espace_membre_from_client', {
-      p_client_id: '00000000-0000-0000-0000-000000000000' as any,
-      p_entreprise_id: '00000000-0000-0000-0000-000000000000' as any,
+      p_client_id: '00000000-0000-0000-0000-000000000000',
+      p_entreprise_id: '00000000-0000-0000-0000-000000000000',
       p_password: 'test',
-      p_plan_id: '00000000-0000-0000-0000-000000000000' as any,
+      p_plan_id: '00000000-0000-0000-0000-000000000000',
       p_options_ids: [],
     });
 
@@ -175,7 +176,7 @@ export async function checkDatabaseStructure(): Promise<{
       errors.push('Fonction create_espace_membre_from_client manquante');
       fixes.push('Exécutez: supabase/migrations/20250122000005_create_espace_membre_from_client.sql');
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Ignorer les erreurs de validation
     if (!error.message.includes('validation') && !error.message.includes('does not exist')) {
       // Erreur autre que "function does not exist" -> la fonction existe

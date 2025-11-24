@@ -81,9 +81,10 @@ export async function createAbonnement(params: CreateAbonnementParams): Promise<
     }
 
     return { success: false, error: data?.error || 'Erreur inconnue' };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur création abonnement:', error);
-    return { success: false, error: error.message || 'Erreur inconnue' };
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -137,7 +138,13 @@ export async function getPlanModules(planId: string): Promise<PlanModule[]> {
     }
 
     // Normaliser les valeurs boolean
-    return (data || []).map((mod: any) => ({
+    return (data || []).map((mod: {
+      module_code?: string;
+      module_nom?: string;
+      module_description?: string;
+      categorie?: string;
+      actif?: boolean;
+    }) => ({
       module_code: mod.module_code || '',
       module_nom: mod.module_nom || '',
       module_description: mod.module_description || '',

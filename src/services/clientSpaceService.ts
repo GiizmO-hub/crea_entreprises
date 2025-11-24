@@ -18,7 +18,7 @@ export interface ClientSpace {
   abonnement_id?: string;
   actif: boolean;
   modules_actifs: Record<string, boolean>;
-  preferences?: Record<string, any>;
+  preferences?: Record<string, unknown>;
   email?: string;
   statut_compte?: string;
 }
@@ -69,9 +69,10 @@ export async function createClientSpace(params: CreateClientSpaceParams): Promis
     }
 
     return { success: false, error: data?.error || 'Erreur inconnue' };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur création espace membre:', error);
-    return { success: false, error: error.message || 'Erreur inconnue' };
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    return { success: false, error: errorMessage };
   }
 }
 
