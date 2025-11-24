@@ -771,12 +771,13 @@ export default function Parametres() {
                             {(() => {
                               const isSuperAdmin = client.role === 'client_super_admin';
                               // Log pour déboguer
+                              console.log(`🔍 Client ${client.email} - Rôle actuel: "${client.role}", isSuperAdmin: ${isSuperAdmin}`);
                               if (isSuperAdmin) {
                                 console.log(`🎯 Affichage badge Client Administrateur pour ${client.email}, rôle détecté: "${client.role}"`);
                               }
                               return isSuperAdmin ? (
                                 <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 inline-flex items-center gap-1.5">
-                                  <span className="text-yellow-400 text-sm">⭐</span>
+                                  <Crown className="w-3 h-3 text-yellow-400" />
                                   <span className="font-semibold">Client Administrateur</span>
                                 </span>
                               ) : (
