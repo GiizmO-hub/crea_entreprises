@@ -359,7 +359,7 @@ export default function Clients() {
           <Building2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400 mb-4">Vous devez créer une entreprise avant d'ajouter des clients</p>
           <button
-            onClick={() => onNavigate('entreprises')}
+            onClick={() => window.location.reload()}
             className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
           >
             Créer une entreprise
