@@ -1,0 +1,22 @@
+CORRECTIONS À APPLIQUER DANS Parametres.tsx:
+
+1. Remplacer dans loadEntrepriseConfig (ligne ~228):
+   - setEntrepriseConfig({...}) 
+   PAR:
+   - return { id: entreprise.id, nom: entreprise.nom, statut_paiement: entreprise.statut_paiement || 'non_requis', statut: entreprise.statut || 'active', clients: clientsCount || 0, espaces: espacesCount, abonnements: abonnementsCount || 0, superAdmins: superAdminsCount, created_at: entreprise.created_at };
+
+2. Remplacer l'affichage dans case 'entreprise' (ligne ~774-925):
+   - Tout le code de l'affichage actuel
+   PAR:
+   <div className="space-y-6">
+     <div className="flex items-center justify-between mb-4">
+       <h2 className="text-2xl font-bold text-white">Paramètres Entreprise</h2>
+       {entrepriseConfigs.length > 0 && (
+         <span className="text-sm text-gray-400">
+           {entrepriseConfigs.length} entreprise{entrepriseConfigs.length > 1 ? 's' : ''}
+         </span>
+       )}
+     </div>
+     <EntrepriseAccordion entreprises={entrepriseConfigs} loading={loadingConfig} />
+   </div>
+

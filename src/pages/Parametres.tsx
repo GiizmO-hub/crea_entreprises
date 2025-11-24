@@ -225,16 +225,24 @@ export default function Parametres() {
         }
       }
 
-      setEntrepriseConfig({
-        entreprise: entreprisesData,
-        clients: clientsCount || 0,
-        espaces: espacesCount,
-        abonnements: abonnementsCount || 0,
-        superAdmins: superAdminsCount,
-      });
+          return {
+            id: entreprise.id,
+            nom: entreprise.nom,
+            statut_paiement: entreprise.statut_paiement || 'non_requis',
+            statut: entreprise.statut || 'active',
+            clients: clientsCount || 0,
+            espaces: espacesCount,
+            abonnements: abonnementsCount || 0,
+            superAdmins: superAdminsCount,
+            created_at: entreprise.created_at,
+          };
+        })
+      );
+
+      setEntrepriseConfigs(configs);
     } catch (error) {
-      console.error('Erreur chargement config entreprise:', error);
-      setEntrepriseConfig(null);
+      console.error('Erreur chargement config entreprises:', error);
+      setEntrepriseConfigs([]);
     } finally {
       setLoadingConfig(false);
     }
@@ -774,157 +782,21 @@ export default function Parametres() {
       case 'entreprise':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Paramètres Entreprise</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-white">Paramètres Entreprise</h2>
+              {entrepriseConfigs.length > 0 && (
+                <span className="text-sm text-gray-400">
+                  {entrepriseConfigs.length} entreprise{entrepriseConfigs.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
             
-            {loadingConfig ? (
-              <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
-                <div className="text-center text-gray-400">Chargement...</div>
-              </div>
-            ) : entrepriseConfig?.entreprise ? (
-              <div className="space-y-4">
-                {/* Statut de l'entreprise */}
-                <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Building2 className="w-6 h-6 text-blue-400" />
-                    <h3 className="text-xl font-bold text-white">{entrepriseConfig.entreprise.nom}</h3>
-                  </div>
-                  
-                  {/* Statut de configuration */}
-                  <div className="space-y-3 mt-6">
-                    <h4 className="text-lg font-semibold text-white mb-4">Statut de configuration</h4>
-                    
-                    {/* Entreprise créée */}
-                    <div className="flex items-center justify-between p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                          <span className="text-white text-xs">✅</span>
-                        </div>
-                        <span className="text-white font-medium">Entreprise créée</span>
-                      </div>
-                    </div>
-
-                    {/* Clients */}
-                    <div className={`flex items-center justify-between p-3 rounded-lg border ${
-                      entrepriseConfig.clients > 0 
-                        ? 'bg-green-500/10 border-green-500/30' 
-                        : 'bg-orange-500/10 border-orange-500/30'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          entrepriseConfig.clients > 0 ? 'bg-green-500' : 'bg-orange-500'
-                        }`}>
-                          {entrepriseConfig.clients > 0 ? (
-                            <span className="text-white text-xs">✅</span>
-                          ) : (
-                            <span className="text-white text-xs">⏳</span>
-                          )}
-                        </div>
-                        <span className="text-white font-medium">Client{entrepriseConfig.clients > 1 ? 's' : ''}</span>
-                      </div>
-                      <span className="text-gray-300 text-sm">
-                        {entrepriseConfig.clients > 0 ? `${entrepriseConfig.clients} créé(s)` : 'En attente de création'}
-                      </span>
-                    </div>
-
-                    {/* Espaces membres */}
-                    <div className={`flex items-center justify-between p-3 rounded-lg border ${
-                      entrepriseConfig.espaces > 0 
-                        ? 'bg-green-500/10 border-green-500/30' 
-                        : 'bg-orange-500/10 border-orange-500/30'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          entrepriseConfig.espaces > 0 ? 'bg-green-500' : 'bg-orange-500'
-                        }`}>
-                          {entrepriseConfig.espaces > 0 ? (
-                            <span className="text-white text-xs">✅</span>
-                          ) : (
-                            <span className="text-white text-xs">⏳</span>
-                          )}
-                        </div>
-                        <span className="text-white font-medium">Espace{entrepriseConfig.espaces > 1 ? 's' : ''} client{entrepriseConfig.espaces > 1 ? 's' : ''}</span>
-                      </div>
-                      <span className="text-gray-300 text-sm">
-                        {entrepriseConfig.espaces > 0 ? `${entrepriseConfig.espaces} créé(s)` : 'En attente de création'}
-                      </span>
-                    </div>
-
-                    {/* Abonnements */}
-                    <div className={`flex items-center justify-between p-3 rounded-lg border ${
-                      entrepriseConfig.abonnements > 0 
-                        ? 'bg-green-500/10 border-green-500/30' 
-                        : 'bg-orange-500/10 border-orange-500/30'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          entrepriseConfig.abonnements > 0 ? 'bg-green-500' : 'bg-orange-500'
-                        }`}>
-                          {entrepriseConfig.abonnements > 0 ? (
-                            <span className="text-white text-xs">✅</span>
-                          ) : (
-                            <span className="text-white text-xs">⏳</span>
-                          )}
-                        </div>
-                        <span className="text-white font-medium">Abonnement{entrepriseConfig.abonnements > 1 ? 's' : ''}</span>
-                      </div>
-                      <span className="text-gray-300 text-sm">
-                        {entrepriseConfig.abonnements > 0 ? `${entrepriseConfig.abonnements} actif(s)` : 'En attente de configuration'}
-                      </span>
-                    </div>
-
-                    {/* Super Admins */}
-                    <div className={`flex items-center justify-between p-3 rounded-lg border ${
-                      entrepriseConfig.superAdmins > 0 
-                        ? 'bg-green-500/10 border-green-500/30' 
-                        : 'bg-orange-500/10 border-orange-500/30'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          entrepriseConfig.superAdmins > 0 ? 'bg-green-500' : 'bg-orange-500'
-                        }`}>
-                          {entrepriseConfig.superAdmins > 0 ? (
-                            <Crown className="w-3 h-3 text-white" />
-                          ) : (
-                            <span className="text-white text-xs">⏳</span>
-                          )}
-                        </div>
-                        <span className="text-white font-medium">Client{entrepriseConfig.superAdmins > 1 ? 's' : ''} Administrateur{entrepriseConfig.superAdmins > 1 ? 's' : ''}</span>
-                      </div>
-                      <span className="text-gray-300 text-sm">
-                        {entrepriseConfig.superAdmins > 0 ? `${entrepriseConfig.superAdmins} actif(s)` : 'En attente d\'activation'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Message d'action */}
-                  {entrepriseConfig.clients === 0 || entrepriseConfig.espaces === 0 || entrepriseConfig.abonnements === 0 ? (
-                    <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                      <p className="text-blue-300 text-sm">
-                        💡 <strong>Prochaine étape :</strong> Configurez vos clients, espaces membres et abonnements depuis l'onglet <strong>"Gestion des clients"</strong> ci-dessus.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="mt-6 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
-                      <p className="text-green-300 text-sm">
-                        ✅ <strong>Configuration complète :</strong> Votre entreprise est entièrement configurée !
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
-                <div className="text-center space-y-4">
-                  <AlertCircle className="w-12 h-12 text-orange-400 mx-auto" />
-                  <p className="text-gray-400">
-                    Aucune entreprise n'a été créée pour votre compte.
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Créez votre entreprise depuis l'onglet <strong>"Mon Entreprise"</strong> dans le menu principal.
-                  </p>
-                </div>
-              </div>
-            )}
+            <EntrepriseAccordion 
+              entreprises={entrepriseConfigs} 
+              loading={loadingConfig}
+            />
+          </div>
+        );
           </div>
         );
 
