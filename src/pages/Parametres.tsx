@@ -257,7 +257,7 @@ export default function Parametres() {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       console.error('Erreur suppression client:', error);
-      alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
+      alert('❌ Erreur lors de la suppression: ' + errorMessage);
     }
   };
 

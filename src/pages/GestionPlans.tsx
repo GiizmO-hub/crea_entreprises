@@ -307,9 +307,10 @@ export default function GestionPlans() {
       }
       
       await loadData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suppression plan:', error);
-      alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur: ' + errorMessage);
     }
   };
 

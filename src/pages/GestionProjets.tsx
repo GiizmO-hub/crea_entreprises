@@ -305,9 +305,16 @@ export default function GestionProjets({ onNavigate }: GestionProjetsProps) {
             const { data: statsData } = await supabase.rpc('get_projet_stats', {
               p_projet_id: projet.id
             });
+            interface StatsData {
+              total_taches?: number;
+              taches_completees?: number;
+              taches_en_cours?: number;
+              [key: string]: unknown;
+            }
+            
             return {
               ...projet,
-              stats: statsData || null
+              stats: (statsData as StatsData | null) || null
             };
           } catch (err) {
             console.error('Erreur chargement stats projet:', err);
