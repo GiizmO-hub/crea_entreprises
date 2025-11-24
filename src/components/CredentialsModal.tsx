@@ -18,6 +18,7 @@ interface CredentialsModalProps {
 export default function CredentialsModal({ isOpen, onClose, credentials }: CredentialsModalProps) {
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [resending, setResending] = useState(false);
   const [copySuccess, setCopySuccess] = useState<'email' | 'password' | null>(null);
 
   if (!isOpen) return null;
@@ -32,8 +33,12 @@ export default function CredentialsModal({ isOpen, onClose, credentials }: Crede
     }
   };
 
-  const handleSendEmail = async () => {
-    setEmailSending(true);
+  const handleSendEmail = async (isResend = false) => {
+    if (isResend) {
+      setResending(true);
+    } else {
+      setEmailSending(true);
+    }
     setEmailSent(false);
 
     try {
@@ -50,9 +55,12 @@ export default function CredentialsModal({ isOpen, onClose, credentials }: Crede
 
       if (result.success) {
         setEmailSent(true);
-        setTimeout(() => {
-          setEmailSent(false);
-        }, 5000);
+        // Ne pas masquer la confirmation automatiquement si c'est un renvoi
+        if (!isResend) {
+          setTimeout(() => {
+            setEmailSent(false);
+          }, 5000);
+        }
       } else {
         alert(`❌ Erreur lors de l'envoi de l'email: ${result.error || 'Erreur inconnue'}`);
       }
@@ -60,7 +68,11 @@ export default function CredentialsModal({ isOpen, onClose, credentials }: Crede
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       alert(`❌ Erreur lors de l'envoi de l'email: ${errorMessage}`);
     } finally {
-      setEmailSending(false);
+      if (isResend) {
+        setResending(false);
+      } else {
+        setEmailSending(false);
+      }
     }
   };
 
@@ -179,28 +191,45 @@ export default function CredentialsModal({ isOpen, onClose, credentials }: Crede
           >
             Fermer
           </button>
-          <button
-            onClick={handleSendEmail}
-            disabled={emailSending || emailSent}
-            className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {emailSending ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Envoi...
-              </>
-            ) : emailSent ? (
-              <>
-                <CheckCircle className="w-5 h-5" />
-                Envoyé
-              </>
-            ) : (
-              <>
-                <Send className="w-5 h-5" />
-                Envoyer par Email
-              </>
-            )}
-          </button>
+          {!emailSent ? (
+            <button
+              onClick={() => handleSendEmail(false)}
+              disabled={emailSending}
+              className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {emailSending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Envoi...
+                </>
+              ) : (
+                <>
+                  <Send className="w-5 h-5" />
+                  Envoyer par Email
+                </>
+              )}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => handleSendEmail(true)}
+                disabled={resending}
+                className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Renvoi...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-5 h-5" />
+                    Renvoyer
+                  </>
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
