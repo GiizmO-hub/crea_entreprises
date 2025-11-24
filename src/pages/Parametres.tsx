@@ -768,16 +768,23 @@ export default function Parametres() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {client.role === 'client_super_admin' ? (
-                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 inline-flex items-center gap-1">
-                                <span>⭐</span>
-                                <span>Client Administrateur</span>
-                              </span>
-                            ) : (
-                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400">
-                                Client
-                              </span>
-                            )}
+                            {(() => {
+                              const isSuperAdmin = client.role === 'client_super_admin';
+                              // Log pour déboguer
+                              if (isSuperAdmin) {
+                                console.log(`🎯 Affichage badge Client Administrateur pour ${client.email}, rôle détecté: "${client.role}"`);
+                              }
+                              return isSuperAdmin ? (
+                                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 inline-flex items-center gap-1.5">
+                                  <span className="text-yellow-400 text-sm">⭐</span>
+                                  <span className="font-semibold">Client Administrateur</span>
+                                </span>
+                              ) : (
+                                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400">
+                                  Client
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {client.espace_id ? (
