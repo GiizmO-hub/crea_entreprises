@@ -392,16 +392,12 @@ export default function Parametres() {
         }
         
         // Toujours récupérer le rôle depuis rolesMap (qui est maintenant toujours mis à jour via email)
-        // Si le rôle n'est pas trouvé via email, utiliser 'client' par défaut
-        let clientRole = rolesMap[c.id];
+        // Si le rôle n'est pas trouvé, utiliser 'client' par défaut
+        const clientRole = rolesMap[c.id] || 'client';
         
-        // Si pas de rôle trouvé, essayer de le récupérer directement depuis utilisateurs via l'espace
-        if (!clientRole && espace?.user_id) {
-          // Le rôle devrait être dans rolesMap via l'email, mais double vérification
-          // On utilise déjà rolesMap qui est rempli avant cette boucle, donc clientRole devrait être défini
-          clientRole = 'client'; // Par défaut si rien trouvé
-        } else if (!clientRole) {
-          clientRole = 'client'; // Par défaut
+        // Log si le rôle a été trouvé
+        if (!rolesMap[c.id] && c.email) {
+          console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}), utilisation de 'client' par défaut`);
         }
         
         const clientInfo: ClientInfo = {
