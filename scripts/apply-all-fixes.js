@@ -65,7 +65,8 @@ async function applyAllFixes() {
       '20250122000092_fix_utilisateurs_role_constraint.sql',
       '20250122000093_ensure_all_espaces_membres_columns.sql',
       '20250122000094_fix_module_sync_on_espace_creation.sql',
-      '20250122000095_add_resend_credentials_function.sql'
+      '20250122000095_add_resend_credentials_function.sql',
+      '20250122000096_fix_toggle_client_super_admin_function.sql'
     ];
 
     for (const migrationFile of migrations) {
