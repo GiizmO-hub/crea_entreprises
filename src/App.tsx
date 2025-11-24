@@ -53,31 +53,31 @@ function AppContent() {
       case 'dashboard':
         return (
           <Suspense fallback={<PageLoader />}>
-            <Dashboard onNavigate={setCurrentPage} />
+            <Dashboard />
           </Suspense>
         );
       case 'entreprises':
         return (
           <Suspense fallback={<PageLoader />}>
-            <Entreprises onNavigate={setCurrentPage} />
+            <Entreprises />
           </Suspense>
         );
       case 'clients':
         return (
           <Suspense fallback={<PageLoader />}>
-            <Clients onNavigate={setCurrentPage} />
+            <Clients />
           </Suspense>
         );
       case 'abonnements':
         return (
           <Suspense fallback={<PageLoader />}>
-            <Abonnements onNavigate={setCurrentPage} />
+            <Abonnements />
           </Suspense>
         );
       case 'factures':
         return (
           <Suspense fallback={<PageLoader />}>
-            <Factures onNavigate={setCurrentPage} />
+            <Factures />
           </Suspense>
         );
       case 'comptabilite':
@@ -87,49 +87,49 @@ function AppContent() {
       case 'modules':
         return (
           <Suspense fallback={<PageLoader />}>
-            <Modules onNavigate={setCurrentPage} />
+            <Modules />
           </Suspense>
         );
       case 'collaborateurs':
         return (
           <Suspense fallback={<PageLoader />}>
-            <Collaborateurs onNavigate={setCurrentPage} />
+            <Collaborateurs />
           </Suspense>
         );
       case 'documents':
         return (
           <Suspense fallback={<PageLoader />}>
-            <Documents onNavigate={setCurrentPage} />
+            <Documents />
           </Suspense>
         );
       case 'gestion-equipe':
         return (
           <Suspense fallback={<PageLoader />}>
-            <GestionEquipe onNavigate={setCurrentPage} />
+            <GestionEquipe />
           </Suspense>
         );
       case 'gestion-projets':
         return (
           <Suspense fallback={<PageLoader />}>
-            <GestionProjets onNavigate={setCurrentPage} />
+            <GestionProjets />
           </Suspense>
         );
       case 'gestion-plans':
         return (
           <Suspense fallback={<PageLoader />}>
-            <GestionPlans onNavigate={setCurrentPage} />
+            <GestionPlans />
           </Suspense>
         );
       case 'settings':
         return (
           <Suspense fallback={<PageLoader />}>
-            <Parametres onNavigate={setCurrentPage} />
+            <Parametres />
           </Suspense>
         );
       default:
         return (
           <Suspense fallback={<PageLoader />}>
-            <Dashboard onNavigate={setCurrentPage} />
+            <Dashboard />
           </Suspense>
         );
     }

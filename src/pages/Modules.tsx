@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Package, CheckCircle, Lock, Unlock, ToggleLeft, ToggleRight, Hammer, Briefcase, Store, Factory, Heart, GraduationCap, Truck, Hotel, Home, Users, TrendingUp } from 'lucide-react';
-
-interface ModulesProps {
-  onNavigate: (page: string) => void;
-}
 
 interface Module {
   id: string;

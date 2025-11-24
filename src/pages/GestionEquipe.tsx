@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import {
   Users,
@@ -14,10 +14,6 @@ import {
   Settings,
   UserPlus,
 } from 'lucide-react';
-
-interface GestionEquipeProps {
-  onNavigate: (page: string) => void;
-}
 
 interface Equipe {
   id: string;

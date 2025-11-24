@@ -3,10 +3,6 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { TrendingUp, Users, FileText, DollarSign, Building2 } from 'lucide-react';
 
-interface DashboardProps {
-  onNavigate: (page: string) => void;
-}
-
 interface Stats {
   nbEntreprises: number;
   nbClients: number;
@@ -14,7 +10,7 @@ interface Stats {
   caTotal: number;
 }
 
-export default function Dashboard({ onNavigate }: DashboardProps) {
+export default function Dashboard() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats>({
@@ -99,7 +95,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div
-          onClick={() => onNavigate('entreprises')}
           className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-4">
@@ -113,7 +108,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         </div>
 
         <div
-          onClick={() => onNavigate('clients')}
           className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-4">
@@ -126,7 +120,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         </div>
 
         <div
-          onClick={() => onNavigate('factures')}
           className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-4">
@@ -156,19 +149,16 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <h2 className="text-xl font-bold text-white mb-4">Actions rapides</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
-            onClick={() => onNavigate('entreprises')}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all text-left"
           >
             Créer une entreprise
           </button>
           <button
-            onClick={() => onNavigate('clients')}
             className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all text-left"
           >
             Ajouter un client
           </button>
           <button
-            onClick={() => onNavigate('factures')}
             className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-all text-left"
           >
             Créer une facture

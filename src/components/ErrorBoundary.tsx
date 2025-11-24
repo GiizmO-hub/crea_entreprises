@@ -5,7 +5,8 @@
  * et affiche une interface utilisateur de fallback
  */
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -74,7 +75,7 @@ export class ErrorBoundary extends Component<Props, State> {
               Désolé, quelque chose s'est mal passé. Veuillez réessayer.
             </p>
             
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <details className="mb-6 text-left bg-black/20 p-4 rounded text-sm text-gray-300">
                 <summary className="cursor-pointer mb-2 font-semibold">
                   Détails de l'erreur (développement)
