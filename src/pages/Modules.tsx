@@ -137,7 +137,18 @@ export default function Modules({ onNavigate }: ModulesProps) {
       setLoading(true);
 
       // Charger les modules depuis la table modules_activation avec leurs métiers
-      let modulesFromDB: any[] = [];
+      interface ModuleFromDB {
+        module_code: string;
+        module_nom: string;
+        module_description?: string;
+        categorie?: string;
+        actif: boolean;
+        est_cree: boolean;
+        prix_optionnel?: number;
+        [key: string]: unknown;
+      }
+      
+      let modulesFromDB: ModuleFromDB[] = [];
       
       try {
         // Récupérer tous les modules avec leurs informations complètes
@@ -242,7 +253,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
       }
 
       // Mapper les modules depuis la DB
-      const modulesWithStatus: Module[] = modulesFromDB.map((mod: any) => {
+      const modulesWithStatus: Module[] = modulesFromDB.map((mod: ModuleFromDB) => {
         let disponible = isSuperAdmin;
         const active = mod.actif === true;
         
@@ -332,9 +343,10 @@ export default function Modules({ onNavigate }: ModulesProps) {
       await loadModules();
       
       alert(activer ? '✅ Module activé avec succès!' : '✅ Module désactivé avec succès!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur toggle module:', error);
-      alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la modification: ' + errorMessage);
     }
   };
 

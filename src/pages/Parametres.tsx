@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Settings, Building2, Mail, Shield, Trash2, Play, Pause, Plus, Search, AlertCircle } from 'lucide-react';
-
-interface ParametresProps {
-  onNavigate: (page: string) => void;
-}
 
 interface ClientInfo {
   id: string;
@@ -258,7 +254,8 @@ export default function Parametres() {
       }
 
       await loadAllClients();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       console.error('Erreur suppression client:', error);
       alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
     }

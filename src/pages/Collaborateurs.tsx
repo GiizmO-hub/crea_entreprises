@@ -306,7 +306,12 @@ export default function Collaborateurs() {
     if (!confirm(`Êtes-vous sûr de vouloir activer ${collaborateurNom} ? Il pourra à nouveau accéder à l'application.`)) return;
 
     try {
-      const { data, error } = await supabase.rpc('activer_collaborateur', {
+      interface ActiverResult {
+        success: boolean;
+        error?: string;
+      }
+      
+      const { data, error } = await supabase.rpc<ActiverResult>('activer_collaborateur', {
         p_collaborateur_id: collaborateurId,
       });
 

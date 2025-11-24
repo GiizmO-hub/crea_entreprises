@@ -12,7 +12,10 @@ module.exports = {
   rules: {
     'react-refresh/only-export-components': [
       'warn',
-      { allowConstantExport: true, allowExportNames: ['AuthContext', 'AuthContextType'] },
+      { 
+        allowConstantExport: true, 
+        allowExportNames: ['AuthContext', 'AuthContextType', 'AuthProvider'] 
+      },
     ],
     '@typescript-eslint/no-explicit-any': 'warn', // Passer en 'warn' au lieu de 'error' temporairement
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],

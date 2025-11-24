@@ -128,9 +128,10 @@ export function ClientSuperAdmin({
       } else {
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur toggle super admin:', error);
-      alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur: ' + errorMessage);
     }
   };
 
