@@ -9,29 +9,30 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+
+import type { ErrorType } from '../types/errors';
 
 interface UseSupabaseQueryOptions<T> {
-  queryFn: () => Promise<{ data: T | null; error: any }>;
+  queryFn: () => Promise<{ data: T | null; error: ErrorType }>;
   enabled?: boolean;
   cacheKey?: string;
   cacheTime?: number; // en millisecondes
   retry?: number;
   retryDelay?: number; // en millisecondes
   onSuccess?: (data: T) => void;
-  onError?: (error: any) => void;
+  onError?: (error: ErrorType) => void;
 }
 
 interface UseSupabaseQueryResult<T> {
   data: T | null;
   loading: boolean;
-  error: any;
+  error: ErrorType | null;
   refetch: () => Promise<void>;
   invalidateCache: () => void;
 }
 
 // Cache global simple (pourrait être remplacé par React Query ou SWR)
-const cache = new Map<string, { data: any; timestamp: number; cacheTime: number }>();
+const cache = new Map<string, { data: unknown; timestamp: number; cacheTime: number }>();
 
 export function useSupabaseQuery<T>({
   queryFn,
@@ -45,7 +46,7 @@ export function useSupabaseQuery<T>({
 }: UseSupabaseQueryOptions<T>): UseSupabaseQueryResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<any>(null);
+  const [error, setError] = useState<ErrorType | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const executeQuery = useCallback(
@@ -77,7 +78,7 @@ export function useSupabaseQuery<T>({
       }
       abortControllerRef.current = new AbortController();
 
-      let lastError: any = null;
+      let lastError: ErrorType | null = null;
       let attempts = 0;
 
       while (attempts <= retry) {
@@ -109,7 +110,7 @@ export function useSupabaseQuery<T>({
 
           onSuccess?.(result.data as T);
           return;
-        } catch (err: any) {
+        } catch (err: unknown) {
           lastError = err;
           attempts++;
 

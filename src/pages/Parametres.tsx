@@ -21,7 +21,7 @@ interface ClientInfo {
   created_at: string;
 }
 
-export default function Parametres({}: ParametresProps) {
+export default function Parametres(_props: ParametresProps) {
   const { user } = useAuth();
   const [clients, setClients] = useState<ClientInfo[]>([]);
   const [loading, setLoading] = useState(true);

@@ -20,6 +20,7 @@ interface EntreprisesProps {
 }
 
 export default function Entreprises({ onNavigate: _onNavigate }: EntreprisesProps) {
+  // onNavigate non utilisé dans ce composant
   const { user } = useAuth();
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
   const [loading, setLoading] = useState(true);

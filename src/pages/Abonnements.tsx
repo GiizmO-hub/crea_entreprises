@@ -71,7 +71,7 @@ interface Client {
   entreprise_nom?: string;
 }
 
-export default function Abonnements({ onNavigate: _onNavigate }: AbonnementsProps) {
+export default function Abonnements({ onNavigate: _onNavigate: _onNavigate }: AbonnementsProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);

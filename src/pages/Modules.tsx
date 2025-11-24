@@ -244,7 +244,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
       // Mapper les modules depuis la DB
       const modulesWithStatus: Module[] = modulesFromDB.map((mod: any) => {
         let disponible = isSuperAdmin;
-        let active = mod.actif === true;
+        const active = mod.actif === true;
         
         // Pour les clients, ils ne voient que les modules actifs et créés
         if (!isSuperAdmin) {

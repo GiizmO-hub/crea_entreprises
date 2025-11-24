@@ -55,6 +55,7 @@ interface Module {
 }
 
 export default function GestionPlans({ onNavigate: _onNavigate }: GestionPlansProps) {
+  // onNavigate non utilisé dans ce composant
   const { user } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [modules, setModules] = useState<Module[]>([]);

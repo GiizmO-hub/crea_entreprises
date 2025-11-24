@@ -26,6 +26,7 @@ interface Collaborateur {
 }
 
 export default function Collaborateurs({ onNavigate: _onNavigate }: CollaborateursProps) {
+  // onNavigate non utilisé dans ce composant
   const { user } = useAuth();
   const [collaborateurs, setCollaborateurs] = useState<Collaborateur[]>([]);
   const [entreprises, setEntreprises] = useState<Array<{ id: string; nom: string }>>([]);

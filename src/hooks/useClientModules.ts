@@ -32,16 +32,7 @@ export function useClientModules({ menuItems, isSuperAdmin = false, isClientSupe
   const [loading, setLoading] = useState(true);
   const [isClient, setIsClient] = useState(false);
 
-  useEffect(() => {
-    if (!user) {
-      setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
-      setLoading(false);
-      return;
-    }
-
-    loadActiveModules();
-  }, [user, isSuperAdmin, isClientSuperAdmin]);
-
+  // ✅ Déclarer la fonction AVANT de l'utiliser dans useEffect
   const loadActiveModules = async () => {
     try {
       setLoading(true);
@@ -120,6 +111,18 @@ export function useClientModules({ menuItems, isSuperAdmin = false, isClientSupe
       setLoading(false);
     }
   };
+
+  // ✅ useEffect pour charger les modules
+  useEffect(() => {
+    if (!user) {
+      setActiveModules(new Set(['dashboard', 'entreprises', 'settings']));
+      setLoading(false);
+      return;
+    }
+
+    loadActiveModules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isSuperAdmin, isClientSuperAdmin]); // loadActiveModules est stable, pas besoin de l'inclure
 
   return {
     activeModules,

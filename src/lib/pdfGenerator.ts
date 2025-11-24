@@ -122,7 +122,7 @@ export function generatePDF(data: PDFData): void {
   // Informations document (à droite)
   doc.setFont('helvetica', 'bold');
   const docInfoY = 50;
-  let docInfoX = 140;
+  const docInfoX = 140;
   doc.text('N°:', docInfoX, docInfoY);
   doc.setFont('helvetica', 'normal');
   doc.text(data.numero, docInfoX + 15, docInfoY);

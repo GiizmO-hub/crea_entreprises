@@ -23,7 +23,7 @@ export default function Auth() {
       if (error) {
         setError(error.message);
       }
-    } catch (err) {
+    } catch (_err) {
       setError('Une erreur est survenue');
     } finally {
       setLoading(false);

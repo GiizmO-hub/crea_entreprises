@@ -51,29 +51,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'settings', label: 'Paramètres', icon: Settings, moduleCode: 'settings' },
   ];
 
-  useEffect(() => {
-    if (user) {
-      checkSuperAdmin();
-      checkClientSuperAdmin();
-    } else {
-      setIsSuperAdmin(false);
-      setIsClientSuperAdmin(false);
-      setIsClient(false);
-    }
-  }, [user]);
-
-  // ✅ Utiliser le hook personnalisé pour gérer les modules actifs (après la définition des états)
-  const { activeModules, isClient: isClientFromHook } = useClientModules({
-    menuItems,
-    isSuperAdmin,
-    isClientSuperAdmin,
-  });
-
-  // Mettre à jour isClient depuis le hook
-  useEffect(() => {
-    setIsClient(isClientFromHook);
-  }, [isClientFromHook]);
-
+  // ✅ Déclarer les fonctions AVANT de les utiliser dans useEffect
   const checkClientSuperAdmin = async () => {
     if (!user) {
       setIsClientSuperAdmin(false);
@@ -241,7 +219,30 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
   };
 
-  // ✅ La fonction loadActiveModules a été remplacée par le hook useClientModules ci-dessus
+  // ✅ Utiliser le hook personnalisé pour gérer les modules actifs (après la définition des fonctions)
+  const { activeModules, isClient: isClientFromHook } = useClientModules({
+    menuItems,
+    isSuperAdmin,
+    isClientSuperAdmin,
+  });
+
+  // Mettre à jour isClient depuis le hook
+  useEffect(() => {
+    setIsClient(isClientFromHook);
+  }, [isClientFromHook]);
+
+  // ✅ useEffect pour appeler les fonctions de vérification
+  useEffect(() => {
+    if (user) {
+      checkSuperAdmin();
+      checkClientSuperAdmin();
+    } else {
+      setIsSuperAdmin(false);
+      setIsClientSuperAdmin(false);
+      setIsClient(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // checkSuperAdmin et checkClientSuperAdmin sont stables, pas besoin de les inclure
 
   const handleSignOut = async () => {
     try {
