@@ -184,8 +184,8 @@ BEGIN
         'authenticated'
       );
 
-      -- Créer l'entrée dans utilisateurs
-      INSERT INTO utilisateurs (
+    -- Créer l'entrée dans utilisateurs
+    INSERT INTO utilisateurs (
         id,
         email,
         nom,
@@ -206,8 +206,8 @@ BEGIN
         prenom = EXCLUDED.prenom,
         role = EXCLUDED.role;
 
-      -- Créer l'espace membre client
-      INSERT INTO espaces_membres_clients (
+    -- Créer l'espace membre client
+    INSERT INTO espaces_membres_clients (
         client_id,
         entreprise_id,
         user_id,
@@ -227,22 +227,21 @@ BEGIN
         'actif',
         false
       )
-      RETURNING id INTO v_espace_membre_id;
+    RETURNING id INTO v_espace_membre_id;
 
-      v_email_final := p_email_client;
+    v_email_final := p_email_client;
 
-      -- Synchroniser les modules de base si pas de plan
-      IF p_plan_id IS NULL THEN
-        UPDATE espaces_membres_clients
+    -- Synchroniser les modules de base si pas de plan
+    IF p_plan_id IS NULL THEN
+      UPDATE espaces_membres_clients
         SET modules_actifs = jsonb_build_object(
           'tableau_de_bord', true,
           'mon_entreprise', true,
           'factures', true,
           'documents', true
-        )
-        WHERE id = v_espace_membre_id;
-      END IF;
-    END;
+      )
+      WHERE id = v_espace_membre_id;
+    END IF;
   END IF;
 
   -- 4. Si un plan est fourni, créer l'abonnement
