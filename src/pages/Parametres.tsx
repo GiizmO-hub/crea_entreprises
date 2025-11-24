@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Settings, Building2, Mail, Shield, Trash2, Play, Pause, Plus, Search, AlertCircle } from 'lucide-react';
+import CredentialsModal from '../components/CredentialsModal';
 
 interface ClientInfo {
   id: string;
@@ -23,6 +24,16 @@ export default function Parametres() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [clientCredentials, setClientCredentials] = useState<{
+    email: string;
+    password: string;
+    clientName: string;
+    entrepriseNom: string;
+    clientPrenom?: string;
+  } | null>(null);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -177,11 +188,19 @@ export default function Parametres() {
         if (result.already_exists) {
           alert('✅ Un espace membre existe déjà pour ce client.\n\n' + (result.message || ''));
         } else {
-          // Afficher les identifiants pour un nouvel espace membre
+          // Afficher le modal avec les identifiants
           const finalPassword = result.password || password;
           const finalEmail = result.email || client.email;
           
-          alert(`✅ Espace membre créé avec succès!\n\nEmail: ${finalEmail}\nMot de passe temporaire: ${finalPassword}\n\n⚠️ Enregistrez ces identifiants, ils ne seront plus affichés.`);
+          setClientCredentials({
+            email: finalEmail,
+            password: finalPassword,
+            clientName: client.client_nom || '',
+            clientPrenom: client.client_prenom || undefined,
+            entrepriseNom: client.entreprise_nom || '',
+          });
+          setShowCredentialsModal(true);
+          setEmailSent(false);
         }
         await loadAllClients();
       } else {
@@ -511,6 +530,18 @@ export default function Parametres() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal identifiants */}
+      {showCredentialsModal && clientCredentials && (
+        <CredentialsModal
+          isOpen={showCredentialsModal}
+          onClose={() => {
+            setShowCredentialsModal(false);
+            setClientCredentials(null);
+          }}
+          credentials={clientCredentials}
+        />
       )}
     </div>
   );
