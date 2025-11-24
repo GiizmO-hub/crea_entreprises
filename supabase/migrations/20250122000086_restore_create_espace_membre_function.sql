@@ -26,7 +26,7 @@ CREATE OR REPLACE FUNCTION create_espace_membre_from_client_unified(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, auth
+SET search_path = public, auth, extensions
 AS $$
 DECLARE
   v_client_email text;
@@ -108,7 +108,7 @@ BEGIN
       'authenticated',
       'authenticated',
       v_client_email,
-      crypt(v_password_to_use, gen_salt('bf')),
+      crypt(v_password_to_use, gen_salt('bf'))::text,
       NOW(),
       NULL,
       NULL,
