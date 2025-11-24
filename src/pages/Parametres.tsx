@@ -75,13 +75,35 @@ export default function Parametres() {
       if (clientsError) throw clientsError;
 
       // Récupérer tous les utilisateurs en une seule requête
-      const clientIds = (clientsData || []).map((c: any) => c.id);
+      interface ClientData {
+        id: string;
+        entreprise_id: string;
+        nom?: string;
+        prenom?: string;
+        email?: string;
+        created_at: string;
+        entreprises?: { nom: string };
+      }
+      
+      const clientIds = (clientsData || []).map((c: ClientData) => c.id);
       const { data: utilisateursData } = await supabase
         .from('utilisateurs')
         .select('id, role')
         .in('id', clientIds);
 
-      const rolesMap = new Map((utilisateursData || []).map((u: any) => [u.id, u.role || 'client']));
+      interface UtilisateurData {
+        id: string;
+        role?: string;
+      }
+      
+      interface EspaceData {
+        id: string;
+        client_id: string;
+        user_id: string | null;
+        actif: boolean;
+      }
+      
+      const rolesMap = new Map((utilisateursData || []).map((u: UtilisateurData) => [u.id, u.role || 'client']));
       
       // Récupérer tous les espaces membres en une seule requête
       const { data: espacesData } = await supabase
@@ -89,13 +111,13 @@ export default function Parametres() {
         .select('id, client_id, user_id, actif')
         .in('client_id', clientIds);
 
-      const espacesMap = new Map();
-      (espacesData || []).forEach((e: any) => {
+      const espacesMap = new Map<string, EspaceData>();
+      (espacesData || []).forEach((e: EspaceData) => {
         espacesMap.set(e.client_id, e);
       });
 
       // Construire la liste finale
-      const clientsWithDetails = (clientsData || []).map((client: any) => {
+      const clientsWithDetails = (clientsData || []).map((client: ClientData) => {
         const espace = espacesMap.get(client.id);
         const role = rolesMap.get(client.id) || 'client';
         
@@ -160,9 +182,10 @@ export default function Parametres() {
       } else {
         throw new Error(result?.error || 'Erreur inconnue');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création espace membre:', error);
-      alert('❌ Erreur lors de la création de l\'espace membre: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la création de l\'espace membre: ' + errorMessage);
     }
   };
 
@@ -179,9 +202,10 @@ export default function Parametres() {
 
       alert(`✅ Espace membre ${!client.espace_actif ? 'activé' : 'suspendu'} avec succès`);
       await loadAllClients();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suspension espace:', error);
-      alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur: ' + errorMessage);
     }
   };
 
