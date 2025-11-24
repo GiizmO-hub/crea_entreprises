@@ -1,5 +1,5 @@
 import { type ReactNode, useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { useClientModules } from '../hooks/useClientModules';
 import {

@@ -152,16 +152,24 @@ export default function Collaborateurs() {
 
       console.log('✅ Collaborateurs chargés:', data?.length || 0);
 
+      interface CollaborateurData {
+        id: string;
+        email: string;
+        entreprise?: { nom: string };
+        [key: string]: unknown;
+      }
+      
       // Enrichir avec le nom de l'entreprise
-      const collaborateursEnriched = (data || []).map((c: any) => ({
+      const collaborateursEnriched = (data || []).map((c: CollaborateurData) => ({
         ...c,
         entreprise_nom: c.entreprise?.nom,
       }));
 
       setCollaborateurs(collaborateursEnriched || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Erreur chargement collaborateurs:', error);
-      alert('Erreur lors du chargement des collaborateurs: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('Erreur lors du chargement des collaborateurs: ' + errorMessage);
       setCollaborateurs([]);
     } finally {
       setLoading(false);
@@ -213,9 +221,10 @@ export default function Collaborateurs() {
         salaire: '',
       });
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création collaborateur:', error);
-      alert('❌ Erreur lors de la création: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la création: ' + errorMessage);
     }
   };
 
@@ -227,7 +236,7 @@ export default function Collaborateurs() {
       nom: collaborateur.nom || '',
       prenom: collaborateur.prenom || '',
       telephone: collaborateur.telephone || '',
-      role: collaborateur.role as any,
+      role: collaborateur.role,
       entreprise_id: collaborateur.entreprise_id || '',
       departement: collaborateur.departement || '',
       poste: collaborateur.poste || '',
@@ -266,9 +275,10 @@ export default function Collaborateurs() {
       setShowEditForm(false);
       setEditingCollaborateur(null);
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur modification:', error);
-      alert('❌ Erreur lors de la modification: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la modification: ' + errorMessage);
     }
   };
 
@@ -289,9 +299,10 @@ export default function Collaborateurs() {
 
       alert('✅ Collaborateur suspendu avec succès');
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suspension:', error);
-      alert('❌ Erreur lors de la suspension: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la suspension: ' + errorMessage);
     }
   };
 
@@ -312,9 +323,10 @@ export default function Collaborateurs() {
 
       alert('✅ Collaborateur activé avec succès');
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur activation:', error);
-      alert('❌ Erreur lors de l\'activation: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de l\'activation: ' + errorMessage);
     }
   };
 
@@ -335,9 +347,10 @@ export default function Collaborateurs() {
 
       alert('✅ Collaborateur supprimé avec succès');
       loadCollaborateurs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suppression:', error);
-      alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la suppression: ' + errorMessage);
     }
   };
 
@@ -889,7 +902,7 @@ export default function Collaborateurs() {
                 <select
                   required
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
                 >
                   <option value="collaborateur">Collaborateur</option>
@@ -1056,7 +1069,7 @@ export default function Collaborateurs() {
                 <select
                   required
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
                 >
                   <option value="collaborateur">Collaborateur</option>

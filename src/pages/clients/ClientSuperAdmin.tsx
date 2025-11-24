@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import { Crown, Shield, ShieldOff, Mail, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { Client } from './types';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 
 interface ClientSuperAdminProps {
   clients: Client[];
@@ -128,7 +128,7 @@ export function ClientSuperAdmin({
       } else {
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Erreur toggle super admin:', error);
       alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
     }

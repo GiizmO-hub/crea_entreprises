@@ -215,7 +215,7 @@ export default function Entreprises() {
                   setShowCredentialsModal(true);
                 }
               }
-            } catch (espaceErr: any) {
+            } catch (espaceErr: unknown) {
               console.error('Erreur création espace membre:', espaceErr);
               alert('⚠️ Entreprise et client créés mais erreur lors de la création de l\'espace membre');
             }
@@ -231,9 +231,10 @@ export default function Entreprises() {
       setEditingId(null);
       resetForm();
       await loadEntreprises();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur sauvegarde entreprise:', error);
-      alert('❌ Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la sauvegarde: ' + errorMessage);
     }
   };
 
@@ -273,9 +274,10 @@ export default function Entreprises() {
       }
       
       await loadEntreprises();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur suppression:', error);
-      alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert('❌ Erreur lors de la suppression: ' + errorMessage);
     }
   };
 
