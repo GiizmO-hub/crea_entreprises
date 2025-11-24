@@ -21,11 +21,44 @@ const projectRoot = join(__dirname, '..');
 // Charger les variables d'environnement
 config({ path: join(projectRoot, '.env') });
 
-const dbUrl = process.env.SUPABASE_DB_URL || process.env.POSTGRES_URL || process.env.DATABASE_URL;
+// Essayer plusieurs façons de construire l'URL de connexion
+let dbUrl = process.env.SUPABASE_DB_URL || process.env.POSTGRES_URL || process.env.DATABASE_URL;
+
+// Si pas d'URL directe, essayer de la construire depuis les variables Supabase
+if (!dbUrl) {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const dbPassword = process.env.SUPABASE_DB_PASSWORD || process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD;
+  
+  if (supabaseUrl && dbPassword) {
+    try {
+      // URL Supabase: https://xxxxx.supabase.co
+      const url = new URL(supabaseUrl);
+      const projectId = url.hostname.replace('.supabase.co', '');
+      
+      if (projectId) {
+        console.log('✅ Construction de l\'URL PostgreSQL depuis VITE_SUPABASE_URL');
+        dbUrl = `postgresql://postgres:${encodeURIComponent(dbPassword)}@db.${projectId}.supabase.co:5432/postgres`;
+      }
+    } catch (e) {
+      console.error('❌ Erreur parsing URL Supabase:', e.message);
+    }
+  }
+}
 
 if (!dbUrl) {
-  console.error('❌ ERREUR: SUPABASE_DB_URL ou DATABASE_URL non trouvé dans .env');
-  console.error('   Ajoutez SUPABASE_DB_URL=postgresql://... dans votre .env');
+  console.error('❌ ERREUR: Impossible de construire l\'URL de connexion DB');
+  console.error('');
+  console.error('   Variables nécessaires dans .env:');
+  console.error('   - VITE_SUPABASE_URL (ou SUPABASE_URL)');
+  console.error('   - SUPABASE_DB_PASSWORD (ou DB_PASSWORD)');
+  console.error('');
+  console.error('   OU');
+  console.error('');
+  console.error('   - SUPABASE_DB_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres');
+  console.error('');
+  console.error('   Option alternative:');
+  console.error('   Appliquer manuellement via Supabase Dashboard > SQL Editor');
+  console.error('   Fichier: supabase/migrations/20250122000091_fix_all_gen_salt_functions.sql');
   process.exit(1);
 }
 
