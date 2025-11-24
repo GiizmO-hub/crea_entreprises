@@ -162,7 +162,7 @@ export default function Parametres() {
       }
 
       // Transformer les données pour correspondre à ClientInfo
-      const transformedClients: ClientInfo[] = (data || []).map((client: unknown) => {
+      const transformedClients: ClientInfo[] = clientsData.map((client: unknown) => {
         const c = client as {
           id: string;
           entreprise_id: string;
@@ -170,17 +170,13 @@ export default function Parametres() {
           prenom?: string;
           email: string;
           created_at: string;
-          entreprises?: { nom: string } | null | Array<{ nom: string }>;
-          espaces_membres_clients?: Array<{ id: string; actif: boolean; user_id: string | null }> | null;
+          entreprises?: { nom: string } | Array<{ nom: string }>;
         };
         
-        // Gérer l'espace membre (peut être array ou null)
-        const espaces = c.espaces_membres_clients;
-        const espace = Array.isArray(espaces) && espaces.length > 0
-          ? espaces[0] 
-          : null;
+        // Récupérer l'espace depuis la map
+        const espace = espacesMap[c.id] || null;
         
-        // Gérer le nom de l'entreprise (peut être array ou object ou null)
+        // Gérer le nom de l'entreprise (peut être array ou object)
         let entrepriseNom = 'N/A';
         if (Array.isArray(c.entreprises) && c.entreprises.length > 0) {
           entrepriseNom = c.entreprises[0]?.nom || 'N/A';
@@ -204,9 +200,9 @@ export default function Parametres() {
         
         // Log pour déboguer
         if (espace) {
-          console.log(`✅ Client ${c.id}: Espace trouvé - ID: ${espace.id}, Actif: ${espace.actif}`);
+          console.log(`✅ Client ${c.id} (${c.email}): Espace trouvé - ID: ${espace.id}, Actif: ${espace.actif}`);
         } else {
-          console.log(`⚠️ Client ${c.id}: Aucun espace trouvé`);
+          console.log(`⚠️ Client ${c.id} (${c.email}): Aucun espace trouvé`);
         }
         
         return clientInfo;
