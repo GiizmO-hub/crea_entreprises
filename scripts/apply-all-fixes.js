@@ -62,7 +62,8 @@ async function applyAllFixes() {
     // Liste des migrations à appliquer
     const migrations = [
       '20250122000091_fix_all_gen_salt_functions.sql',
-      '20250122000092_fix_utilisateurs_role_constraint.sql'
+      '20250122000092_fix_utilisateurs_role_constraint.sql',
+      '20250122000093_ensure_all_espaces_membres_columns.sql'
     ];
 
     for (const migrationFile of migrations) {
