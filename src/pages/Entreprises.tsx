@@ -433,7 +433,7 @@ export default function Entreprises() {
               {!editingId && (
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mt-4">
                   <p className="text-sm text-blue-300">
-                    💡 <strong>Note :</strong> Une fois l'entreprise créée, configurez les clients, espaces membres et abonnements depuis l'onglet <strong>"Paramètres" > "Gestion Clients"</strong>.
+                    💡 <strong>Note :</strong> Une fois l'entreprise créée, configurez les clients, espaces membres et abonnements depuis l'onglet <strong>"Paramètres" &gt; "Gestion Clients"</strong>.
                   </p>
                 </div>
               )}

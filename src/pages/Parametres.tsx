@@ -734,8 +734,7 @@ export default function Parametres() {
                             >
                               {client.role === 'client_super_admin' ? (
                                 <>
-                                  <Shield className="w-3 h-3 inline mr-1" />
-                                  Client Super Admin
+                                  ⭐ Client Administrateur
                                 </>
                               ) : (
                                 'Client'
