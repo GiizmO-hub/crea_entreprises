@@ -125,16 +125,17 @@ export function filterActiveModules(
   
   // Parcourir tous les modules actifs
   Object.keys(modulesActifs).forEach((moduleCode) => {
-    const moduleValue = modulesActifs[moduleCode];
+    const moduleValue: any = modulesActifs[moduleCode];
     
-    // Vérifier si le module est actif
-    const isActive = moduleValue === true || 
-                    moduleValue === 'true' || 
-                    moduleValue === 1 || 
-                    moduleValue === '1' ||
-                    (typeof moduleValue === 'string' && moduleValue.toLowerCase() === 'true') ||
-                    (typeof moduleValue === 'boolean' && moduleValue === true) ||
-                    (typeof moduleValue === 'number' && moduleValue === 1);
+    // Vérifier si le module est actif (gérer tous les types possibles)
+    let isActive = false;
+    if (typeof moduleValue === 'boolean') {
+      isActive = moduleValue === true;
+    } else if (typeof moduleValue === 'string') {
+      isActive = moduleValue === 'true' || moduleValue === '1' || moduleValue.toLowerCase() === 'true';
+    } else if (typeof moduleValue === 'number') {
+      isActive = moduleValue === 1;
+    }
     
     if (isActive) {
       // Mapper le code vers un ID de menu
