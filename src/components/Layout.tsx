@@ -267,18 +267,22 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                 // ✅ Modules de base toujours visibles pour tous
                 const isBaseModule = item.id === 'dashboard' || item.id === 'entreprises' || item.id === 'settings';
                 
-                // ✅ ÉTAPE 1 : Les modules admin de la plateforme ne doivent JAMAIS apparaître pour les clients
+                // ✅ PRIORITÉ 1 : SUPER ADMIN PLATEFORME voit TOUT (tous les modules)
+                // Un super admin PLATEFORME n'est JAMAIS un client (pas d'espace membre client)
+                if (isSuperAdmin && !isClient) {
+                  console.log('✅ Super admin PLATEFORME détecté - TOUS les modules visibles');
+                  return true; // ✅ TOUS les modules sont visibles pour le super admin PLATEFORME
+                }
+                
+                // ✅ PRIORITÉ 2 : Les modules admin de la plateforme ne doivent JAMAIS apparaître pour les clients
                 // Même si le client est super_admin de son espace, il ne doit pas voir les modules admin plateforme
                 if (item.superAdminOnly) {
                   // Seuls les super_admin de la plateforme (PAS les clients) peuvent voir ces modules
-                  if (isClientSuperAdmin) {
-                    // C'est un client, ne jamais afficher les modules admin
-                    return false;
-                  }
-                  return isSuperAdmin;
+                  // Si on arrive ici, c'est qu'on n'est pas super admin PLATEFORME
+                  return false; // Les clients ne voient jamais les modules admin plateforme
                 }
                 
-                // ✅ ÉTAPE 2 : Pour les clients, afficher uniquement les modules actifs de leur abonnement
+                // ✅ PRIORITÉ 3 : Pour les clients, afficher uniquement les modules actifs de leur abonnement
                 // Mais toujours afficher les modules de base
                 if (isClient) {
                   // Client : vérifier si c'est un module de base ou un module actif
@@ -293,12 +297,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                   return activeModules.has(item.id);
                 }
                 
-                // ✅ ÉTAPE 3 : Pour les super_admin plateforme, tout est visible
-                if (isSuperAdmin && !isClientSuperAdmin) {
-                  return true;
-                }
-                
-                // ✅ ÉTAPE 4 : Par défaut, afficher les modules de base et les modules actifs
+                // ✅ PRIORITÉ 4 : Par défaut (non-client, non-super-admin), afficher les modules de base et les modules actifs
                 if (isBaseModule) {
                   return true; // Modules de base toujours visibles
                 }
