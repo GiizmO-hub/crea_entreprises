@@ -136,11 +136,17 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     try {
       // ✅ NOUVEAU : Utiliser is_platform_super_admin pour distinguer super_admin plateforme vs client
       // Les clients même super_admin de leur espace ne sont PAS super_admin de la plateforme
-      const { data: isPlatformAdmin, error: platformAdminError } = await supabase.rpc('is_platform_super_admin', {
-        p_user_id: user.id
-      });
+      // La fonction is_platform_super_admin() n'a pas de paramètre, elle utilise auth.uid()
+      const { data: isPlatformAdmin, error: platformAdminError } = await supabase.rpc('is_platform_super_admin');
 
-      if (!platformAdminError && isPlatformAdmin === true) {
+      // Si la fonction n'existe pas (404) ou erreur, ignorer et continuer avec les autres méthodes
+      if (platformAdminError) {
+        if (platformAdminError.code === 'PGRST204' || platformAdminError.message?.includes('404') || platformAdminError.code === '42883') {
+          console.log('⚠️ Fonction is_platform_super_admin non disponible, utilisation méthode fallback');
+        } else {
+          console.warn('⚠️ Erreur is_platform_super_admin:', platformAdminError);
+        }
+      } else if (isPlatformAdmin === true) {
         console.log('✅ Super admin plateforme détecté (accès complet)');
         setIsSuperAdmin(true);
         return;

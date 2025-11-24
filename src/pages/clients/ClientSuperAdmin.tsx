@@ -68,7 +68,12 @@ export function ClientSuperAdmin({
           );
 
           if (rpcError) {
-            console.error(`Erreur RPC pour entreprise ${entrepriseId}:`, rpcError);
+            // Si erreur de permission (P0001), c'est normal si l'utilisateur n'est pas super_admin
+            if (rpcError.code === 'P0001' || rpcError.message?.includes('non autorisé')) {
+              console.log(`ℹ️ Accès refusé pour entreprise ${entrepriseId} (utilisateur non super_admin)`);
+            } else {
+              console.error(`Erreur RPC pour entreprise ${entrepriseId}:`, rpcError);
+            }
             continue;
           }
 
