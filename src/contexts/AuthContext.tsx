@@ -75,7 +75,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      // Nettoyer la session et les états
+      setSession(null);
+      setUser(null);
+      // Déconnecter de Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('❌ Erreur lors de la déconnexion Supabase:', error);
+        throw error;
+      }
+      console.log('✅ Déconnexion Supabase réussie');
+    } catch (error) {
+      console.error('❌ Erreur dans signOut:', error);
+      // Même en cas d'erreur, nettoyer les états locaux
+      setSession(null);
+      setUser(null);
+      throw error;
+    }
   };
 
   return (

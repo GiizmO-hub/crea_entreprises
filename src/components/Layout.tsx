@@ -235,7 +235,17 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   // ✅ La fonction loadActiveModules a été remplacée par le hook useClientModules ci-dessus
 
   const handleSignOut = async () => {
-    await signOut();
+    try {
+      console.log('🔄 Déconnexion en cours...');
+      await signOut();
+      console.log('✅ Déconnexion réussie');
+      // Rediriger vers la page de connexion après déconnexion
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('❌ Erreur lors de la déconnexion:', error);
+      // Même en cas d'erreur, forcer la redirection
+      window.location.href = '/login';
+    }
   };
 
   return (
