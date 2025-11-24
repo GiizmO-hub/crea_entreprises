@@ -31,7 +31,7 @@ export async function sendClientCredentialsEmail(
     }
 
     // Appeler l'Edge Function pour envoyer l'email
-    const { data, error } = await supabase.functions.invoke('send-client-credentials', {
+    const { data: responseData, error } = await supabase.functions.invoke('send-client-credentials', {
       body: {
         client_email: data.clientEmail,
         client_nom: data.clientName,
@@ -55,7 +55,7 @@ export async function sendClientCredentialsEmail(
 
     return {
       success: true,
-      message: data?.message || 'Email envoyé avec succès'
+      message: responseData?.message || 'Email envoyé avec succès'
     };
 
   } catch (error: unknown) {
@@ -149,7 +149,7 @@ export function generateCredentialsEmailHTML(data: ClientCredentialsEmailData): 
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td align="center" style="padding: 30px 0;">
-                    <a href="${window.location.origin}/login" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);">
+                    <a href="${typeof window !== 'undefined' ? window.location.origin : 'https://app.crea-entreprises.com'}/login" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff !important; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);">
                       Accéder à mon espace client
                     </a>
                   </td>
