@@ -339,7 +339,11 @@ export default function Abonnements() {
       interface ModuleData {
         module_code: string;
         module_id?: string;
+        module_nom?: string;
         inclus?: boolean | string;
+        est_cree?: boolean | string;
+        actif?: boolean | string;
+        prix_mensuel?: number;
       }
       
       const enrichedAbonnements = await Promise.all(
@@ -400,7 +404,7 @@ export default function Abonnements() {
           
           const optionsActives = (optionsData || [])
             .map((opt: OptionData) => opt.options_supplementaires)
-            .filter((opt) => opt && opt.actif !== false);
+            .filter((opt): opt is { id: string; nom: string; prix_mensuel: number; actif?: boolean } => opt !== null && opt !== undefined && opt.actif !== false);
 
           console.log(`📋 Abonnement ${ab.plans_abonnement?.nom || 'Inconnu'}: ${planModules.length} modules inclus`);
 
@@ -945,23 +949,29 @@ export default function Abonnements() {
                     <div className="mt-3">
                       <p className="text-gray-400 text-sm mb-2">Modules inclus dans le plan ({modulesInclus.length}):</p>
                       <div className="flex flex-wrap gap-2">
-                        {modulesInclus.map((mod: ModuleDisplay) => (
-                          <span
-                            key={mod.module_code}
-                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                              mod.est_cree && mod.actif
-                                ? 'bg-green-500/20 text-green-300'
-                                : mod.est_cree
-                                ? 'bg-blue-500/20 text-blue-300'
-                                : 'bg-gray-500/20 text-gray-300'
-                            }`}
-                          >
-                            {mod.module_nom}
-                            {mod.prix_mensuel > 0 && ` (+${mod.prix_mensuel}€/mois)`}
-                            {!mod.est_cree && ' (À venir)'}
-                            {mod.est_cree && !mod.actif && ' (Inactif)'}
-                          </span>
-                        ))}
+                        {modulesInclus.map((mod: { module_code: string; module_nom?: string; est_cree?: boolean | string; actif?: boolean | string; prix_mensuel?: number }) => {
+                          const est_cree = mod.est_cree === true || mod.est_cree === 'true' || String(mod.est_cree || '').toLowerCase() === 'true';
+                          const actif = mod.actif === true || mod.actif === 'true' || String(mod.actif || '').toLowerCase() === 'true';
+                          const prix_mensuel = typeof mod.prix_mensuel === 'number' ? mod.prix_mensuel : parseFloat(String(mod.prix_mensuel || 0));
+                          
+                          return (
+                            <span
+                              key={mod.module_code}
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                est_cree && actif
+                                  ? 'bg-green-500/20 text-green-300'
+                                  : est_cree
+                                  ? 'bg-blue-500/20 text-blue-300'
+                                  : 'bg-gray-500/20 text-gray-300'
+                              }`}
+                            >
+                              {mod.module_nom || mod.module_code}
+                              {prix_mensuel > 0 && ` (+${prix_mensuel}€/mois)`}
+                              {!est_cree && ' (À venir)'}
+                              {est_cree && !actif && ' (Inactif)'}
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : (
