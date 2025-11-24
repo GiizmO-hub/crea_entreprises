@@ -5,11 +5,16 @@
   - La fonction create_espace_membre_from_client_unified n'existe pas
   - L'application l'utilise dans Entreprises.tsx
   - Cela cause une erreur runtime quand on clique sur "Mon Entreprise"
+  - Erreur: function gen_salt(unknown) does not exist
   
   SOLUTION:
+  - Activer l'extension pgcrypto pour gen_salt
   - Créer la fonction avec la signature attendue par le frontend
   - Utiliser la logique consolidée existante
 */
+
+-- Activer l'extension pgcrypto pour le hashage de mot de passe
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE OR REPLACE FUNCTION create_espace_membre_from_client_unified(
   p_client_id uuid,
