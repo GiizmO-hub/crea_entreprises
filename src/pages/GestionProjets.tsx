@@ -129,7 +129,7 @@ const PRIORITES = [
   { value: 'urgente', label: 'Urgente', color: 'red' },
 ];
 
-export default function GestionProjets({ onNavigate }: GestionProjetsProps) {
+export default function GestionProjets() {
   const { user } = useAuth();
   const [projets, setProjets] = useState<Projet[]>([]);
   const [entreprises, setEntreprises] = useState<Array<{ id: string; nom: string }>>([]);

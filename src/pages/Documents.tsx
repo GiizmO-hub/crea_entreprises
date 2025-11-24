@@ -101,7 +101,7 @@ const TYPES_FICHIER = [
   { value: 'autre', label: 'Autre', icon: File },
 ];
 
-export default function Documents({ onNavigate: _onNavigate }: DocumentsProps) {
+export default function Documents() {
   const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<DocumentFolder[]>([]);

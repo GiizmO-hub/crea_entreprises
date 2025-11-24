@@ -48,11 +48,7 @@ interface RelanceMRA {
   notes?: string;
 }
 
-interface FacturesProps {
-  onNavigate: (page: string) => void;
-}
-
-export default function Factures({ onNavigate: _onNavigate }: FacturesProps) {
+export default function Factures() {
   const { user } = useAuth();
   const [factures, setFactures] = useState<Facture[]>([]);
   const [avoirs, setAvoirs] = useState<Facture[]>([]);
