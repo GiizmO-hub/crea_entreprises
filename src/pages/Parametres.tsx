@@ -143,45 +143,72 @@ export default function Parametres() {
 
   const handleCreateEspace = async (client: ClientInfo) => {
     if (!client.email) {
-      alert('Le client doit avoir un email pour créer un espace membre');
+      alert('❌ Le client doit avoir un email pour créer un espace membre');
       return;
     }
 
     try {
-      // Utiliser la fonction RPC pour créer l'espace membre
-      // Essayer différentes fonctions selon ce qui est disponible
-      let result;
-      let error;
+      // Générer un mot de passe temporaire
+      const password = Math.random().toString(36).slice(-12) + 'A1!';
       
-      // Essayer create_espace_membre_from_client (la fonction standard)
-      ({ data: result, error } = await supabase.rpc('create_espace_membre_from_client', {
-        p_client_id: client.id,
-        p_entreprise_id: client.entreprise_id,
-        p_password: null, // Généré automatiquement
-        p_plan_id: null, // Pas de plan spécifique pour l'instant
-        p_options_ids: []
-      }));
+      // Utiliser la fonction RPC unifiée (comme dans Entreprises.tsx)
+      const { data: result, error } = await supabase.rpc(
+        'create_espace_membre_from_client_unified',
+        {
+          p_client_id: client.id,
+          p_entreprise_id: client.entreprise_id,
+          p_password: password,
+          p_plan_id: null, // Pas de plan spécifique pour l'instant
+          p_options_ids: null, // Pas d'options pour l'instant
+        }
+      );
 
-      // Si erreur, essayer avec create_complete_client_space
-      if (error || !result?.success) {
-        ({ data: result, error } = await supabase.rpc('create_complete_client_space', {
-          p_client_id: client.id
-        }));
+      if (error) {
+        console.error('❌ Erreur RPC création espace membre:', error);
+        throw new Error(error.message || error.details || 'Erreur lors de l\'appel à la fonction RPC');
       }
 
-      if (error) throw error;
+      if (!result) {
+        throw new Error('Aucune réponse de la fonction RPC');
+      }
 
-      if (result?.success) {
-        const password = result.password || result.password_temporaire || 'Généré automatiquement';
-        alert(`✅ Espace membre créé avec succès!\n\nEmail: ${result.email || client.email}\nMot de passe temporaire: ${password}`);
+      if (result.success) {
+        // Si l'espace membre existait déjà
+        if (result.already_exists) {
+          alert('✅ Un espace membre existe déjà pour ce client.\n\n' + (result.message || ''));
+        } else {
+          // Afficher les identifiants pour un nouvel espace membre
+          const finalPassword = result.password || password;
+          const finalEmail = result.email || client.email;
+          
+          alert(`✅ Espace membre créé avec succès!\n\nEmail: ${finalEmail}\nMot de passe temporaire: ${finalPassword}\n\n⚠️ Enregistrez ces identifiants, ils ne seront plus affichés.`);
+        }
         await loadAllClients();
       } else {
-        throw new Error(result?.error || 'Erreur inconnue');
+        // Erreur retournée par la fonction RPC
+        const errorMsg = result.error || result.message || 'Erreur inconnue lors de la création';
+        console.error('❌ Erreur fonction RPC:', result);
+        throw new Error(errorMsg);
       }
     } catch (error: unknown) {
-      console.error('Erreur création espace membre:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      alert('❌ Erreur lors de la création de l\'espace membre: ' + errorMessage);
+      console.error('❌ Erreur complète création espace membre:', error);
+      
+      // Gestion d'erreur détaillée
+      let errorMessage = 'Erreur inconnue';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        const errObj = error as { message?: string; error?: string; details?: string; code?: string };
+        errorMessage = errObj.message || errObj.error || errObj.details || errorMessage;
+        
+        // Ajouter le code d'erreur si disponible
+        if (errObj.code) {
+          errorMessage += ` (Code: ${errObj.code})`;
+        }
+      }
+      
+      alert(`❌ Erreur lors de la création de l'espace membre: ${errorMessage}`);
     }
   };
 
