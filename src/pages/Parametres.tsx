@@ -35,6 +35,7 @@ export default function Parametres() {
     clientPrenom?: string;
   } | null>(null);
   const [resendingEmail, setResendingEmail] = useState<string | null>(null);
+  const [resendingEmail, setResendingEmail] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
