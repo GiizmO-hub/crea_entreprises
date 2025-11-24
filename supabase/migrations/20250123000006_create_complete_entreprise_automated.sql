@@ -69,6 +69,7 @@ DECLARE
   v_result jsonb;
   v_auth_user_id uuid;
   v_role text;
+  v_client_id_for_abonnement uuid;
 BEGIN
   -- 1. Vérifier que l'utilisateur est connecté
   v_user_id := auth.uid();
@@ -247,11 +248,15 @@ BEGIN
   -- 4. Si un plan est fourni, créer l'abonnement
   IF p_plan_id IS NOT NULL THEN
     -- Vérifier que le plan existe et est actif
-    IF EXISTS (SELECT 1 FROM plans_abonnement WHERE id = p_plan_id AND actif = true) THEN
-      -- La table abonnements nécessite user_id (NOT NULL)
-      -- Utiliser v_user_id (créateur de l'entreprise)
+    IF EXISTS (SELECT 1 FROM plans_abonnement WHERE id = p_plan_id AND (actif = true OR actif IS NULL)) THEN
+      -- La table abonnements utilise client_id (renommé depuis user_id)
+      -- Si un client a été créé, utiliser son auth_user_id, sinon v_user_id (créateur entreprise)
+      v_client_id_for_abonnement := COALESCE(v_auth_user_id, v_user_id);
+      
+      -- La colonne s'appelle maintenant client_id (migration appliquée)
+      -- Utiliser client_id pour l'abonnement
       INSERT INTO abonnements (
-        user_id,
+        client_id,
         entreprise_id,
         plan_id,
         date_debut,
@@ -259,7 +264,7 @@ BEGIN
         statut
       )
       VALUES (
-        v_user_id,
+        v_client_id_for_abonnement,
         v_entreprise_id,
         p_plan_id,
         CURRENT_DATE,
