@@ -194,15 +194,35 @@ export default function Entreprises() {
         if (result.client_id) {
           message += `📧 Client créé\n`;
           message += `🎯 Espace membre créé\n`;
+          
           if (result.email && result.password) {
-            message += `\n📨 Identifiants:\n`;
-            message += `Email: ${result.email}\n`;
-            message += `Mot de passe: ${result.password}\n`;
-            
-            // Proposer d'envoyer l'email si activé
-            if (formData.envoyer_email && result.email_a_envoyer) {
-              // TODO: Appeler l'Edge Function pour envoyer l'email
-              message += `\n📧 Email envoyé automatiquement au client`;
+            // Envoyer l'email si activé
+            if (formData.envoyer_email && result.email_a_envoyer && result.client_id) {
+              try {
+                // Importer le service email
+                const { sendClientCredentialsEmail } = await import('../services/emailService');
+                
+                await sendClientCredentialsEmail({
+                  email: result.email,
+                  password: result.password,
+                  clientName: formData.nom_client || 'Client',
+                  clientPrenom: formData.prenom_client || '',
+                  entrepriseNom: formData.nom,
+                });
+                
+                message += `\n📧 Email envoyé automatiquement au client`;
+              } catch (emailError) {
+                console.error('❌ Erreur envoi email:', emailError);
+                message += `\n⚠️ Email non envoyé: ${emailError instanceof Error ? emailError.message : 'Erreur inconnue'}`;
+                message += `\n📨 Identifiants à envoyer manuellement:\n`;
+                message += `Email: ${result.email}\n`;
+                message += `Mot de passe: ${result.password}`;
+              }
+            } else {
+              message += `\n📨 Identifiants:\n`;
+              message += `Email: ${result.email}\n`;
+              message += `Mot de passe: ${result.password}\n`;
+              message += `\n💡 Pensez à envoyer ces identifiants au client`;
             }
           }
         }
@@ -212,9 +232,6 @@ export default function Entreprises() {
         }
 
         alert(message);
-        
-        // Si un espace membre a été créé avec email, on pourrait ouvrir le modal d'identifiants
-        // TODO: Intégrer le modal d'identifiants ici si nécessaire
       }
 
       setShowForm(false);
