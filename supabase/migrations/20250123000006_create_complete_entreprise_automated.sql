@@ -186,47 +186,47 @@ BEGIN
 
     -- Créer l'entrée dans utilisateurs
     INSERT INTO utilisateurs (
-        id,
-        email,
-        nom,
-        prenom,
-        role
-      )
-      VALUES (
-        v_auth_user_id,
-        p_email_client,
-        COALESCE(p_nom_client, 'Client'),
-        COALESCE(p_prenom_client, ''),
-        v_role
-      )
-      ON CONFLICT (id) DO UPDATE
-      SET
-        email = EXCLUDED.email,
-        nom = EXCLUDED.nom,
-        prenom = EXCLUDED.prenom,
-        role = EXCLUDED.role;
+      id,
+      email,
+      nom,
+      prenom,
+      role
+    )
+    VALUES (
+      v_auth_user_id,
+      p_email_client,
+      COALESCE(p_nom_client, 'Client'),
+      COALESCE(p_prenom_client, ''),
+      v_role
+    )
+    ON CONFLICT (id) DO UPDATE
+    SET
+      email = EXCLUDED.email,
+      nom = EXCLUDED.nom,
+      prenom = EXCLUDED.prenom,
+      role = EXCLUDED.role;
 
     -- Créer l'espace membre client
     INSERT INTO espaces_membres_clients (
-        client_id,
-        entreprise_id,
-        user_id,
-        password_temporaire,
-        doit_changer_password,
-        actif,
-        statut_compte,
-        configuration_validee
-      )
-      VALUES (
-        v_client_id,
-        v_entreprise_id,
-        v_auth_user_id,
-        v_password,
-        true,
-        true,
-        'actif',
-        false
-      )
+      client_id,
+      entreprise_id,
+      user_id,
+      password_temporaire,
+      doit_changer_password,
+      actif,
+      statut_compte,
+      configuration_validee
+    )
+    VALUES (
+      v_client_id,
+      v_entreprise_id,
+      v_auth_user_id,
+      v_password,
+      true,
+      true,
+      'actif',
+      false
+    )
     RETURNING id INTO v_espace_membre_id;
 
     v_email_final := p_email_client;
@@ -266,7 +266,6 @@ BEGIN
         (CURRENT_DATE + interval '1 year')::date,
         'actif'
       )
-      RETURNING id INTO v_abonnement_id;
       RETURNING id INTO v_abonnement_id;
 
       -- Lier l'abonnement à l'espace membre si créé
