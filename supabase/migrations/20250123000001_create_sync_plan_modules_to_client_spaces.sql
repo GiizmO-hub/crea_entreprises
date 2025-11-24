@@ -13,7 +13,10 @@
   - Utiliser les abonnements actifs pour trouver les espaces concernés
 */
 
--- Créer la fonction sync_plan_modules_to_client_spaces
+-- Recréer la fonction sync_plan_modules_to_client_spaces avec retour jsonb
+-- La fonction existante retourne void, on la modifie pour retourner jsonb
+DROP FUNCTION IF EXISTS sync_plan_modules_to_client_spaces(uuid) CASCADE;
+
 CREATE OR REPLACE FUNCTION sync_plan_modules_to_client_spaces(p_plan_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -59,7 +62,7 @@ BEGIN
 
   -- Parcourir tous les abonnements actifs utilisant ce plan
   FOR v_abonnement_record IN
-    SELECT 
+    SELECT DISTINCT
       ab.id as abonnement_id,
       ab.entreprise_id,
       emc.id as espace_id,
@@ -67,14 +70,14 @@ BEGIN
     FROM abonnements ab
     INNER JOIN espaces_membres_clients emc ON emc.entreprise_id = ab.entreprise_id
     WHERE ab.plan_id = p_plan_id
-      AND ab.actif = true
-      AND (ab.statut IS NULL OR ab.statut = 'actif')
+      AND (ab.actif = true OR ab.statut = 'actif')
       AND emc.actif = true
   LOOP
     -- Mettre à jour les modules_actifs de l'espace membre
     UPDATE espaces_membres_clients
     SET 
       modules_actifs = v_modules_json,
+      abonnement_id = v_abonnement_record.abonnement_id,
       updated_at = NOW()
     WHERE id = v_abonnement_record.espace_id;
     

@@ -345,13 +345,20 @@ export default function Parametres() {
               emailToRole[u.email] = u.role || 'client';
             });
 
-            // Mapper les rôles par email de client (remplace si le rôle via espace n'est pas client_super_admin)
+            // Mapper les rôles par email de client (TOUJOURS utiliser le rôle depuis utilisateurs - source de vérité)
             data.forEach((c: { id: string; email?: string }) => {
               if (c.email && emailToRole[c.email]) {
-                // Toujours utiliser le rôle depuis utilisateurs (source de vérité)
-                // Cela garantit que les changements récents sont pris en compte
-                rolesMap[c.id] = emailToRole[c.email];
-                console.log(`📌 Rôle récupéré via email pour client ${c.id} (${c.email}): ${emailToRole[c.email]}`);
+                // TOUJOURS utiliser le rôle depuis utilisateurs via email (écrase celui de l'espace si différent)
+                // Cela garantit que les changements récents (comme toggle Super Admin) sont pris en compte
+                const newRole = emailToRole[c.email];
+                const oldRole = rolesMap[c.id];
+                rolesMap[c.id] = newRole;
+                
+                if (oldRole !== newRole) {
+                  console.log(`🔄 Rôle changé pour client ${c.id} (${c.email}): "${oldRole}" → "${newRole}"`);
+                } else {
+                  console.log(`📌 Rôle récupéré via email pour client ${c.id} (${c.email}): ${newRole}`);
+                }
               }
             });
           }
