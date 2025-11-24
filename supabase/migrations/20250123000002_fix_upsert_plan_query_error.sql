@@ -30,6 +30,7 @@ DECLARE
   v_new_plan_id uuid;
   v_module_item jsonb;
   v_user_role text;
+  v_existing_plan_id uuid;
 BEGIN
   -- Vérifier que l'utilisateur est super admin (utiliser LIMIT 1 pour éviter "more than one row")
   SELECT role INTO v_user_role
@@ -74,23 +75,19 @@ BEGIN
     RETURNING id INTO v_new_plan_id;
   ELSE
     -- Mise à jour - Vérifier si le nouveau nom n'est pas déjà utilisé par un autre plan
-    DECLARE
-      v_existing_plan_id uuid;
-    BEGIN
-      SELECT id INTO v_existing_plan_id
-      FROM plans_abonnement
-      WHERE nom = p_nom
-        AND id != p_plan_id
-      LIMIT 1;
-      
-      IF v_existing_plan_id IS NOT NULL THEN
-        -- Un autre plan avec ce nom existe déjà
-        RETURN jsonb_build_object(
-          'success', false,
-          'error', format('Un autre plan avec le nom "%s" existe déjà. Veuillez utiliser un nom différent.', p_nom)
-        );
-      END IF;
-    END;
+    SELECT id INTO v_existing_plan_id
+    FROM plans_abonnement
+    WHERE nom = p_nom
+      AND id != p_plan_id
+    LIMIT 1;
+    
+    IF v_existing_plan_id IS NOT NULL THEN
+      -- Un autre plan avec ce nom existe déjà
+      RETURN jsonb_build_object(
+        'success', false,
+        'error', format('Un autre plan avec le nom "%s" existe déjà. Veuillez utiliser un nom différent.', p_nom)
+      );
+    END IF;
     
     -- Mise à jour du plan
     v_new_plan_id := p_plan_id;
