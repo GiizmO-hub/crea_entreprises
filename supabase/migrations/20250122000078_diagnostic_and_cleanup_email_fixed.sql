@@ -105,9 +105,8 @@ DECLARE
   v_total_deleted integer := 0;
   v_deleted_count integer;
 BEGIN
-  -- Vérifier que l'utilisateur est admin (ou utiliser service role)
-  -- Si auth.uid() est NULL, c'est probablement le service role, donc autoriser
-  IF auth.uid() IS NOT NULL AND NOT is_admin_user_simple() THEN
+  -- Vérifier que l'utilisateur est admin
+  IF NOT is_admin_user_simple() THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Accès non autorisé - Admin requis'
