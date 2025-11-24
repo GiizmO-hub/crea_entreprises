@@ -192,7 +192,13 @@ export default function Parametres() {
 
     try {
       // Utiliser la fonction RPC pour supprimer complètement le client
-      const { data, error } = await supabase.rpc('delete_client_complete_unified', {
+        interface DeleteClientResult {
+          success: boolean;
+          message?: string;
+          error?: string;
+        }
+        
+        const { data, error } = await supabase.rpc<DeleteClientResult>('delete_client_complete_unified', {
         p_client_id: client.id
       });
 

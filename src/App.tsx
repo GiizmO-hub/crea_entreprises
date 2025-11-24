@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './hooks/useAuth';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import Auth from './pages/Auth';
