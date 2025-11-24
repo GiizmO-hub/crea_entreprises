@@ -4,7 +4,7 @@
  * Affiche les informations d'un client dans une carte
  */
 
-import { Users, Mail, Edit, Trash2, Key } from 'lucide-react';
+import { Users, Mail, Edit, Trash2, UserPlus } from 'lucide-react';
 import { Client } from './types';
 
 interface ClientCardProps {
@@ -76,7 +76,7 @@ export function ClientCard({
             className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg transition-all"
             title="Créer un espace membre"
           >
-            <Key className="w-4 h-4" />
+            <UserPlus className="w-4 h-4" />
           </button>
         )}
         <button
