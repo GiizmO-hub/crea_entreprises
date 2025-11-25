@@ -668,46 +668,43 @@ export default function Parametres() {
       console.log('🔍 Réponse toggle super admin:', data);
       
       if (data?.success) {
+        const confirmedRole = data.role || (newStatus ? 'client_super_admin' : 'client');
+        console.log(`✅ Rôle confirmé par la fonction RPC: "${confirmedRole}"`);
+        
         alert(
           newStatus
             ? '✅ Client défini comme super admin de son espace.\n💡 Le client doit se déconnecter et se reconnecter pour voir le badge Super Admin.'
             : '✅ Statut super admin retiré du client.'
         );
         
-        // Mettre à jour immédiatement le rôle dans le state local pour un feedback visuel instantané
-        setClients(prevClients => prevClients.map(c => 
-          c.id === client.id 
-            ? { ...c, role: newStatus ? 'client_super_admin' : 'client' }
-            : c
-        ));
+        // Mettre à jour immédiatement le rôle dans le state local avec le rôle confirmé par la fonction RPC
+        setClients(prevClients => prevClients.map(c => {
+          if (c.id === client.id) {
+            const updatedClient = { ...c, role: confirmedRole };
+            console.log(`🔄 Mise à jour state local pour client ${c.email}: "${c.role}" → "${confirmedRole}"`);
+            return updatedClient;
+          }
+          return c;
+        }));
         
-        // Attendre pour que la base de données se synchronise
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Forcer un rechargement immédiat et forcer le re-render
-        console.log('🔄 Premier rechargement après toggle Super Admin');
-        await loadAllClients();
-        if (activeTab === 'entreprise') {
-          await loadEntrepriseConfig();
-        }
-        
-        // Forcer un deuxième rechargement après un délai pour garantir la synchronisation
+        // Ne PAS recharger immédiatement - attendre que la base de données soit complètement synchronisée
+        // Attendre 3 secondes avant de recharger pour garantir que la transaction est terminée
         setTimeout(async () => {
-          console.log('🔄 Deuxième rechargement après toggle Super Admin');
+          console.log('🔄 Premier rechargement après toggle Super Admin (3s)');
           await loadAllClients();
           if (activeTab === 'entreprise') {
             await loadEntrepriseConfig();
           }
-        }, 2000);
+        }, 3000);
         
-        // Forcer un troisième rechargement pour être sûr
+        // Un deuxième rechargement pour confirmer
         setTimeout(async () => {
-          console.log('🔄 Troisième rechargement après toggle Super Admin');
+          console.log('🔄 Deuxième rechargement après toggle Super Admin (5s)');
           await loadAllClients();
           if (activeTab === 'entreprise') {
             await loadEntrepriseConfig();
           }
-        }, 4000);
+        }, 5000);
       } else {
         console.error('❌ Échec toggle super admin:', data);
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
