@@ -746,6 +746,17 @@ export default function Parametres() {
             : '✅ Statut super admin retiré du client.'
         );
         
+        // Stocker le rôle confirmé dans le cache pour préserver après rechargement et changement d'onglet
+        setConfirmedRolesCache(prev => {
+          const updated = {
+            ...prev,
+            [client.id]: confirmedRole
+          };
+          console.log(`💾 Cache des rôles mis à jour pour client ${client.id}: "${confirmedRole}"`);
+          console.log(`💾 Cache complet:`, updated);
+          return updated;
+        });
+        
         // Mettre à jour immédiatement le rôle dans le state local avec le rôle confirmé par la fonction RPC
         setClients(prevClients => prevClients.map(c => {
           if (c.id === client.id) {
