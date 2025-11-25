@@ -546,13 +546,19 @@ export default function Parametres() {
           entrepriseNom = (c.entreprises as { nom: string }).nom || 'N/A';
         }
         
-        // Toujours récupérer le rôle depuis rolesMap (qui est maintenant toujours mis à jour via email)
-        // Si le rôle n'est pas trouvé, utiliser 'client' par défaut
-        const clientRole = rolesMap[c.id] || 'client';
+        // Récupérer le rôle avec priorité: cache confirmé > rolesMap > 'client'
+        // Le cache a la priorité car il contient le rôle confirmé par la fonction RPC
+        const cachedRole = confirmedRolesCache[c.id];
+        const dbRole = rolesMap[c.id];
+        const clientRole = cachedRole || dbRole || 'client';
         
-        // Log si le rôle a été trouvé
-        if (!rolesMap[c.id] && c.email) {
+        // Log pour diagnostiquer quelle source est utilisée
+        if (cachedRole && cachedRole !== dbRole) {
+          console.log(`🔧 Client ${c.id} (${c.email}): Utilisation du rôle depuis le cache: "${cachedRole}" (DB: "${dbRole || 'non trouvé'}")`);
+        } else if (!rolesMap[c.id] && !cachedRole && c.email) {
           console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}), utilisation de 'client' par défaut`);
+        } else if (dbRole) {
+          console.log(`📌 Client ${c.id} (${c.email}): Rôle depuis DB: "${dbRole}"`);
         }
         
         const clientInfo: ClientInfo = {
