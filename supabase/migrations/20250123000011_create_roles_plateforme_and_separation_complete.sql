@@ -359,6 +359,10 @@ $$;
 COMMENT ON FUNCTION has_module_access IS 'Vérifie si un utilisateur (plateforme ou client) a accès à un module selon son rôle';
 
 -- ✅ 10. Mettre à jour is_platform_super_admin pour utiliser equipe_plateforme
+-- Supprimer toutes les anciennes versions de la fonction
+DROP FUNCTION IF EXISTS is_platform_super_admin() CASCADE;
+DROP FUNCTION IF EXISTS is_platform_super_admin(uuid) CASCADE;
+
 CREATE OR REPLACE FUNCTION is_platform_super_admin(p_user_id uuid DEFAULT NULL)
 RETURNS boolean
 LANGUAGE plpgsql
