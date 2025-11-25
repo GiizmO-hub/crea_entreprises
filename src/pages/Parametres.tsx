@@ -418,7 +418,7 @@ export default function Parametres() {
         }
       }
       
-      // Récupérer les rôles pour TOUS les clients via email (y compris ceux sans espace)
+      // Récupérer les rôles pour TOUS les clients via email ET via user_id (double vérification)
       try {
         const clientEmails = data
           .map((c: { email?: string }) => c.email)
@@ -427,43 +427,84 @@ export default function Parametres() {
         if (clientEmails.length > 0) {
           console.log(`🔍 Récupération des rôles pour ${clientEmails.length} emails:`, clientEmails);
           
-          // Utiliser select avec une requête explicite pour éviter les problèmes de cache
+          // Méthode 1: Récupérer par email (méthode principale)
           const { data: usersByEmailData, error: usersByEmailError } = await supabase
             .from('utilisateurs')
-            .select('email, role')
+            .select('id, email, role')
             .in('email', clientEmails);
 
           if (usersByEmailError) {
-            console.error('❌ Erreur lors de la récupération des rôles:', usersByEmailError);
+            console.error('❌ Erreur lors de la récupération des rôles par email:', usersByEmailError);
           }
 
-          if (usersByEmailData) {
-            console.log(`✅ Rôles récupérés depuis utilisateurs:`, usersByEmailData);
+          // Méthode 2: Récupérer aussi par user_id depuis espaces_membres_clients (fallback)
+          const userIdsFromEspaces = Object.values(espacesMap)
+            .map(e => e.user_id)
+            .filter((id): id is string => !!id);
+
+          let usersByIdData: Array<{ id: string; email: string; role: string }> = [];
+          if (userIdsFromEspaces.length > 0) {
+            const { data: usersByIdDataTemp, error: usersByIdError } = await supabase
+              .from('utilisateurs')
+              .select('id, email, role')
+              .in('id', userIdsFromEspaces);
             
+            if (!usersByIdError && usersByIdDataTemp) {
+              usersByIdData = usersByIdDataTemp;
+              console.log(`✅ Rôles récupérés par user_id:`, usersByIdData);
+            }
+          }
+
+          if (usersByEmailData || usersByIdData.length > 0) {
+            // Créer une map combinée email -> role et id -> role
             const emailToRole: Record<string, string> = {};
-            usersByEmailData.forEach((u: { email: string; role: string }) => {
-              emailToRole[u.email] = u.role || 'client';
-              console.log(`   📋 Email: ${u.email} → Rôle: "${u.role}"`);
+            const idToRole: Record<string, string> = {};
+            
+            // Ajouter les rôles depuis la requête par email
+            if (usersByEmailData) {
+              usersByEmailData.forEach((u: { id: string; email: string; role: string }) => {
+                emailToRole[u.email] = u.role || 'client';
+                idToRole[u.id] = u.role || 'client';
+                console.log(`   📋 Email: ${u.email} (ID: ${u.id}) → Rôle: "${u.role}"`);
+              });
+            }
+            
+            // Ajouter les rôles depuis la requête par user_id (écrase si différent)
+            usersByIdData.forEach((u: { id: string; email: string; role: string }) => {
+              if (!emailToRole[u.email] || idToRole[u.id]) {
+                emailToRole[u.email] = u.role || 'client';
+              }
+              idToRole[u.id] = u.role || 'client';
+              console.log(`   📋 User ID: ${u.id} (Email: ${u.email}) → Rôle: "${u.role}"`);
             });
 
-            // Mapper les rôles par email de client (TOUJOURS utiliser le rôle depuis utilisateurs - source de vérité)
+            // Mapper les rôles par email de client ET par user_id (double vérification)
             data.forEach((c: { id: string; email?: string }) => {
+              const espace = espacesMap[c.id];
+              let roleFound: string | null = null;
+              
+              // Priorité 1: Rôle par email
               if (c.email && emailToRole[c.email]) {
-                // TOUJOURS utiliser le rôle depuis utilisateurs via email (écrase celui de l'espace si différent)
-                // Cela garantit que les changements récents (comme toggle Super Admin) sont pris en compte
-                const newRole = emailToRole[c.email];
+                roleFound = emailToRole[c.email];
+              }
+              
+              // Priorité 2: Rôle par user_id (si email non trouvé ou différent)
+              if (!roleFound && espace?.user_id && idToRole[espace.user_id]) {
+                roleFound = idToRole[espace.user_id];
+                console.log(`   🔄 Rôle trouvé par user_id pour client ${c.id}: "${roleFound}"`);
+              }
+              
+              if (roleFound) {
                 const oldRole = rolesMap[c.id];
+                rolesMap[c.id] = roleFound;
                 
-                // Toujours mettre à jour, même si identique, pour forcer le re-render
-                rolesMap[c.id] = newRole;
-                
-                if (oldRole !== newRole) {
-                  console.log(`🔄 Rôle changé pour client ${c.id} (${c.email}): "${oldRole}" → "${newRole}"`);
+                if (oldRole !== roleFound) {
+                  console.log(`🔄 Rôle changé pour client ${c.id} (${c.email}): "${oldRole}" → "${roleFound}"`);
                 } else {
-                  console.log(`📌 Rôle récupéré via email pour client ${c.id} (${c.email}): ${newRole}`);
+                  console.log(`📌 Rôle récupéré pour client ${c.id} (${c.email}): ${roleFound}`);
                 }
               } else if (c.email) {
-                console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}) dans utilisateurs. Emails disponibles:`, Object.keys(emailToRole));
+                console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}) dans utilisateurs`);
               }
             });
           } else {
@@ -471,7 +512,7 @@ export default function Parametres() {
           }
         }
       } catch (emailRoleError) {
-        console.error('❌ Erreur récupération rôles via email:', emailRoleError);
+        console.error('❌ Erreur récupération rôles:', emailRoleError);
       }
 
       // Transformer les données pour correspondre à ClientInfo
@@ -702,17 +743,34 @@ export default function Parametres() {
           return c;
         }));
         
-        // Ne PAS recharger loadAllClients() après toggle - cela écrase le rôle confirmé
-        // Le rôle confirmé par la fonction RPC est la source de vérité et reste dans le state local
-        // On ne rechargera que si l'utilisateur change d'onglet ou recharge la page manuellement
-        
-        // Recharger uniquement la config entreprise (pour mettre à jour le compteur de super admins)
-        if (activeTab === 'entreprise') {
-          setTimeout(async () => {
-            console.log('🔄 Rechargement config entreprise après toggle Super Admin (2s)');
+        // Recharger après un délai pour synchroniser avec la base de données
+        // Mais préserver le rôle confirmé par la fonction RPC si le rechargement échoue
+        setTimeout(async () => {
+          console.log('🔄 Rechargement clients après toggle Super Admin (3s)');
+          const savedRole = confirmedRole;
+          
+          // Recharger les clients
+          await loadAllClients();
+          
+          // Vérifier si le rôle a été perdu après rechargement
+          setClients(prevClients => {
+            const updatedClient = prevClients.find(c => c.id === client.id);
+            if (updatedClient && updatedClient.role !== savedRole) {
+              console.warn(`⚠️ Rôle perdu après rechargement: "${savedRole}" → "${updatedClient.role}"`);
+              console.warn(`🔧 Forcer le rôle confirmé par la fonction RPC: "${savedRole}"`);
+              // Forcer le rôle confirmé par la fonction RPC
+              return prevClients.map(c => 
+                c.id === client.id ? { ...c, role: savedRole } : c
+              );
+            }
+            return prevClients;
+          });
+          
+          // Recharger la config entreprise pour mettre à jour le compteur
+          if (activeTab === 'entreprise') {
             await loadEntrepriseConfig();
-          }, 2000);
-        }
+          }
+        }, 3000);
       } else {
         console.error('❌ Échec toggle super admin:', data);
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
