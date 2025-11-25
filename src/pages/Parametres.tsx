@@ -384,9 +384,9 @@ export default function Parametres() {
     try {
       setLoading(true);
       
-      // Requête plus simple qui fonctionne mieux avec RLS
+      // Utiliser la vue clients_with_roles pour récupérer les clients avec leurs rôles
       const { data, error } = await supabase
-        .from('clients')
+        .from('clients_with_roles')
         .select(`
           id,
           entreprise_id,
@@ -394,6 +394,9 @@ export default function Parametres() {
           prenom,
           email,
           created_at,
+          role_code,
+          role_nom,
+          role_niveau,
           entreprises(nom),
           espaces_membres_clients(
             id,
@@ -439,136 +442,22 @@ export default function Parametres() {
       }
       console.log('📦 Espaces chargés:', Object.keys(espacesMap).length, 'espaces pour', clientIds.length, 'clients');
 
-      // Récupérer les rôles depuis utilisateurs via espaces_membres_clients
+      // ✅ NOUVEAU: Récupérer les rôles directement depuis la table roles via clients.role_id
+      // Plus simple et plus fiable avec la nouvelle structure
       let rolesMap: Record<string, string> = {};
       
-      if (espacesData && espacesData.length > 0) {
-        const userIds = espacesData
-          .map((e: { user_id: string | null }) => e.user_id)
-          .filter((uid: string | null): uid is string => uid !== null);
-
-        if (userIds.length > 0) {
-          try {
-            const { data: usersData } = await supabase
-              .from('utilisateurs')
-              .select('id, role')
-              .in('id', userIds);
-
-            if (usersData) {
-              const userIdToRole: Record<string, string> = {};
-              usersData.forEach((u: { id: string; role: string }) => {
-                userIdToRole[u.id] = u.role || 'client';
-              });
-
-              // Mapper les rôles par client_id
-              espacesData.forEach((espace: { client_id: string; user_id: string | null }) => {
-                if (espace.user_id && userIdToRole[espace.user_id]) {
-                  rolesMap[espace.client_id] = userIdToRole[espace.user_id];
-                }
-              });
-            }
-          } catch (roleError) {
-            console.warn('⚠️ Erreur récupération rôles via espaces:', roleError);
-          }
+      // Les rôles sont déjà dans data depuis clients_with_roles (role_code)
+      data.forEach((c: { id: string; role_code?: string }) => {
+        if (c.role_code) {
+          rolesMap[c.id] = c.role_code;
+          console.log(`📌 Rôle récupéré depuis clients_with_roles pour client ${c.id}: "${c.role_code}"`);
+        } else {
+          // Par défaut, 'client' si pas de rôle défini
+          rolesMap[c.id] = 'client';
         }
-      }
+      });
       
-      // Récupérer les rôles pour TOUS les clients via email ET via user_id (double vérification)
-      try {
-        const clientEmails = data
-          .map((c: { email?: string }) => c.email)
-          .filter((email: string | undefined): email is string => !!email);
-
-        if (clientEmails.length > 0) {
-          console.log(`🔍 Récupération des rôles pour ${clientEmails.length} emails:`, clientEmails);
-          
-          // Méthode 1: Récupérer par email (méthode principale)
-          const { data: usersByEmailData, error: usersByEmailError } = await supabase
-            .from('utilisateurs')
-            .select('id, email, role')
-            .in('email', clientEmails);
-
-          if (usersByEmailError) {
-            console.error('❌ Erreur lors de la récupération des rôles par email:', usersByEmailError);
-          }
-
-          // Méthode 2: Récupérer aussi par user_id depuis espaces_membres_clients (fallback)
-          const userIdsFromEspaces = Object.values(espacesMap)
-            .map(e => e.user_id)
-            .filter((id): id is string => !!id);
-
-          let usersByIdData: Array<{ id: string; email: string; role: string }> = [];
-          if (userIdsFromEspaces.length > 0) {
-            const { data: usersByIdDataTemp, error: usersByIdError } = await supabase
-              .from('utilisateurs')
-              .select('id, email, role')
-              .in('id', userIdsFromEspaces);
-            
-            if (!usersByIdError && usersByIdDataTemp) {
-              usersByIdData = usersByIdDataTemp;
-              console.log(`✅ Rôles récupérés par user_id:`, usersByIdData);
-            }
-          }
-
-          if (usersByEmailData || usersByIdData.length > 0) {
-            // Créer une map combinée email -> role et id -> role
-            const emailToRole: Record<string, string> = {};
-            const idToRole: Record<string, string> = {};
-            
-            // Ajouter les rôles depuis la requête par email
-            if (usersByEmailData) {
-              usersByEmailData.forEach((u: { id: string; email: string; role: string }) => {
-                emailToRole[u.email] = u.role || 'client';
-                idToRole[u.id] = u.role || 'client';
-                console.log(`   📋 Email: ${u.email} (ID: ${u.id}) → Rôle: "${u.role}"`);
-              });
-            }
-            
-            // Ajouter les rôles depuis la requête par user_id (écrase si différent)
-            usersByIdData.forEach((u: { id: string; email: string; role: string }) => {
-              if (!emailToRole[u.email] || idToRole[u.id]) {
-                emailToRole[u.email] = u.role || 'client';
-              }
-              idToRole[u.id] = u.role || 'client';
-              console.log(`   📋 User ID: ${u.id} (Email: ${u.email}) → Rôle: "${u.role}"`);
-            });
-
-            // Mapper les rôles par email de client ET par user_id (double vérification)
-            data.forEach((c: { id: string; email?: string }) => {
-              const espace = espacesMap[c.id];
-              let roleFound: string | null = null;
-              
-              // Priorité 1: Rôle par email
-              if (c.email && emailToRole[c.email]) {
-                roleFound = emailToRole[c.email];
-              }
-              
-              // Priorité 2: Rôle par user_id (si email non trouvé ou différent)
-              if (!roleFound && espace?.user_id && idToRole[espace.user_id]) {
-                roleFound = idToRole[espace.user_id];
-                console.log(`   🔄 Rôle trouvé par user_id pour client ${c.id}: "${roleFound}"`);
-              }
-              
-              if (roleFound) {
-                const oldRole = rolesMap[c.id];
-                rolesMap[c.id] = roleFound;
-                
-                if (oldRole !== roleFound) {
-                  console.log(`🔄 Rôle changé pour client ${c.id} (${c.email}): "${oldRole}" → "${roleFound}"`);
-                } else {
-                  console.log(`📌 Rôle récupéré pour client ${c.id} (${c.email}): ${roleFound}`);
-                }
-              } else if (c.email) {
-                console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}) dans utilisateurs`);
-              }
-            });
-          } else {
-            console.warn('⚠️ Aucun rôle trouvé dans utilisateurs pour les emails fournis');
-          }
-        }
-      } catch (emailRoleError) {
-        console.error('❌ Erreur récupération rôles:', emailRoleError);
-      }
+      console.log(`✅ Rôles récupérés depuis clients_with_roles:`, Object.keys(rolesMap).length, 'clients');
 
       // Transformer les données pour correspondre à ClientInfo
       const transformedClients: ClientInfo[] = data.map((client: unknown) => {
