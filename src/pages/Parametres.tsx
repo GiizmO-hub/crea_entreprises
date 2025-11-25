@@ -63,7 +63,30 @@ export default function Parametres() {
   }>>([]);
   const [loadingConfig, setLoadingConfig] = useState(false);
   // Cache des rôles confirmés par la fonction RPC pour préserver entre rechargements
-  const [confirmedRolesCache, setConfirmedRolesCache] = useState<Record<string, string>>({});
+  // Initialiser depuis localStorage pour persister même après navigation
+  const [confirmedRolesCache, setConfirmedRolesCache] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem('confirmedRolesCache');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log('📦 Cache des rôles restauré depuis localStorage:', parsed);
+        return parsed || {};
+      }
+    } catch (error) {
+      console.error('❌ Erreur lecture cache depuis localStorage:', error);
+    }
+    return {};
+  });
+  
+  // Sauvegarder le cache dans localStorage à chaque modification
+  useEffect(() => {
+    try {
+      localStorage.setItem('confirmedRolesCache', JSON.stringify(confirmedRolesCache));
+      console.log('💾 Cache des rôles sauvegardé dans localStorage:', confirmedRolesCache);
+    } catch (error) {
+      console.error('❌ Erreur sauvegarde cache dans localStorage:', error);
+    }
+  }, [confirmedRolesCache]);
   
 
   useEffect(() => {
@@ -571,9 +594,27 @@ export default function Parametres() {
           entrepriseNom = (c.entreprises as { nom: string }).nom || 'N/A';
         }
         
-        // Récupérer le rôle avec priorité: cache confirmé > rolesMap > 'client'
-        // Le cache a la priorité car il contient le rôle confirmé par la fonction RPC
-        const cachedRole = confirmedRolesCache[c.id];
+        // Récupérer le rôle avec priorité: cache confirmé (localStorage) > cache state > rolesMap > 'client'
+        // Le cache a la priorité ABSOLUE car il contient le rôle confirmé par la fonction RPC
+        // Vérifier d'abord le cache state, puis localStorage si nécessaire
+        let cachedRole = confirmedRolesCache[c.id];
+        if (!cachedRole && c.id) {
+          try {
+            const saved = localStorage.getItem('confirmedRolesCache');
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              cachedRole = parsed[c.id];
+              if (cachedRole) {
+                console.log(`📦 Rôle récupéré depuis localStorage pour client ${c.id}: "${cachedRole}"`);
+                // Mettre à jour le state pour cohérence
+                setConfirmedRolesCache(prev => ({ ...prev, [c.id]: cachedRole! }));
+              }
+            }
+          } catch (error) {
+            console.error('❌ Erreur lecture cache depuis localStorage:', error);
+          }
+        }
+        
         const dbRole = rolesMap[c.id];
         const clientRole = cachedRole || dbRole || 'client';
         
@@ -582,7 +623,7 @@ export default function Parametres() {
           console.log(`🔧 Client ${c.id} (${c.email}): Utilisation du rôle depuis le cache: "${cachedRole}" (DB: "${dbRole || 'non trouvé'}")`);
         } else if (!rolesMap[c.id] && !cachedRole && c.email) {
           console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}), utilisation de 'client' par défaut`);
-        } else if (dbRole) {
+        } else if (dbRole && !cachedRole) {
           console.log(`📌 Client ${c.id} (${c.email}): Rôle depuis DB: "${dbRole}"`);
         }
         
