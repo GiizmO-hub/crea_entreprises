@@ -70,6 +70,8 @@ DECLARE
   v_auth_user_id uuid;
   v_role text;
   v_client_id_for_abonnement uuid;
+  v_plan_montant_mensuel numeric;
+  v_plan_mode_paiement text;
 BEGIN
   -- 1. Vérifier que l'utilisateur est connecté
   v_user_id := auth.uid();
@@ -249,19 +251,31 @@ BEGIN
   IF p_plan_id IS NOT NULL THEN
     -- Vérifier que le plan existe et est actif
     IF EXISTS (SELECT 1 FROM plans_abonnement WHERE id = p_plan_id AND (actif = true OR actif IS NULL)) THEN
+      -- Récupérer les informations du plan (montant, mode paiement)
+      SELECT 
+        COALESCE(prix_mensuel, 0),
+        'mensuel'
+      INTO 
+        v_plan_montant_mensuel,
+        v_plan_mode_paiement
+      FROM plans_abonnement
+      WHERE id = p_plan_id;
+      
       -- La table abonnements utilise client_id (renommé depuis user_id)
       -- Si un client a été créé, utiliser son auth_user_id, sinon v_user_id (créateur entreprise)
       v_client_id_for_abonnement := COALESCE(v_auth_user_id, v_user_id);
       
       -- La colonne s'appelle maintenant client_id (migration appliquée)
-      -- Utiliser client_id pour l'abonnement
+      -- Inclure explicitement montant_mensuel et mode_paiement pour éviter les erreurs NOT NULL
       INSERT INTO abonnements (
         client_id,
         entreprise_id,
         plan_id,
         date_debut,
         date_fin,
-        statut
+        statut,
+        montant_mensuel,
+        mode_paiement
       )
       VALUES (
         v_client_id_for_abonnement,
@@ -269,7 +283,9 @@ BEGIN
         p_plan_id,
         CURRENT_DATE,
         (CURRENT_DATE + interval '1 year')::date,
-        'actif'
+        'actif',
+        COALESCE(v_plan_montant_mensuel, 0),
+        COALESCE(v_plan_mode_paiement, 'mensuel')
       )
       RETURNING id INTO v_abonnement_id;
 
