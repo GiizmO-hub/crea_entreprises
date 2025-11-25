@@ -64,6 +64,7 @@ export default function Parametres() {
   const [loadingConfig, setLoadingConfig] = useState(false);
   // Cache des rôles confirmés par la fonction RPC pour préserver entre rechargements
   const [confirmedRolesCache, setConfirmedRolesCache] = useState<Record<string, string>>({});
+  
 
   useEffect(() => {
     if (user) {
@@ -80,9 +81,6 @@ export default function Parametres() {
       loadOptions();
     }
   }, [user, isSuperAdmin, activeTab]);
-  
-  // Stocker le dernier rôle confirmé par la fonction RPC pour préserver après rechargement
-  const [confirmedRolesCache, setConfirmedRolesCache] = useState<Record<string, string>>({});
   
   // Ne PAS recharger automatiquement les clients quand on change d'onglet si on vient de faire un toggle
   // Cela évite d'écraser le state local avec des données potentiellement obsolètes
