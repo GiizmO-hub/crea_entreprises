@@ -665,16 +665,27 @@ export default function Parametres() {
         return;
       }
 
+      console.log('🔍 Réponse toggle super admin:', data);
+      
       if (data?.success) {
         alert(
           newStatus
             ? '✅ Client défini comme super admin de son espace.\n💡 Le client doit se déconnecter et se reconnecter pour voir le badge Super Admin.'
             : '✅ Statut super admin retiré du client.'
         );
+        
+        // Mettre à jour immédiatement le rôle dans le state local pour un feedback visuel instantané
+        setClients(prevClients => prevClients.map(c => 
+          c.id === client.id 
+            ? { ...c, role: newStatus ? 'client_super_admin' : 'client' }
+            : c
+        ));
+        
         // Attendre pour que la base de données se synchronise
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Forcer un rechargement immédiat et forcer le re-render
+        console.log('🔄 Premier rechargement après toggle Super Admin');
         await loadAllClients();
         if (activeTab === 'entreprise') {
           await loadEntrepriseConfig();
@@ -682,12 +693,12 @@ export default function Parametres() {
         
         // Forcer un deuxième rechargement après un délai pour garantir la synchronisation
         setTimeout(async () => {
-          console.log('🔄 Rechargement final après toggle Super Admin');
+          console.log('🔄 Deuxième rechargement après toggle Super Admin');
           await loadAllClients();
           if (activeTab === 'entreprise') {
             await loadEntrepriseConfig();
           }
-        }, 3000);
+        }, 2000);
         
         // Forcer un troisième rechargement pour être sûr
         setTimeout(async () => {
@@ -696,8 +707,9 @@ export default function Parametres() {
           if (activeTab === 'entreprise') {
             await loadEntrepriseConfig();
           }
-        }, 5000);
+        }, 4000);
       } else {
+        console.error('❌ Échec toggle super admin:', data);
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
     } catch (error: unknown) {
