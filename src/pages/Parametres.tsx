@@ -422,15 +422,25 @@ export default function Parametres() {
           .filter((email: string | undefined): email is string => !!email);
 
         if (clientEmails.length > 0) {
-          const { data: usersByEmailData } = await supabase
+          console.log(`🔍 Récupération des rôles pour ${clientEmails.length} emails:`, clientEmails);
+          
+          // Utiliser select avec une requête explicite pour éviter les problèmes de cache
+          const { data: usersByEmailData, error: usersByEmailError } = await supabase
             .from('utilisateurs')
             .select('email, role')
             .in('email', clientEmails);
 
+          if (usersByEmailError) {
+            console.error('❌ Erreur lors de la récupération des rôles:', usersByEmailError);
+          }
+
           if (usersByEmailData) {
+            console.log(`✅ Rôles récupérés depuis utilisateurs:`, usersByEmailData);
+            
             const emailToRole: Record<string, string> = {};
             usersByEmailData.forEach((u: { email: string; role: string }) => {
               emailToRole[u.email] = u.role || 'client';
+              console.log(`   📋 Email: ${u.email} → Rôle: "${u.role}"`);
             });
 
             // Mapper les rôles par email de client (TOUJOURS utiliser le rôle depuis utilisateurs - source de vérité)
@@ -450,13 +460,15 @@ export default function Parametres() {
                   console.log(`📌 Rôle récupéré via email pour client ${c.id} (${c.email}): ${newRole}`);
                 }
               } else if (c.email) {
-                console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}) dans utilisateurs`);
+                console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}) dans utilisateurs. Emails disponibles:`, Object.keys(emailToRole));
               }
             });
+          } else {
+            console.warn('⚠️ Aucun rôle trouvé dans utilisateurs pour les emails fournis');
           }
         }
       } catch (emailRoleError) {
-        console.warn('⚠️ Erreur récupération rôles via email:', emailRoleError);
+        console.error('❌ Erreur récupération rôles via email:', emailRoleError);
       }
 
       // Transformer les données pour correspondre à ClientInfo
