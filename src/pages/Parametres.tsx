@@ -249,10 +249,10 @@ export default function Parametres() {
         .select('*', { count: 'exact', head: true })
         .eq('entreprise_id', entrepriseId);
 
-      // Récupérer les IDs des clients pour compter les espaces
+      // ✅ NOUVEAU: Récupérer les clients avec leurs rôles depuis clients_with_roles
       const { data: clientsData } = await supabase
-        .from('clients')
-        .select('id, email')
+        .from('clients_with_roles')
+        .select('id, email, role_code')
         .eq('entreprise_id', entrepriseId);
 
       const clientIds = clientsData?.map((c: { id: string }) => c.id) || [];
@@ -282,74 +282,21 @@ export default function Parametres() {
       
       console.log(`📊 Entreprise ${entrepriseId}: ${abonnementsCount} abonnement(s) actif(s)`, abonnementsData);
 
-      // Compter les clients super admins
+      // ✅ NOUVEAU: Compter les clients super admins depuis clients_with_roles (role_code)
       let superAdminsCount = 0;
       if (clientsData && clientsData.length > 0) {
-        const clientEmails = clientsData.map((c: { email?: string }) => c.email).filter(Boolean) as string[];
-        if (clientEmails.length > 0) {
-          console.log(`🔍 Recherche super admins pour entreprise ${entrepriseId}: ${clientEmails.length} emails`, clientEmails);
-          
-          // Vérifier dans utilisateurs d'abord par email
-          const { data: usersData, error: usersError } = await supabase
-            .from('utilisateurs')
-            .select('email, role')
-            .in('email', clientEmails)
-            .eq('role', 'client_super_admin');
-
-          if (usersError) {
-            console.error(`❌ Erreur récupération super admins par email:`, usersError);
-          }
-
-          if (usersData) {
-            superAdminsCount = usersData.length;
-            console.log(`✅ Super admins trouvés par email:`, usersData);
-          }
-          
-          // Si pas trouvé ou pour double vérification, vérifier aussi via espaces_membres_clients
-          if (superAdminsCount === 0 && clientIds.length > 0) {
-            console.log(`🔍 Recherche super admins par user_id (fallback) pour ${clientIds.length} clients`);
-            const { data: espacesForRoles } = await supabase
-              .from('espaces_membres_clients')
-              .select('user_id')
-              .in('client_id', clientIds);
-            
-            if (espacesForRoles && espacesForRoles.length > 0) {
-              const userIds = espacesForRoles.map((e: { user_id: string | null }) => e.user_id).filter(Boolean) as string[];
-              if (userIds.length > 0) {
-                // Vérifier dans utilisateurs par user_id au lieu d'email
-                const { data: usersByUserId, error: usersByIdError } = await supabase
-                  .from('utilisateurs')
-                  .select('id, role')
-                  .in('id', userIds)
-                  .eq('role', 'client_super_admin');
-                
-                if (usersByIdError) {
-                  console.error(`❌ Erreur récupération super admins par user_id:`, usersByIdError);
-                }
-                
-                if (usersByUserId) {
-                  superAdminsCount = usersByUserId.length;
-                  console.log(`✅ Super admins trouvés par user_id:`, usersByUserId);
-                }
-              }
-            }
-          }
-          
-          // Aussi vérifier dans le cache local si disponible (pour mise à jour immédiate)
-          const cachedSuperAdmins = Object.values(confirmedRolesCache).filter(role => role === 'client_super_admin').length;
-          if (cachedSuperAdmins > superAdminsCount) {
-            console.log(`🔧 Utilisation du cache pour super admins: ${cachedSuperAdmins} (DB: ${superAdminsCount})`);
-            // Ne pas écraser complètement, mais utiliser le max pour une mise à jour plus rapide
-            superAdminsCount = Math.max(superAdminsCount, cachedSuperAdmins);
-          }
-          
-          console.log(`👑 Entreprise ${entrepriseId}: ${superAdminsCount} super admin(s) client(s) final`, { 
-            emails: clientEmails.length,
-            found_by_email: usersData?.length || 0,
-            found_by_user_id: superAdminsCount - (usersData?.length || 0),
-            final_count: superAdminsCount
-          });
+        // Les rôles sont déjà dans clientsData depuis clients_with_roles
+        superAdminsCount = clientsData.filter((c: { role_code?: string }) => c.role_code === 'client_super_admin').length;
+        console.log(`✅ Super admins trouvés depuis clients_with_roles:`, superAdminsCount);
+        
+        // Vérifier aussi dans le cache local si disponible (pour mise à jour immédiate)
+        const cachedSuperAdmins = Object.values(confirmedRolesCache).filter(role => role === 'client_super_admin').length;
+        if (cachedSuperAdmins > superAdminsCount) {
+          console.log(`🔧 Utilisation du cache pour super admins: ${cachedSuperAdmins} (DB: ${superAdminsCount})`);
+          superAdminsCount = Math.max(superAdminsCount, cachedSuperAdmins);
         }
+        
+        console.log(`👑 Entreprise ${entrepriseId}: ${superAdminsCount} super admin(s) client(s) final`);
       }
 
           return {
