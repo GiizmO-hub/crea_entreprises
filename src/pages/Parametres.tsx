@@ -1137,6 +1137,7 @@ export default function Parametres() {
                                 </button>
                               )}
                               <button
+                                key={`super-admin-${client.id}-${client.role}`}
                                 onClick={() => handleToggleSuperAdmin(client)}
                                 disabled={!client.espace_id}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
@@ -1146,17 +1147,17 @@ export default function Parametres() {
                                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                                 title={!client.espace_id ? 'L\'espace membre doit être créé d\'abord' : client.role === 'client_super_admin' ? 'Retirer le statut super admin' : 'Définir comme super admin'}
                               >
-                                {client.role === 'client_super_admin' ? (
-                                  <>
-                                    <ShieldOff className="w-3 h-3" />
-                                    Retirer SA
-                                  </>
-                                ) : (
-                                  <>
-                                    <Crown className="w-3 h-3" />
-                                    Super Admin
-                                  </>
-                                )}
+                                {(() => {
+                                  const isSuperAdmin = client.role === 'client_super_admin';
+                                  const Icon = isSuperAdmin ? ShieldOff : Crown;
+                                  const label = isSuperAdmin ? 'Retirer SA' : 'Super Admin';
+                                  return (
+                                    <>
+                                      <Icon className="w-3 h-3" />
+                                      {label}
+                                    </>
+                                  );
+                                })()}
                               </button>
                               <button
                                 onClick={() => handleDeleteClient(client)}
