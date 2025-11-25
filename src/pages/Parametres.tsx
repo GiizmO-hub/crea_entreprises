@@ -236,25 +236,27 @@ export default function Parametres() {
         espacesCount = count || 0;
       }
 
-      // Compter les abonnements actifs (ou avec statut 'actif')
+      // Compter les abonnements actifs (statut='actif')
       const { data: abonnementsData, error: abonnementsError } = await supabase
         .from('abonnements')
-        .select('id, statut, actif')
-        .eq('entreprise_id', entrepriseId);
+        .select('id, statut')
+        .eq('entreprise_id', entrepriseId)
+        .eq('statut', 'actif');
       
       let abonnementsCount = 0;
       if (!abonnementsError && abonnementsData) {
-        // Compter les abonnements actifs (soit actif=true, soit statut='actif')
-        abonnementsCount = abonnementsData.filter((ab: { actif?: boolean; statut?: string }) => 
-          ab.actif === true || ab.statut === 'actif'
-        ).length;
+        // Compter les abonnements avec statut='actif'
+        abonnementsCount = abonnementsData.length;
       }
+      
+      console.log(`📊 Entreprise ${entrepriseId}: ${abonnementsCount} abonnement(s) actif(s)`, abonnementsData);
 
       // Compter les clients super admins
       let superAdminsCount = 0;
       if (clientsData && clientsData.length > 0) {
         const clientEmails = clientsData.map((c: { email?: string }) => c.email).filter(Boolean) as string[];
         if (clientEmails.length > 0) {
+          // Vérifier dans utilisateurs d'abord
           const { data: usersData } = await supabase
             .from('utilisateurs')
             .select('email, role')
@@ -262,6 +264,33 @@ export default function Parametres() {
             .eq('role', 'client_super_admin');
 
           superAdminsCount = usersData?.length || 0;
+          
+          // Si pas trouvé, vérifier aussi dans auth.users via espaces_membres_clients
+          if (superAdminsCount === 0 && clientIds.length > 0) {
+            const { data: espacesForRoles } = await supabase
+              .from('espaces_membres_clients')
+              .select('user_id')
+              .in('client_id', clientIds);
+            
+            if (espacesForRoles && espacesForRoles.length > 0) {
+              const userIds = espacesForRoles.map((e: { user_id: string | null }) => e.user_id).filter(Boolean) as string[];
+              if (userIds.length > 0) {
+                // Vérifier dans utilisateurs par user_id au lieu d'email
+                const { data: usersByUserId } = await supabase
+                  .from('utilisateurs')
+                  .select('id, role')
+                  .in('id', userIds)
+                  .eq('role', 'client_super_admin');
+                
+                superAdminsCount = usersByUserId?.length || 0;
+              }
+            }
+          }
+          
+          console.log(`👑 Entreprise ${entrepriseId}: ${superAdminsCount} super admin(s) client(s)`, { 
+            emails: clientEmails.length, 
+            found: superAdminsCount 
+          });
         }
       }
 
