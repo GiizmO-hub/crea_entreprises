@@ -71,11 +71,16 @@ export default function Parametres() {
 
   useEffect(() => {
     if (user && isSuperAdmin && activeTab === 'clients') {
+      // Recharger les clients uniquement si l'onglet vient d'être activé
+      // Ne pas forcer un rechargement à chaque rendu pour éviter d'écraser le state local
       loadAllClients();
       loadPlans();
       loadOptions();
     }
   }, [user, isSuperAdmin, activeTab]);
+  
+  // Stocker le dernier rôle confirmé par la fonction RPC pour préserver après rechargement
+  const [confirmedRolesCache, setConfirmedRolesCache] = useState<Record<string, string>>({});
   
   // Ne PAS recharger automatiquement les clients quand on change d'onglet si on vient de faire un toggle
   // Cela évite d'écraser le state local avec des données potentiellement obsolètes
