@@ -264,17 +264,27 @@ export default function Parametres() {
       if (clientsData && clientsData.length > 0) {
         const clientEmails = clientsData.map((c: { email?: string }) => c.email).filter(Boolean) as string[];
         if (clientEmails.length > 0) {
-          // Vérifier dans utilisateurs d'abord
-          const { data: usersData } = await supabase
+          console.log(`🔍 Recherche super admins pour entreprise ${entrepriseId}: ${clientEmails.length} emails`, clientEmails);
+          
+          // Vérifier dans utilisateurs d'abord par email
+          const { data: usersData, error: usersError } = await supabase
             .from('utilisateurs')
             .select('email, role')
             .in('email', clientEmails)
             .eq('role', 'client_super_admin');
 
-          superAdminsCount = usersData?.length || 0;
+          if (usersError) {
+            console.error(`❌ Erreur récupération super admins par email:`, usersError);
+          }
+
+          if (usersData) {
+            superAdminsCount = usersData.length;
+            console.log(`✅ Super admins trouvés par email:`, usersData);
+          }
           
-          // Si pas trouvé, vérifier aussi dans auth.users via espaces_membres_clients
+          // Si pas trouvé ou pour double vérification, vérifier aussi via espaces_membres_clients
           if (superAdminsCount === 0 && clientIds.length > 0) {
+            console.log(`🔍 Recherche super admins par user_id (fallback) pour ${clientIds.length} clients`);
             const { data: espacesForRoles } = await supabase
               .from('espaces_membres_clients')
               .select('user_id')
@@ -284,20 +294,37 @@ export default function Parametres() {
               const userIds = espacesForRoles.map((e: { user_id: string | null }) => e.user_id).filter(Boolean) as string[];
               if (userIds.length > 0) {
                 // Vérifier dans utilisateurs par user_id au lieu d'email
-                const { data: usersByUserId } = await supabase
+                const { data: usersByUserId, error: usersByIdError } = await supabase
                   .from('utilisateurs')
                   .select('id, role')
                   .in('id', userIds)
                   .eq('role', 'client_super_admin');
                 
-                superAdminsCount = usersByUserId?.length || 0;
+                if (usersByIdError) {
+                  console.error(`❌ Erreur récupération super admins par user_id:`, usersByIdError);
+                }
+                
+                if (usersByUserId) {
+                  superAdminsCount = usersByUserId.length;
+                  console.log(`✅ Super admins trouvés par user_id:`, usersByUserId);
+                }
               }
             }
           }
           
-          console.log(`👑 Entreprise ${entrepriseId}: ${superAdminsCount} super admin(s) client(s)`, { 
-            emails: clientEmails.length, 
-            found: superAdminsCount 
+          // Aussi vérifier dans le cache local si disponible (pour mise à jour immédiate)
+          const cachedSuperAdmins = Object.values(confirmedRolesCache).filter(role => role === 'client_super_admin').length;
+          if (cachedSuperAdmins > superAdminsCount) {
+            console.log(`🔧 Utilisation du cache pour super admins: ${cachedSuperAdmins} (DB: ${superAdminsCount})`);
+            // Ne pas écraser complètement, mais utiliser le max pour une mise à jour plus rapide
+            superAdminsCount = Math.max(superAdminsCount, cachedSuperAdmins);
+          }
+          
+          console.log(`👑 Entreprise ${entrepriseId}: ${superAdminsCount} super admin(s) client(s) final`, { 
+            emails: clientEmails.length,
+            found_by_email: usersData?.length || 0,
+            found_by_user_id: superAdminsCount - (usersData?.length || 0),
+            final_count: superAdminsCount
           });
         }
       }
@@ -788,11 +815,16 @@ export default function Parametres() {
             return prevClients;
           });
           
-          // Recharger la config entreprise pour mettre à jour le compteur
-          if (activeTab === 'entreprise') {
-            await loadEntrepriseConfig();
-          }
+          // TOUJOURS recharger la config entreprise pour mettre à jour le compteur, même si on n'est pas sur l'onglet
+          console.log('🔄 Rechargement config entreprise pour mettre à jour le compteur Super Admin');
+          await loadEntrepriseConfig();
         }, 3000);
+        
+        // Recharger aussi après un délai plus long pour s'assurer que la base est synchronisée
+        setTimeout(async () => {
+          console.log('🔄 Rechargement config entreprise après toggle Super Admin (5s - second rechargement)');
+          await loadEntrepriseConfig();
+        }, 5000);
       } else {
         console.error('❌ Échec toggle super admin:', data);
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
