@@ -62,6 +62,8 @@ export default function Parametres() {
     created_at?: string;
   }>>([]);
   const [loadingConfig, setLoadingConfig] = useState(false);
+  // Cache des rôles confirmés par la fonction RPC pour préserver entre rechargements
+  const [confirmedRolesCache, setConfirmedRolesCache] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (user) {
