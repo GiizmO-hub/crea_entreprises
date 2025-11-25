@@ -76,6 +76,9 @@ export default function Parametres() {
       loadOptions();
     }
   }, [user, isSuperAdmin, activeTab]);
+  
+  // Ne PAS recharger automatiquement les clients quand on change d'onglet si on vient de faire un toggle
+  // Cela évite d'écraser le state local avec des données potentiellement obsolètes
 
   useEffect(() => {
     if (user && activeTab === 'entreprise') {
@@ -699,24 +702,36 @@ export default function Parametres() {
           return c;
         }));
         
-        // Ne PAS recharger immédiatement - attendre que la base de données soit complètement synchronisée
-        // Attendre 3 secondes avant de recharger pour garantir que la transaction est terminée
-        setTimeout(async () => {
-          console.log('🔄 Premier rechargement après toggle Super Admin (3s)');
-          await loadAllClients();
-          if (activeTab === 'entreprise') {
-            await loadEntrepriseConfig();
-          }
-        }, 3000);
+        // Ne PAS recharger depuis la base - utiliser uniquement le rôle confirmé par la fonction RPC
+        // Le rechargement depuis la base peut récupérer un ancien rôle à cause du cache ou de la synchronisation
+        // On garde le rôle dans le state local et on ne rechargera que si l'utilisateur change d'onglet ou recharge la page
         
-        // Un deuxième rechargement pour confirmer
+        // Optionnel : recharger après un délai très long uniquement pour confirmer (mais ne pas écraser le state local)
         setTimeout(async () => {
-          console.log('🔄 Deuxième rechargement après toggle Super Admin (5s)');
+          console.log('🔄 Rechargement de confirmation après toggle Super Admin (10s)');
+          // Sauvegarder le rôle actuel dans le state avant de recharger
+          const currentRole = confirmedRole;
           await loadAllClients();
+          
+          // Vérifier si le rôle a changé après le rechargement
+          const updatedClient = clients.find(c => c.id === client.id);
+          if (updatedClient && updatedClient.role !== currentRole) {
+            console.warn(`⚠️ Rôle changé après rechargement: "${currentRole}" → "${updatedClient.role}"`);
+            console.warn(`⚠️ Forcer le rôle confirmé par la fonction RPC: "${currentRole}"`);
+            // Forcer le rôle confirmé par la fonction RPC
+            setClients(prevClients => prevClients.map(c => 
+              c.id === client.id 
+                ? { ...c, role: currentRole }
+                : c
+            ));
+          } else if (updatedClient && updatedClient.role === currentRole) {
+            console.log(`✅ Rôle confirmé après rechargement: "${currentRole}"`);
+          }
+          
           if (activeTab === 'entreprise') {
             await loadEntrepriseConfig();
           }
-        }, 5000);
+        }, 10000);
       } else {
         console.error('❌ Échec toggle super admin:', data);
         alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
