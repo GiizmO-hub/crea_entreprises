@@ -1171,112 +1171,125 @@ export default function Parametres() {
                             <div className="flex items-center justify-center gap-2 flex-wrap">
                               {client.espace_id ? (
                                 <>
-                                  <button
-                                    onClick={() => handleSuspendreEspace(client)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                                      client.espace_actif
-                                        ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/30'
-                                        : 'bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30'
-                                    }`}
-                                    title={client.espace_actif ? 'Suspendre' : 'Activer'}
-                                  >
-                                    {client.espace_actif ? (
-                                      <>
-                                        <Pause className="w-3 h-3 inline mr-1" />
-                                        Suspendre
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Play className="w-3 h-3 inline mr-1" />
-                                        Activer
-                                      </>
-                                    )}
-                                  </button>
-                                  <button
-                                    onClick={() => handleResendCredentials(client)}
-                                    disabled={resendingEmail === client.id}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                    title="Renvoyer les identifiants par email"
-                                  >
-                                    {resendingEmail === client.id ? (
-                                      <>
-                                        <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-                                        Envoi...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Send className="w-3 h-3" />
-                                        Renvoyer
-                                      </>
-                                    )}
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedClientId(client.id);
-                                      setShowClientDetailsModal(true);
-                                    }}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30 transition-all flex items-center gap-1"
-                                    title="Voir et modifier les détails du client"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    Détails
-                                  </button>
+                                  <div className="relative group">
+                                    <button
+                                      onClick={() => handleSuspendreEspace(client)}
+                                      className={`p-2 rounded-lg transition-all ${
+                                        client.espace_actif
+                                          ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/30'
+                                          : 'bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30'
+                                      }`}
+                                    >
+                                      {client.espace_actif ? (
+                                        <Pause className="w-4 h-4" />
+                                      ) : (
+                                        <Play className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                      {client.espace_actif ? 'Suspendre' : 'Activer'}
+                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                    </div>
+                                  </div>
+                                  <div className="relative group">
+                                    <button
+                                      onClick={() => handleResendCredentials(client)}
+                                      disabled={resendingEmail === client.id}
+                                      className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {resendingEmail === client.id ? (
+                                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                                      ) : (
+                                        <Send className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                      Renvoyer les identifiants par email
+                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                    </div>
+                                  </div>
+                                  <div className="relative group">
+                                    <button
+                                      onClick={() => {
+                                        setSelectedClientId(client.id);
+                                        setShowClientDetailsModal(true);
+                                      }}
+                                      className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30 transition-all"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                      Voir et modifier les détails du client
+                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                    </div>
+                                  </div>
                                 </>
                               ) : (
                                 <>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedClientId(client.id);
-                                      setShowClientDetailsModal(true);
-                                    }}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30 transition-all flex items-center gap-1"
-                                    title="Voir et modifier les détails du client"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    Détails
-                                  </button>
-                                  <button
-                                    onClick={() => handleCreateEspaceClick(client)}
-                                    disabled={!client.email}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                    title={!client.email ? 'Le client doit avoir un email' : 'Créer l\'espace membre avec abonnement'}
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                    Créer
-                                  </button>
+                                  <div className="relative group">
+                                    <button
+                                      onClick={() => {
+                                        setSelectedClientId(client.id);
+                                        setShowClientDetailsModal(true);
+                                      }}
+                                      className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30 transition-all"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                      Voir et modifier les détails du client
+                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                    </div>
+                                  </div>
+                                  <div className="relative group">
+                                    <button
+                                      onClick={() => handleCreateEspaceClick(client)}
+                                      disabled={!client.email}
+                                      className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                      {!client.email ? 'Le client doit avoir un email' : 'Créer l\'espace membre avec abonnement'}
+                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                    </div>
+                                  </div>
                                 </>
                               )}
-                              <button
-                                key={`super-admin-${client.id}-${client.role}`}
-                                onClick={() => handleToggleSuperAdmin(client)}
-                                disabled={!client.espace_id}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
-                                  client.role === 'client_super_admin'
-                                    ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30'
-                                    : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30'
-                                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                title={!client.espace_id ? 'L\'espace membre doit être créé d\'abord' : client.role === 'client_super_admin' ? 'Retirer le statut super admin' : 'Définir comme super admin'}
-                              >
-                                {(() => {
-                                  const isSuperAdmin = client.role === 'client_super_admin';
-                                  const Icon = isSuperAdmin ? ShieldOff : Crown;
-                                  const label = isSuperAdmin ? 'Retirer SA' : 'Super Admin';
-                                  return (
-                                    <>
-                                      <Icon className="w-3 h-3" />
-                                      {label}
-                                    </>
-                                  );
-                                })()}
-                              </button>
-                              <button
-                                onClick={() => handleDeleteClient(client)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 transition-all flex items-center gap-1"
-                                title="Supprimer définitivement"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                Supprimer
-                              </button>
+                              <div className="relative group">
+                                <button
+                                  key={`super-admin-${client.id}-${client.role}`}
+                                  onClick={() => handleToggleSuperAdmin(client)}
+                                  disabled={!client.espace_id}
+                                  className={`p-2 rounded-lg transition-all ${
+                                    client.role === 'client_super_admin'
+                                      ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30'
+                                      : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30'
+                                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  {(() => {
+                                    const isSuperAdmin = client.role === 'client_super_admin';
+                                    const Icon = isSuperAdmin ? ShieldOff : Crown;
+                                    return <Icon className="w-4 h-4" />;
+                                  })()}
+                                </button>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                  {!client.espace_id ? 'L\'espace membre doit être créé d\'abord' : client.role === 'client_super_admin' ? 'Retirer le statut super admin' : 'Définir comme super admin'}
+                                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                </div>
+                              </div>
+                              <div className="relative group">
+                                <button
+                                  onClick={() => handleDeleteClient(client)}
+                                  className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 transition-all"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                  Supprimer définitivement
+                                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                </div>
+                              </div>
                             </div>
                           </td>
                         </tr>
