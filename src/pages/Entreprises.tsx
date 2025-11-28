@@ -51,6 +51,7 @@ export default function Entreprises() {
   
   const [plans, setPlans] = useState<Array<{ id: string; nom: string }>>([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [currentPaiementId, setCurrentPaiementId] = useState<string | null>(null);
   const [currentPaiementMontant, setCurrentPaiementMontant] = useState<number>(0);
@@ -666,6 +667,31 @@ export default function Entreprises() {
                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="+33 6 12 34 56 78"
                           />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Mot de passe client (optionnel)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showPassword ? 'text' : 'password'}
+                              value={formData.password_client}
+                              onChange={(e) => setFormData({ ...formData, password_client: e.target.value })}
+                              className="w-full px-4 py-3 pr-10 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Laissez vide pour générer automatiquement"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                            >
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          <p className="mt-1 text-xs text-gray-400">
+                            Si vide, un mot de passe sécurisé sera généré automatiquement
+                          </p>
                         </div>
                       </div>
 
