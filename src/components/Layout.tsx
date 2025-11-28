@@ -286,7 +286,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {menuItems
               .filter((item) => {
-                // ✅ Modules de base toujours visibles pour tous
+                // ✅ Modules de base toujours visibles pour tous (sauf "entreprises" pour les clients)
                 const isBaseModule = item.id === 'dashboard' || item.id === 'entreprises' || item.id === 'settings';
                 
                 // ✅ PRIORITÉ 1 : SUPER ADMIN PLATEFORME voit TOUT (tous les modules)
@@ -304,17 +304,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                   return false; // Les clients ne voient jamais les modules admin plateforme
                 }
                 
-                // ✅ PRIORITÉ 3 : Pour les clients, afficher uniquement les modules actifs de leur abonnement
-                // Mais toujours afficher les modules de base
+                // ✅ PRIORITÉ 3 : Pour les clients, masquer l'onglet "Entreprises" (garder "Mon Entreprise")
+                // Les clients ne doivent pas voir l'onglet "Entreprises" car ils ne peuvent pas créer d'entreprises
                 if (isClient) {
-                  // Client : vérifier si c'est un module de base ou un module actif
-                  if (isBaseModule) {
-                    return true; // Modules de base toujours visibles pour les clients
+                  // Masquer l'onglet "entreprises" pour les clients (ils voient "Mon Entreprise" via le module "entreprises" mais pas l'onglet listé)
+                  // En fait, "entreprises" est déjà le module "Mon Entreprise", donc on le garde mais on change juste son affichage dans Entreprises.tsx
+                  if (item.id === 'entreprises') {
+                    return true; // Les clients voient "Mon Entreprise" (mais pas pour créer)
+                  }
+                  // Vérifier si c'est un module de base (dashboard, settings)
+                  if (item.id === 'dashboard' || item.id === 'settings') {
+                    return true;
                   }
                   // Vérifier si le module est dans la liste des modules actifs
-                  // Si activeModules est vide, on affiche quand même les modules de base
                   if (activeModules.size === 0) {
-                    return isBaseModule; // Seulement les modules de base si rien n'est chargé
+                    return false; // Seulement les modules de base si rien n'est chargé
                   }
                   return activeModules.has(item.id);
                 }
