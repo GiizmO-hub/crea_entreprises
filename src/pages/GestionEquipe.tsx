@@ -79,6 +79,10 @@ const NIVEAUX_ACCES = [
   { value: 'administration', label: 'Administration complète', icon: Settings, color: 'purple' },
 ];
 
+interface GestionEquipeProps {
+  onNavigate?: (path: string) => void;
+}
+
 export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipeProps) {
   const { user } = useAuth();
   const [equipes, setEquipes] = useState<Equipe[]>([]);
@@ -1618,7 +1622,7 @@ export default function GestionEquipe({ onNavigate: _onNavigate }: GestionEquipe
                     </label>
                     <select
                       value={membreFormData.role}
-                      onChange={(e) => setMembreFormData({ ...membreFormData, role: e.target.value })}
+                      onChange={(e) => setMembreFormData({ ...membreFormData, role: e.target.value as 'admin' | 'collaborateur' | 'manager' | 'comptable' | 'commercial' })}
                       required
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >

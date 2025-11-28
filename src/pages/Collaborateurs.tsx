@@ -161,7 +161,14 @@ export default function Collaborateurs() {
         entreprise_nom: c.entreprise?.nom,
       }));
 
-      setCollaborateurs(collaborateursEnriched || []);
+      const enrichedWithDefaults = (collaborateursEnriched || []).map(c => ({
+        ...c,
+        user_id: c.user_id || '',
+        role: c.role || 'collaborateur',
+        statut: c.statut || 'actif',
+        created_at: c.created_at || new Date().toISOString(),
+      }));
+      setCollaborateurs(enrichedWithDefaults);
     } catch (error: unknown) {
       console.error('❌ Erreur chargement collaborateurs:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
@@ -232,7 +239,7 @@ export default function Collaborateurs() {
       nom: collaborateur.nom || '',
       prenom: collaborateur.prenom || '',
       telephone: collaborateur.telephone || '',
-      role: collaborateur.role,
+      role: collaborateur.role as 'collaborateur' | 'admin' | 'manager' | 'comptable' | 'commercial' | 'super_admin',
       entreprise_id: collaborateur.entreprise_id || '',
       departement: collaborateur.departement || '',
       poste: collaborateur.poste || '',
@@ -903,7 +910,7 @@ export default function Collaborateurs() {
                 <select
                   required
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'collaborateur' | 'admin' | 'manager' | 'comptable' | 'commercial' | 'super_admin' })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
                 >
                   <option value="collaborateur">Collaborateur</option>
@@ -1070,7 +1077,7 @@ export default function Collaborateurs() {
                 <select
                   required
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'collaborateur' | 'admin' | 'manager' | 'comptable' | 'commercial' | 'super_admin' })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
                 >
                   <option value="collaborateur">Collaborateur</option>

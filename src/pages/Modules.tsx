@@ -50,6 +50,10 @@ const secteurLabels: Record<string, string> = {
   'marketing_commercial': '📊 Marketing / Commercial',
 };
 
+interface ModulesProps {
+  onNavigate?: (path: string) => void;
+}
+
 export default function Modules({ onNavigate }: ModulesProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -256,6 +260,14 @@ export default function Modules({ onNavigate }: ModulesProps) {
         // Pour les clients, ils ne voient que les modules actifs et créés
         if (!isSuperAdmin) {
           disponible = active && mod.est_cree === true;
+        }
+        
+        // Convertir icone en string si nécessaire
+        let iconeString: string | undefined;
+        if (typeof mod.icone === 'string') {
+          iconeString = mod.icone;
+        } else if (mod.icone) {
+          iconeString = String(mod.icone);
         }
 
         return {

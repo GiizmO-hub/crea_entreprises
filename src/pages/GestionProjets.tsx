@@ -247,7 +247,14 @@ export default function GestionProjets() {
   const loadDependencies = async () => {
     try {
       const deps = await getModuleDependencies('gestion-projets');
-      setDependencies(deps);
+      setDependencies(deps.map(dep => ({
+        module: dep.module_depend_de,
+        feature: dep.module_nom,
+        actif: dep.actif,
+        est_cree: dep.est_cree,
+        module_depend_de: dep.module_depend_de,
+        type_dependance: dep.type_dependance,
+      })));
       console.log('📦 Dépendances Gestion de Projets:', deps);
     } catch (error) {
       console.error('Erreur chargement dépendances:', error);
@@ -739,14 +746,15 @@ export default function GestionProjets() {
               <div className="flex flex-wrap gap-2">
                 {dependencies.map((dep) => {
                   if (!dep.actif || !dep.est_cree) return null;
+                  const moduleKey = dep.module_depend_de || dep.module;
                   return (
                     <button
-                      key={dep.module_depend_de}
-                      onClick={() => handleOpenReusableModule(dep.module_depend_de)}
+                      key={moduleKey}
+                      onClick={() => handleOpenReusableModule(moduleKey)}
                       className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-all border border-blue-500/30"
                     >
                       <Shield className="w-4 h-4" />
-                      {getModuleLabel(dep.module_depend_de)}
+                      {getModuleLabel(moduleKey)}
                       {dep.type_dependance === 'requis' && (
                         <span className="text-xs bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded">Requis</span>
                       )}
