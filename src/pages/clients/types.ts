@@ -10,7 +10,10 @@ export interface Client {
   entreprise_nom?: string;
   email?: string;
   telephone?: string;
+  adresse?: string;
+  code_postal?: string;
   ville?: string;
+  siret?: string;
   statut: string;
   created_at: string;
 }

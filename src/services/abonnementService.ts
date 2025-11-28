@@ -143,17 +143,21 @@ export async function getPlanModules(planId: string): Promise<PlanModule[]> {
       module_nom?: string;
       module_description?: string;
       categorie?: string;
-      actif?: boolean;
+      actif?: boolean | string;
+      inclus?: boolean | string;
+      prix_mensuel?: number | string;
+      prix_annuel?: number | string;
+      est_cree?: boolean | string;
     }) => ({
       module_code: mod.module_code || '',
       module_nom: mod.module_nom || '',
       module_description: mod.module_description || '',
       categorie: mod.categorie || '',
-      inclus: mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true',
-      prix_mensuel: parseFloat(String(mod.prix_mensuel || 0)),
-      prix_annuel: parseFloat(String(mod.prix_annuel || 0)),
-      est_cree: mod.est_cree === true || mod.est_cree === 'true' || String(mod.est_cree).toLowerCase() === 'true',
-      actif: mod.actif === true || mod.actif === 'true' || String(mod.actif).toLowerCase() === 'true',
+      inclus: mod.inclus === true || mod.inclus === 'true' || (typeof mod.inclus === 'string' && mod.inclus.toLowerCase() === 'true'),
+      prix_mensuel: typeof mod.prix_mensuel === 'number' ? mod.prix_mensuel : parseFloat(String(mod.prix_mensuel || 0)),
+      prix_annuel: typeof mod.prix_annuel === 'number' ? mod.prix_annuel : parseFloat(String(mod.prix_annuel || 0)),
+      est_cree: mod.est_cree === true || mod.est_cree === 'true' || (typeof mod.est_cree === 'string' && mod.est_cree.toLowerCase() === 'true'),
+      actif: mod.actif === true || mod.actif === 'true' || (typeof mod.actif === 'string' && mod.actif.toLowerCase() === 'true'),
     }));
   } catch (error) {
     console.error('Erreur récupération modules du plan:', error);
