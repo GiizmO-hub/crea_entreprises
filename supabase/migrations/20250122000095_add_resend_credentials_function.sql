@@ -190,3 +190,6 @@ BEGIN
   RAISE NOTICE '✅✅✅ Fonction get_or_regenerate_client_credentials créée avec succès ! ✅✅✅';
 END $$;
 
+
+
+

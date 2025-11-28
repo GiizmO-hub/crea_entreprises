@@ -155,3 +155,6 @@ COMMENT ON FUNCTION delete_entreprise_complete IS 'Supprime complètement une en
 
 GRANT EXECUTE ON FUNCTION delete_entreprise_complete(uuid) TO authenticated;
 
+
+
+

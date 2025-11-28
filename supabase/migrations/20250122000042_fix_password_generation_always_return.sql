@@ -268,3 +268,6 @@ $$;
 
 COMMENT ON FUNCTION create_espace_membre_from_client IS 'Crée ou met à jour un espace membre pour un client existant avec un abonnement et des options. Génère automatiquement un mot de passe sécurisé si aucun mot de passe n''est fourni. Retourne toujours le mot de passe dans le résultat.';
 
+
+
+

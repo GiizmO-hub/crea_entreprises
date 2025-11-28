@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Building2, CheckCircle, Clock, AlertCircle, XCircle, CreditCard } from 'lucide-react';
+import { ChevronDown, ChevronUp, Building2, CheckCircle, Clock, AlertCircle, XCircle, CreditCard, Send, FileText, DollarSign, Mail } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { sendClientCredentialsEmail } from '../services/emailService';
 
 interface EntrepriseConfig {
   id: string;
@@ -16,10 +18,14 @@ interface EntrepriseConfig {
 interface EntrepriseAccordionProps {
   entreprises: EntrepriseConfig[];
   loading?: boolean;
+  isPlatformUser?: boolean; // Nouvelle prop pour vérifier si c'est un utilisateur plateforme
 }
 
-export function EntrepriseAccordion({ entreprises, loading }: EntrepriseAccordionProps) {
+export function EntrepriseAccordion({ entreprises, loading, isPlatformUser = false }: EntrepriseAccordionProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [sendingEmails, setSendingEmails] = useState<Set<string>>(new Set());
+  const [generatingInvoices, setGeneratingInvoices] = useState<Set<string>>(new Set());
+  const [validatingPayments, setValidatingPayments] = useState<Set<string>>(new Set());
 
   const toggleExpanded = (id: string) => {
     const newExpanded = new Set(expandedIds);
@@ -223,6 +229,97 @@ export function EntrepriseAccordion({ entreprises, loading }: EntrepriseAccordio
                     </div>
                   </div>
                 )}
+
+                {/* ✅ Section Paiement & Facturation (Uniquement pour plateforme) */}
+                {isPlatformUser && (
+                  <div className="mt-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-lg border border-blue-500/20 p-6">
+                    <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
+                      <DollarSign className="w-5 h-5 text-blue-400" />
+                      Gestion Paiement & Facturation
+                      <span className="ml-2 px-2 py-1 text-xs font-semibold bg-blue-500/20 text-blue-400 rounded-full border border-blue-500/30">
+                        Plateforme uniquement
+                      </span>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Bouton Valider Paiement */}
+                      <button
+                        onClick={() => handleValidatePayment(entreprise.id, setValidatingPayments)}
+                        disabled={validatingPayments.has(entreprise.id) || entreprise.statut_paiement === 'paye'}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 rounded-lg text-green-400 font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {validatingPayments.has(entreprise.id) ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+                            <span>Validation...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4" />
+                            <span>
+                              {entreprise.statut_paiement === 'paye' ? 'Paiement Validé' : 'Valider Paiement'}
+                            </span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Bouton Générer Facture */}
+                      <button
+                        onClick={() => handleGenerateInvoice(entreprise.id, setGeneratingInvoices)}
+                        disabled={generatingInvoices.has(entreprise.id)}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-purple-400 font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {generatingInvoices.has(entreprise.id) ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                            <span>Génération...</span>
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="w-4 h-4" />
+                            <span>Générer Facture</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Bouton Envoyer Identifiants */}
+                      <button
+                        onClick={() => handleSendCredentials(entreprise.id, setSendingEmails)}
+                        disabled={sendingEmails.has(entreprise.id)}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-blue-400 font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {sendingEmails.has(entreprise.id) ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                            <span>Envoi...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4" />
+                            <span>Envoyer Identifiants</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    
+                    {/* Statut paiement détaillé */}
+                    <div className="mt-4 p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-400">Statut du paiement:</span>
+                        <span className={`font-semibold ${
+                          entreprise.statut_paiement === 'paye' ? 'text-green-400' :
+                          entreprise.statut_paiement === 'en_attente' ? 'text-yellow-400' :
+                          entreprise.statut_paiement === 'refuse' ? 'text-red-400' :
+                          'text-gray-400'
+                        }`}>
+                          {entreprise.statut_paiement === 'paye' ? '✅ Payé' :
+                           entreprise.statut_paiement === 'en_attente' ? '⏳ En attente' :
+                           entreprise.statut_paiement === 'refuse' ? '❌ Refusé' :
+                           '📋 Non requis'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -285,5 +382,296 @@ function calculateProgress(entreprise: EntrepriseConfig): number {
   if (entreprise.superAdmins > 0) completed++;
 
   return Math.round((completed / steps) * 100);
+}
+
+// ✅ Fonctions pour gérer paiement, facturation et email (réservées plateforme)
+async function handleValidatePayment(
+  entrepriseId: string,
+  setValidatingPayments: React.Dispatch<React.SetStateAction<Set<string>>>
+) {
+  setValidatingPayments((prev) => new Set(prev).add(entrepriseId));
+  
+  try {
+    const { data, error } = await supabase.rpc('valider_paiement_entreprise', {
+      p_entreprise_id: entrepriseId
+    });
+
+    if (error) {
+      console.error('Erreur validation paiement:', error);
+      alert('❌ Erreur lors de la validation du paiement: ' + error.message);
+      return;
+    }
+
+    if (data?.success) {
+      // ✅ NOUVEAU : Si l'email doit être envoyé, l'envoyer automatiquement
+      if (data.email_a_envoyer && data.email && data.password) {
+        // Récupérer les informations du client pour l'email
+        const { data: clientData } = await supabase
+          .from('clients')
+          .select('nom, prenom, email')
+          .eq('entreprise_id', entrepriseId)
+          .limit(1)
+          .single();
+
+        const { data: entrepriseData } = await supabase
+          .from('entreprises')
+          .select('nom')
+          .eq('id', entrepriseId)
+          .single();
+
+        if (clientData && entrepriseData) {
+          try {
+            const emailResult = await sendClientCredentialsEmail({
+              to: data.email,
+              clientName: `${clientData.prenom || ''} ${clientData.nom || ''}`.trim(),
+              clientEmail: data.email,
+              clientPassword: data.password,
+              entrepriseName: entrepriseData.nom || '',
+            });
+
+            if (emailResult.success) {
+              alert('✅ Paiement validé avec succès !\n✅ Espace client créé avec Super Admin automatique.\n✅ Identifiants envoyés par email.');
+            } else {
+              alert('✅ Paiement validé avec succès !\n✅ Espace client créé.\n⚠️ Erreur lors de l\'envoi de l\'email: ' + emailResult.error);
+            }
+          } catch (emailError) {
+            console.error('Erreur envoi email:', emailError);
+            alert('✅ Paiement validé avec succès !\n✅ Espace client créé.\n⚠️ Erreur lors de l\'envoi de l\'email.');
+          }
+        } else {
+          alert('✅ Paiement validé avec succès !\n✅ Espace client créé avec Super Admin automatique.');
+        }
+      } else {
+        alert('✅ Paiement validé avec succès !\n✅ Espace client créé avec Super Admin automatique.');
+      }
+      
+      // Recharger la page pour mettre à jour les données
+      window.location.reload();
+    } else {
+      alert('❌ Erreur: ' + (data?.error || 'Erreur inconnue'));
+    }
+  } catch (error) {
+    console.error('Erreur validation paiement:', error);
+    alert('❌ Erreur lors de la validation du paiement');
+  } finally {
+    setValidatingPayments((prev) => {
+      const next = new Set(prev);
+      next.delete(entrepriseId);
+      return next;
+    });
+  }
+}
+
+async function handleGenerateInvoice(
+  entrepriseId: string,
+  setGeneratingInvoices: React.Dispatch<React.SetStateAction<Set<string>>>
+) {
+  setGeneratingInvoices((prev) => new Set(prev).add(entrepriseId));
+  
+  try {
+    // Récupérer les informations de l'entreprise
+    const { data: entreprise, error: entrepriseError } = await supabase
+      .from('entreprises')
+      .select('id, nom, email, statut_paiement')
+      .eq('id', entrepriseId)
+      .single();
+
+    if (entrepriseError || !entreprise) {
+      alert('❌ Erreur: Entreprise non trouvée');
+      return;
+    }
+
+    // ✅ CORRECTION: Utiliser correctement la fonction RPC existante generate_invoice_for_entreprise
+    // Cette fonction existe dans la migration 20250123000012_add_payment_and_invoice_functions.sql
+    const { data, error } = await supabase.rpc('generate_invoice_for_entreprise', {
+      p_entreprise_id: entrepriseId
+    });
+
+    // ✅ CORRECTION: Vérifier l'erreur dans le résultat de supabase.rpc()
+    if (error) {
+      console.error('Erreur génération facture:', error);
+      
+      // Si la fonction RPC n'existe pas ou a une erreur, créer une facture manuellement
+      if (error.code === '42883' || error.message?.includes('does not exist')) {
+        console.warn('⚠️ Fonction RPC non trouvée, création manuelle de la facture...');
+        
+        // Récupérer le client de l'entreprise
+        const { data: clients, error: clientsError } = await supabase
+          .from('clients')
+          .select('id, nom, prenom, email')
+          .eq('entreprise_id', entrepriseId)
+          .limit(1)
+          .single();
+
+        if (clientsError || !clients) {
+          alert('❌ Erreur: Aucun client trouvé pour cette entreprise');
+          return;
+        }
+
+        // Récupérer l'abonnement pour calculer le montant
+        const { data: abonnements, error: abonnementsError } = await supabase
+          .from('abonnements')
+          .select('montant_mensuel, plan_id')
+          .eq('entreprise_id', entrepriseId)
+          .eq('statut', 'actif')
+          .limit(1)
+          .single();
+
+        const montant = abonnements?.montant_mensuel || 0;
+
+        if (montant === 0) {
+          alert('⚠️ Aucun abonnement actif trouvé. Montant de la facture: 0€');
+        }
+
+        // Créer la facture
+        const numero = `FACT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+        
+        const { data: facture, error: factureError } = await supabase
+          .from('factures')
+          .insert({
+            entreprise_id: entrepriseId,
+            client_id: clients.id,
+            numero,
+            type: 'facture',
+            date_emission: new Date().toISOString().split('T')[0],
+            montant_ht: montant,
+            tva: montant * 0.20,
+            montant_ttc: montant * 1.20,
+            statut: 'envoyee'
+          })
+          .select()
+          .single();
+
+        if (factureError) {
+          console.error('Erreur création facture:', factureError);
+          alert('❌ Erreur lors de la création de la facture: ' + factureError.message);
+          return;
+        }
+
+        alert('✅ Facture générée avec succès !\n\nNuméro: ' + numero);
+        return;
+      }
+      
+      alert('❌ Erreur lors de la génération de la facture: ' + error.message);
+      return;
+    }
+
+    // Vérifier le résultat de la fonction RPC
+    if (data?.success || data?.facture_id) {
+      alert('✅ Facture générée avec succès !\n\nNuméro: ' + (data.numero || data.numero_facture || 'N/A'));
+      // Optionnel: télécharger la facture en PDF
+      // TODO: Implémenter le téléchargement PDF
+    } else if (data?.error) {
+      alert('❌ Erreur: ' + data.error);
+    } else {
+      alert('❌ Erreur: Réponse inattendue de la fonction RPC');
+    }
+  } catch (error) {
+    console.error('Erreur génération facture:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    alert('❌ Erreur lors de la génération de la facture: ' + errorMessage);
+  } finally {
+    setGeneratingInvoices((prev) => {
+      const next = new Set(prev);
+      next.delete(entrepriseId);
+      return next;
+    });
+  }
+}
+
+async function handleSendCredentials(
+  entrepriseId: string,
+  setSendingEmails: React.Dispatch<React.SetStateAction<Set<string>>>
+) {
+  setSendingEmails((prev) => new Set(prev).add(entrepriseId));
+  
+  try {
+    // Récupérer le client de l'entreprise
+    const { data: clients, error: clientsError } = await supabase
+      .from('clients')
+      .select('id, email, nom, prenom')
+      .eq('entreprise_id', entrepriseId)
+      .limit(1);
+
+    if (clientsError || !clients || clients.length === 0) {
+      alert('❌ Aucun client trouvé pour cette entreprise');
+      return;
+    }
+
+    const client = clients[0];
+    
+    if (!client.email) {
+      alert('❌ Le client doit avoir un email pour recevoir les identifiants');
+      return;
+    }
+
+    // Récupérer l'entreprise pour le nom
+    const { data: entreprise } = await supabase
+      .from('entreprises')
+      .select('nom')
+      .eq('id', entrepriseId)
+      .single();
+
+    // Récupérer ou régénérer les identifiants
+    const { data: credentialsData, error: credentialsError } = await supabase.rpc(
+      'get_or_regenerate_client_credentials',
+      { p_client_id: client.id }
+    );
+
+    if (credentialsError || !credentialsData?.success) {
+      // Si la fonction échoue, récupérer depuis espaces_membres_clients
+      const { data: espace } = await supabase
+        .from('espaces_membres_clients')
+        .select('email, mot_de_passe_temporaire')
+        .eq('client_id', client.id)
+        .single();
+
+      if (!espace?.email || !espace?.mot_de_passe_temporaire) {
+        alert('❌ Erreur: Aucun espace membre trouvé pour ce client');
+        return;
+      }
+
+      // Envoyer l'email avec les identifiants existants
+      const emailResult = await sendClientCredentialsEmail({
+        to: espace.email,
+        clientName: `${client.prenom || ''} ${client.nom || ''}`.trim(),
+        clientEmail: espace.email,
+        clientPassword: espace.mot_de_passe_temporaire,
+        entrepriseName: entreprise?.nom || 'Votre entreprise',
+      });
+
+      if (emailResult.success) {
+        alert('✅ Identifiants envoyés par email avec succès !\n\nDestinataire: ' + espace.email);
+      } else {
+        alert('❌ Erreur lors de l\'envoi de l\'email: ' + emailResult.error);
+      }
+      return;
+    }
+
+    // Envoyer l'email avec les identifiants
+    const emailResult = await sendClientCredentialsEmail({
+      to: credentialsData.email || client.email,
+      clientName: `${credentialsData.client_prenom || client.prenom || ''} ${credentialsData.client_nom || client.nom || ''}`.trim(),
+      clientEmail: credentialsData.email || client.email,
+      clientPassword: credentialsData.password || '',
+      entrepriseName: credentialsData.entreprise_nom || entreprise?.nom || 'Votre entreprise',
+    });
+
+    if (emailResult.success) {
+      alert('✅ Identifiants envoyés par email avec succès !\n\nDestinataire: ' + (credentialsData.email || client.email));
+    } else {
+      alert('❌ Erreur lors de l\'envoi de l\'email: ' + emailResult.error);
+    }
+  } catch (error) {
+    console.error('Erreur envoi identifiants:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    alert('❌ Erreur lors de l\'envoi des identifiants: ' + errorMessage);
+  } finally {
+    setSendingEmails((prev) => {
+      const next = new Set(prev);
+      next.delete(entrepriseId);
+      return next;
+    });
+  }
 }
 

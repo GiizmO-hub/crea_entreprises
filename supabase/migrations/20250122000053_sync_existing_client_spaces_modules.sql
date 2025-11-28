@@ -70,3 +70,6 @@ SELECT sync_all_client_spaces_modules();
 
 COMMENT ON FUNCTION sync_all_client_spaces_modules IS 'Synchronise tous les espaces clients existants avec les modules inclus dans leurs plans d''abonnement actifs.';
 
+
+
+

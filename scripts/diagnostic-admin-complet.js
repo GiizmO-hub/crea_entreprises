@@ -71,3 +71,6 @@ async function diagnosticComplet() {
 // Lancer le diagnostic
 diagnosticComplet();
 
+
+
+

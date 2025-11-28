@@ -192,3 +192,6 @@ CREATE TRIGGER trigger_delete_espace_membre_auth_user
 
 COMMENT ON FUNCTION delete_espace_membre_auth_user_trigger() IS 'Supprime automatiquement l''auth.user lors de la suppression d''un espace membre (si c''est le dernier espace, protège les super admin PLATEFORME)';
 
+
+
+

@@ -222,3 +222,6 @@ COMMENT ON FUNCTION cleanup_email_complete(text) IS 'Supprime complètement un e
 
 GRANT EXECUTE ON FUNCTION cleanup_email_complete(text) TO authenticated;
 
+
+
+

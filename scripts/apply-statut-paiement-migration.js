@@ -124,3 +124,6 @@ async function applyMigration() {
 // Exécuter
 applyMigration();
 
+
+
+

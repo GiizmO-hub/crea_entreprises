@@ -319,3 +319,6 @@ BEGIN
   RAISE NOTICE '📦 La fonction create_espace_membre_from_client_unified utilise maintenant cette nouvelle fonction';
 END $$;
 
+
+
+

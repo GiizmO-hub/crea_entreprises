@@ -41,3 +41,6 @@ $$;
 
 COMMENT ON FUNCTION get_client_super_admin_status IS 'Récupère le statut client_super_admin de tous les clients d''une entreprise. Utilise is_platform_super_admin() pour vérifier les permissions.';
 
+
+
+

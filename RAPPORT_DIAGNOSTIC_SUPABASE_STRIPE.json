@@ -1,0 +1,93 @@
+{
+  "configuration": {
+    "supabase_url": "https://ewlozuwvrteopotfizcr.supabase.co",
+    "service_key_configured": true,
+    "database_url_configured": true,
+    "secrets_check": "MANUAL_CHECK_REQUIRED"
+  },
+  "edgeFunctions": {
+    "create-stripe-checkout": {
+      "exists": true,
+      "has_secret_key": true,
+      "has_webhook_secret": true
+    },
+    "stripe-webhooks": {
+      "exists": true,
+      "has_secret_key": true,
+      "has_webhook_secret": true
+    }
+  },
+  "paiements": {
+    "count": 10,
+    "stats": {
+      "total": 10,
+      "en_attente": 1,
+      "paye": 9,
+      "avec_stripe_id": 0,
+      "sans_stripe_id": 10
+    },
+    "recent": [
+      {
+        "id": "199242d3-0ab2-467d-a490-4b8126b45214",
+        "statut": "en_attente",
+        "stripe_payment_id": null,
+        "entreprise_id": "b54f8eb8-bdda-4682-94f9-b1c4743b8b0b",
+        "montant_ttc": 239.88,
+        "created_at": "2025-11-27T14:14:12.139228+00:00"
+      },
+      {
+        "id": "de2a0aaa-df02-4dcd-8598-625c8350c6ec",
+        "statut": "paye",
+        "stripe_payment_id": null,
+        "entreprise_id": null,
+        "montant_ttc": 239.88,
+        "created_at": "2025-11-27T13:50:30.673753+00:00"
+      },
+      {
+        "id": "08ff1984-4d92-4588-80ea-f6b99b9a9106",
+        "statut": "paye",
+        "stripe_payment_id": null,
+        "entreprise_id": null,
+        "montant_ttc": 239.88,
+        "created_at": "2025-11-27T12:47:35.774702+00:00"
+      },
+      {
+        "id": "02890385-f0c3-4928-a160-b9275035e1c6",
+        "statut": "paye",
+        "stripe_payment_id": null,
+        "entreprise_id": null,
+        "montant_ttc": 239.88,
+        "created_at": "2025-11-27T12:21:23.745715+00:00"
+      },
+      {
+        "id": "69d63c89-2bd8-4562-9af7-58a8c2af5a8d",
+        "statut": "paye",
+        "stripe_payment_id": null,
+        "entreprise_id": null,
+        "montant_ttc": 239.88,
+        "created_at": "2025-11-27T12:17:22.71674+00:00"
+      }
+    ]
+  },
+  "webhooks": {},
+  "recommendations": [
+    {
+      "level": "HIGH",
+      "issue": "10 paiement(s) sans stripe_payment_id",
+      "fix": "Les webhooks Stripe ne sont peut-être pas reçus ou configurés correctement"
+    },
+    {
+      "level": "MEDIUM",
+      "issue": "1 paiement(s) en attente",
+      "fix": "Vérifier que les webhooks Stripe sont bien configurés et reçus"
+    },
+    {
+      "level": "HIGH",
+      "issue": "Aucun abonnement créé",
+      "fix": "Le workflow de création d'abonnement après paiement ne fonctionne pas"
+    }
+  ],
+  "abonnements": {
+    "count": 0
+  }
+}

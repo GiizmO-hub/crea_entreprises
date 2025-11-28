@@ -150,3 +150,6 @@ BEGIN
   RAISE NOTICE '   - Synchronise avec auth.users.raw_user_meta_data';
 END $$;
 
+
+
+

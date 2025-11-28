@@ -1,18 +1,28 @@
 import { createContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { User, Session } from '@supabase/supabase-js';
+import type { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
 export interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 }
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Valeur par défaut pour éviter les erreurs si utilisé en dehors du Provider
+const defaultValue: AuthContextType = {
+  user: null,
+  session: null,
+  loading: true,
+  signIn: async () => ({ error: null }),
+  signUp: async () => ({ error: null }),
+  signOut: async () => {},
+};
+
+export const AuthContext = createContext<AuthContextType>(defaultValue);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -59,26 +69,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      console.log('🔐 Tentative de connexion pour:', email);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        console.error('❌ Erreur connexion:', error.message);
+        return { error };
+      }
+      
+      if (data?.user) {
+        console.log('✅ Connexion réussie:', data.user.email);
+        setUser(data.user);
+        setSession(data.session);
+      }
+      
+      return { error: null };
+    } catch (err: unknown) {
+      console.error('❌ Erreur inattendue signIn:', err);
+      // Créer un objet AuthError compatible
+      const authError: AuthError = {
+        name: 'AuthError',
+        message: err instanceof Error ? err.message : 'Erreur lors de la connexion',
+        status: 500,
+      } as AuthError;
+      return { error: authError };
+    }
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      console.log('📝 Tentative d\'inscription pour:', email);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      
+      if (error) {
+        console.error('❌ Erreur inscription:', error.message);
+        return { error };
+      }
+      
+      if (data?.user) {
+        console.log('✅ Inscription réussie:', data.user.email);
+        setUser(data.user);
+        setSession(data.session);
+      }
+      
+      return { error: null };
+    } catch (err: unknown) {
+      console.error('❌ Erreur inattendue signUp:', err);
+      // Créer un objet AuthError compatible
+      const authError: AuthError = {
+        name: 'AuthError',
+        message: err instanceof Error ? err.message : 'Erreur lors de l\'inscription',
+        status: 500,
+      } as AuthError;
+      return { error: authError };
+    }
   };
 
   const signOut = async () => {
     try {
       console.log('🔄 Déconnexion en cours...');
       
-      // Nettoyer les états locaux D'ABORD
+      // Nettoyer les états D'ABORD pour déclencher le démontage des composants
       setSession(null);
       setUser(null);
       
@@ -87,23 +145,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (error) {
         console.error('❌ Erreur lors de la déconnexion Supabase:', error);
-        // Même en cas d'erreur, forcer le nettoyage
-        setSession(null);
-        setUser(null);
-        // Nettoyer le localStorage et sessionStorage
-        localStorage.clear();
-        sessionStorage.clear();
-        throw error;
+      } else {
+        console.log('✅ Déconnexion Supabase réussie');
       }
       
-      console.log('✅ Déconnexion Supabase réussie');
-      
-      // Nettoyer TOUT le storage pour être sûr
+      // Nettoyer le storage
       localStorage.clear();
       sessionStorage.clear();
       
-      // Forcer un rechargement complet de la page
-      window.location.href = '/';
+      // SOLUTION : Ne PAS recharger la page, laisser React gérer la transition
+      // Quand on met user à null, React affichera automatiquement le composant Auth
+      // Cela évite les erreurs removeChild lors du rechargement forcé
+      
+      // Nettoyer l'URL pour revenir à la racine (sans recharger)
+      if (window.location.hash || window.location.pathname !== '/') {
+        window.history.replaceState(null, '', '/');
+      }
+      
+      console.log('✅ Déconnexion terminée - React gérera la transition naturellement');
     } catch (error) {
       console.error('❌ Erreur dans signOut:', error);
       // En cas d'erreur, forcer quand même le nettoyage et la redirection
@@ -111,7 +170,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       localStorage.clear();
       sessionStorage.clear();
-      window.location.href = '/';
+      
+      // Nettoyer l'URL (sans recharger)
+      if (window.location.hash || window.location.pathname !== '/') {
+        window.history.replaceState(null, '', '/');
+      }
     }
   };
 

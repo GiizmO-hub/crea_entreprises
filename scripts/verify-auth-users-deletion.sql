@@ -54,3 +54,6 @@ FROM auth.users u
 WHERE u.email != 'VOTRE_EMAIL_SUPER_ADMIN'  -- ⚠️ REMPLACER par votre email super admin
 ORDER BY u.created_at DESC;
 
+
+
+

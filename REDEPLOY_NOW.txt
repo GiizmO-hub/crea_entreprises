@@ -1,0 +1,30 @@
+═══════════════════════════════════════════════════════════════════
+  🚀 REDÉPLOIEMENT RAPIDE - 30 SECONDES
+═══════════════════════════════════════════════════════════════════
+
+📋 ÉTAPE PAR ÉTAPE :
+
+1. Ouvrez ce lien dans votre navigateur :
+   https://supabase.com/dashboard/project/ewlozuwvrteopotfizcr/functions
+
+2. Trouvez "create-stripe-checkout" dans la liste des fonctions
+
+3. Cliquez sur les 3 points (⋮) à droite de la fonction
+
+4. Cliquez sur "Deploy" ou "Redeploy"
+
+5. Attendez 10-20 secondes
+
+6. ✅ C'est terminé !
+
+═══════════════════════════════════════════════════════════════════
+  🧪 TESTER APRÈS REDÉPLOIEMENT :
+═══════════════════════════════════════════════════════════════════
+
+1. Rafraîchissez votre navigateur (Cmd+R ou F5)
+2. Créez une entreprise
+3. Cliquez sur "Payer par carte bancaire"
+4. L'erreur CORS devrait disparaître !
+5. Vous serez redirigé vers Stripe Checkout
+
+═══════════════════════════════════════════════════════════════════

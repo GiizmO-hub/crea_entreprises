@@ -103,3 +103,6 @@ $$;
 
 COMMENT ON FUNCTION toggle_client_super_admin IS 'Active ou désactive le statut super_admin d''un client dans son espace. Seuls les super_admin de la plateforme peuvent utiliser cette fonction.';
 
+
+
+

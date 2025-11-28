@@ -1,0 +1,36 @@
+═══════════════════════════════════════════════════════════════════
+  🚀 DÉPLOIEMENT AUTOMATIQUE AVEC VOTRE TOKEN
+═══════════════════════════════════════════════════════════════════
+
+Votre token : sbp_cde65a8637aa3680b475cc189236b6fec950808d
+
+📋 COMMANDE RAPIDE :
+
+   cd /Users/user/Downloads/cursor
+   ./scripts/setup-and-deploy.sh
+
+Ce script va automatiquement :
+  1. ✅ Installer Supabase CLI
+  2. ✅ Configurer votre token
+  3. ✅ Lier le projet
+  4. ✅ Déployer l'Edge Function
+
+═══════════════════════════════════════════════════════════════════
+  📋 OU MANUELLEMENT :
+═══════════════════════════════════════════════════════════════════
+
+1. Installer CLI :
+   sudo npm install -g supabase
+
+2. Configurer le token :
+   export SUPABASE_ACCESS_TOKEN=sbp_cde65a8637aa3680b475cc189236b6fec950808d
+   supabase login --token sbp_cde65a8637aa3680b475cc189236b6fec950808d
+
+3. Lier le projet :
+   cd /Users/user/Downloads/cursor
+   supabase link --project-ref ewlozuwvrteopotfizcr
+
+4. Déployer :
+   supabase functions deploy create-stripe-checkout
+
+═══════════════════════════════════════════════════════════════════

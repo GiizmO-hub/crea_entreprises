@@ -23,3 +23,6 @@ BEGIN
   RAISE NOTICE 'Rôles autorisés: super_admin, admin, collaborateur, client, manager, comptable, commercial';
 END $$;
 
+
+
+

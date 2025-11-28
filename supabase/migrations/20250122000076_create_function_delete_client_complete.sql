@@ -85,3 +85,6 @@ COMMENT ON FUNCTION delete_client_complete_unified(uuid) IS 'Supprime définitiv
 
 GRANT EXECUTE ON FUNCTION delete_client_complete_unified(uuid) TO authenticated;
 
+
+
+

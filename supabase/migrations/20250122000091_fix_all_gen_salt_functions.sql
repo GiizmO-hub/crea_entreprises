@@ -219,3 +219,6 @@ BEGIN
   RAISE NOTICE '✅ Fonction create_espace_membre_from_client_unified corrigée avec search_path incluant extensions';
 END $$;
 
+
+
+

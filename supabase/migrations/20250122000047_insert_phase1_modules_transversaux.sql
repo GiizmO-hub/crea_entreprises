@@ -268,3 +268,6 @@ BEGIN
   RAISE NOTICE '✅ Modules core mis à jour avec secteur transversal';
 END $$;
 
+
+
+

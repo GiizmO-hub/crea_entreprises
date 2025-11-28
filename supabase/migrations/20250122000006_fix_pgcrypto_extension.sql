@@ -244,3 +244,6 @@ $$;
 
 COMMENT ON FUNCTION create_espace_membre_from_client IS 'Crée un espace membre pour un client existant avec un abonnement et des options. Crée l''utilisateur dans auth.users avec cryptage bcrypt et retourne les identifiants (email + password). Nécessite l''extension pgcrypto.';
 
+
+
+

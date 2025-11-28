@@ -311,3 +311,6 @@ BEGIN
   RAISE NOTICE '   Triggers créés: 3';
 END $$;
 
+
+
+

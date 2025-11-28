@@ -1,0 +1,25 @@
+# Configuration Supabase pour Edge Functions
+# Ce fichier permet de configurer les permissions et paramètres des Edge Functions
+
+[functions]
+# Configuration globale pour toutes les Edge Functions
+# (options communes peuvent être ajoutées ici)
+
+# Configuration spécifique pour stripe-webhooks
+# ✅ IMPORTANT : Désactive la vérification JWT pour permettre les webhooks Stripe
+[functions.stripe-webhooks]
+verify_jwt = false
+
+# Note : Les webhooks Stripe utilisent leur propre système de signature
+# La sécurité est assurée par la vérification de la signature Stripe
+# qui est effectuée dans le code de la fonction elle-même
+
+# Configuration spécifique pour resend-webhooks
+# ✅ IMPORTANT : Désactive la vérification JWT pour permettre les webhooks Resend
+[functions.resend-webhooks]
+verify_jwt = false
+
+# Note : Les webhooks Resend utilisent leur propre système de signature
+# La sécurité est assurée par la vérification de la signature Resend
+# qui est effectuée dans le code de la fonction elle-même
+

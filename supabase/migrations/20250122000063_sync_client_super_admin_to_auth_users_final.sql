@@ -570,3 +570,6 @@ $$;
 
 COMMENT ON FUNCTION create_espace_membre_from_client IS 'Crée ou met à jour un espace membre pour un client. Synchronise le rôle vers auth.users.raw_user_meta_data pour garantir la persistance (comme super_admin plateforme).';
 
+
+
+

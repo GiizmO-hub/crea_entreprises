@@ -125,3 +125,6 @@ SELECT link_all_abonnements_to_client_spaces();
 -- ✅ 4. Synchroniser aussi tous les modules après la liaison
 SELECT sync_all_client_spaces_modules();
 
+
+
+

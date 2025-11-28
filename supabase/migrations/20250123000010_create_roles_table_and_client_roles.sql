@@ -283,3 +283,6 @@ BEGIN
   RAISE NOTICE '   - Vue clients_with_roles créée';
 END $$;
 
+
+
+

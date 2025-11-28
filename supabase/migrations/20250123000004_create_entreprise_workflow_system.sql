@@ -533,3 +533,6 @@ COMMENT ON FUNCTION envoyer_email_apres_validation_entreprise IS 'Prépare l''en
 
 GRANT EXECUTE ON FUNCTION envoyer_email_apres_validation_entreprise TO authenticated;
 
+
+
+

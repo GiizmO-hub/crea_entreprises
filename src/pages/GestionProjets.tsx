@@ -131,9 +131,11 @@ export default function GestionProjets() {
   const [projets, setProjets] = useState<Projet[]>([]);
   const [entreprises, setEntreprises] = useState<Array<{ id: string; nom: string }>>([]);
   const [clients, setClients] = useState<Array<{ id: string; nom?: string; prenom?: string; entreprise_nom?: string }>>([]);
-  const [collaborateurs, setCollaborateurs] = useState<Array<{ id: string; user_id: string; nom?: string; prenom?: string; email: string; poste?: string }>>([]);
+  const [collaborateurs, setCollaborateurs] = useState<Array<{ id: string; user_id: string; nom?: string; prenom?: string; email: string; poste?: string; role?: string }>>([]);
   const [equipes, setEquipes] = useState<Array<{ id: string; nom: string; entreprise_id: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [selectedProjet, setSelectedProjet] = useState<Projet | null>(null);
   const [showJalons, setShowJalons] = useState(false);
@@ -162,12 +164,66 @@ export default function GestionProjets() {
     entreprise_id: '',
   });
 
+  // ✅ Vérifier si l'utilisateur est un client ou un super_admin plateforme
   useEffect(() => {
     if (user) {
+      checkUserRole();
+    } else {
+      setIsClient(false);
+      setIsSuperAdmin(false);
+    }
+  }, [user]);
+
+  // ✅ Charger les entreprises une fois le rôle déterminé
+  useEffect(() => {
+    if (user && (isClient !== undefined || isSuperAdmin !== undefined)) {
       loadDependencies();
       loadEntreprises();
     }
-  }, [user]);
+  }, [user, isClient, isSuperAdmin]);
+
+  // ✅ Fonction pour vérifier le rôle de l'utilisateur
+  const checkUserRole = async () => {
+    if (!user) {
+      setIsClient(false);
+      setIsSuperAdmin(false);
+      return;
+    }
+
+    try {
+      // 1. Vérifier si c'est un super_admin plateforme
+      const { data: isPlatformAdmin, error: platformAdminError } = await supabase.rpc('is_platform_super_admin');
+      
+      if (!platformAdminError && isPlatformAdmin === true) {
+        setIsSuperAdmin(true);
+        setIsClient(false);
+        console.log('✅ Super admin plateforme détecté dans GestionProjets');
+        return;
+      }
+
+      // 2. Vérifier si c'est un client (a un espace membre)
+      const { data: espaceClient, error: espaceError } = await supabase
+        .from('espaces_membres_clients')
+        .select('entreprise_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!espaceError && espaceClient) {
+        setIsClient(true);
+        setIsSuperAdmin(false);
+        console.log('✅ Client détecté dans GestionProjets, entreprise:', espaceClient.entreprise_id);
+        return;
+      }
+
+      // 3. Par défaut, ce n'est ni client ni super_admin
+      setIsClient(false);
+      setIsSuperAdmin(false);
+    } catch (error) {
+      console.error('❌ Erreur vérification rôle:', error);
+      setIsClient(false);
+      setIsSuperAdmin(false);
+    }
+  };
 
   useEffect(() => {
     if (entreprises.length > 0 && !selectedEntreprise) {
@@ -199,66 +255,184 @@ export default function GestionProjets() {
   };
 
   const loadEntreprises = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('entreprises')
-        .select('id, nom')
-        .order('nom');
+    if (!user) return;
 
-      if (error) throw error;
-      setEntreprises(data || []);
+    try {
+      let entreprisesData: Array<{ id: string; nom: string }> = [];
+
+      // ✅ Si c'est un CLIENT, charger UNIQUEMENT son entreprise
+      if (isClient) {
+        const { data: espaceClient, error: espaceError } = await supabase
+          .from('espaces_membres_clients')
+          .select('entreprise_id, entreprise:entreprises(id, nom)')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (espaceError) throw espaceError;
+
+        if (espaceClient && espaceClient.entreprise) {
+          const entreprise = espaceClient.entreprise as { id: string; nom: string };
+          entreprisesData = [entreprise];
+          setSelectedEntreprise(entreprise.id);
+          setFormData((prev) => ({ ...prev, entreprise_id: entreprise.id }));
+          console.log('✅ Entreprise du client chargée:', entreprise.nom);
+        }
+      } else if (isSuperAdmin) {
+        // ✅ Si c'est un SUPER_ADMIN PLATEFORME, charger TOUTES les entreprises
+        const { data, error } = await supabase
+          .from('entreprises')
+          .select('id, nom')
+          .order('nom');
+
+        if (error) throw error;
+
+        entreprisesData = data || [];
+        if (data && data.length > 0) {
+          setSelectedEntreprise(data[0].id);
+          setFormData((prev) => ({ ...prev, entreprise_id: data[0].id }));
+        }
+        console.log('✅ Toutes les entreprises chargées pour super_admin:', entreprisesData.length);
+      } else {
+        // Utilisateur normal (propriétaire d'entreprise) : charger ses entreprises
+        const { data, error } = await supabase
+          .from('entreprises')
+          .select('id, nom')
+          .eq('user_id', user.id)
+          .order('nom');
+
+        if (error) throw error;
+
+        entreprisesData = data || [];
+        if (data && data.length > 0) {
+          setSelectedEntreprise(data[0].id);
+          setFormData((prev) => ({ ...prev, entreprise_id: data[0].id }));
+        }
+      }
+
+      setEntreprises(entreprisesData);
+      setLoading(false);
     } catch (error) {
-      console.error('Erreur chargement entreprises:', error);
+      console.error('❌ Erreur chargement entreprises:', error);
+      setLoading(false);
     }
   };
 
   const loadClients = async (entrepriseId: string) => {
+    if (!entrepriseId) return;
+
     try {
-      const { data, error } = await supabase
+      // ✅ Charger TOUS les membres de l'entreprise : clients + collaborateurs + salariés
+      const allMembers: Array<{ id: string; nom?: string; prenom?: string; entreprise_nom?: string }> = [];
+
+      // 1. Charger les clients
+      const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('id, nom, prenom, entreprise_nom')
         .eq('entreprise_id', entrepriseId)
         .order('nom');
 
-      if (error) throw error;
-      setClients(data || []);
-    } catch (error) {
-      console.error('Erreur chargement clients:', error);
-    }
-  };
-
-  // Charger les collaborateurs (réutilise le module collaborateurs)
-  const loadCollaborateurs = async (entrepriseId: string) => {
-    try {
-      const canReuse = await canReuseModule('gestion-projets', 'collaborateurs');
-      if (!canReuse) {
-        console.warn('⚠️ Module Collaborateurs non disponible pour réutilisation');
-        return;
+      if (clientsError) {
+        console.error('❌ Erreur chargement clients:', clientsError);
+      } else if (clientsData) {
+        allMembers.push(...clientsData);
       }
 
-      const { data, error } = await supabase
-        .from('collaborateurs')
-        .select('id, user_id, nom, prenom, email, poste')
+      // 2. Charger les collaborateurs de l'entreprise (comptable, vendeur, manager, administrateur...)
+      const { data: collaborateursData, error: collaborateursError } = await supabase
+        .from('collaborateurs_entreprise')
+        .select('id, nom, prenom, email, role')
         .eq('entreprise_id', entrepriseId)
-        .eq('statut', 'active')
+        .eq('actif', true)
         .order('nom');
 
-      if (error) throw error;
-      setCollaborateurs(data || []);
+      if (collaborateursError) {
+        console.error('❌ Erreur chargement collaborateurs:', collaborateursError);
+      } else if (collaborateursData) {
+        // Ajouter les collaborateurs à la liste des membres pour l'utilisation dans les projets
+        allMembers.push(...collaborateursData.map(c => ({
+          id: c.id,
+          nom: c.nom || '',
+          prenom: c.prenom || '',
+          entreprise_nom: c.role ? `[${c.role}]` : undefined,
+        })));
+      }
+
+      // 3. Charger les salariés de l'entreprise
+      const { data: salariesData, error: salariesError } = await supabase
+        .from('salaries')
+        .select('id, nom, prenom, poste')
+        .eq('entreprise_id', entrepriseId)
+        .eq('statut', 'actif')
+        .order('nom');
+
+      if (salariesError) {
+        console.error('❌ Erreur chargement salariés:', salariesError);
+      } else if (salariesData) {
+        allMembers.push(...salariesData.map(s => ({
+          id: s.id,
+          nom: s.nom || '',
+          prenom: s.prenom || '',
+          entreprise_nom: s.poste ? `Salarié - ${s.poste}` : 'Salarié',
+        })));
+      }
+
+      // Trier tous les membres par nom
+      allMembers.sort((a, b) => {
+        const nomA = (a.nom || '').toLowerCase();
+        const nomB = (b.nom || '').toLowerCase();
+        return nomA.localeCompare(nomB);
+      });
+
+      setClients(allMembers);
+      console.log(`✅ ${allMembers.length} membre(s) chargé(s) pour les projets: ${clientsData?.length || 0} clients, ${collaborateursData?.length || 0} collaborateurs, ${salariesData?.length || 0} salariés`);
     } catch (error) {
-      console.error('Erreur chargement collaborateurs:', error);
+      console.error('❌ Erreur chargement membres:', error);
     }
   };
 
-  // Charger les équipes (réutilise le module gestion-equipe)
-  const loadEquipes = async (entrepriseId: string) => {
+  // ✅ Charger les collaborateurs depuis collaborateurs_entreprise
+  const loadCollaborateurs = async (entrepriseId: string) => {
+    if (!entrepriseId) return;
+
     try {
-      const canReuse = await canReuseModule('gestion-projets', 'gestion-equipe');
-      if (!canReuse) {
-        console.warn('⚠️ Module Gestion d\'Équipe non disponible pour réutilisation');
+      // Charger les collaborateurs de l'entreprise (comptable, vendeur, manager, administrateur...)
+      const { data, error } = await supabase
+        .from('collaborateurs_entreprise')
+        .select('id, user_id, nom, prenom, email, role')
+        .eq('entreprise_id', entrepriseId)
+        .eq('actif', true)
+        .order('nom');
+
+      if (error) {
+        console.error('❌ Erreur chargement collaborateurs:', error);
+        setCollaborateurs([]);
         return;
       }
 
+      // Mapper les données pour correspondre à l'interface attendue
+      const collaborateursMapped = (data || []).map(c => ({
+        id: c.id,
+        user_id: c.user_id || '',
+        nom: c.nom || '',
+        prenom: c.prenom || '',
+        email: c.email || '',
+        role: c.role || '',
+        poste: c.role, // Utiliser role comme poste pour compatibilité
+      }));
+
+      setCollaborateurs(collaborateursMapped);
+      console.log(`✅ ${collaborateursMapped.length} collaborateur(s) chargé(s) pour l'entreprise`);
+    } catch (error) {
+      console.error('❌ Erreur chargement collaborateurs:', error);
+      setCollaborateurs([]);
+    }
+  };
+
+  // ✅ Charger les équipes de l'entreprise
+  const loadEquipes = async (entrepriseId: string) => {
+    if (!entrepriseId) return;
+
+    try {
       const { data, error } = await supabase
         .from('equipes')
         .select('id, nom, entreprise_id')
@@ -266,10 +440,17 @@ export default function GestionProjets() {
         .eq('actif', true)
         .order('nom');
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur chargement équipes:', error);
+        setEquipes([]);
+        return;
+      }
+
       setEquipes(data || []);
+      console.log(`✅ ${data?.length || 0} équipe(s) chargée(s) pour l'entreprise`);
     } catch (error) {
-      console.error('Erreur chargement équipes:', error);
+      console.error('❌ Erreur chargement équipes:', error);
+      setEquipes([]);
     }
   };
 
@@ -281,7 +462,7 @@ export default function GestionProjets() {
         .select(`
           *,
           client:clients(id, nom, prenom, entreprise_nom),
-          responsable:collaborateurs!projets_responsable_id_fkey(id, nom, prenom, email),
+          responsable:collaborateurs_entreprise!projets_responsable_id_fkey(id, nom, prenom, email, role),
           equipe:equipes!projets_equipe_id_fkey(id, nom)
         `)
         .eq('entreprise_id', entrepriseId)
@@ -458,7 +639,7 @@ export default function GestionProjets() {
         .from('projets_taches')
         .select(`
           *,
-          collaborateur:collaborateurs!projets_taches_collaborateur_id_fkey(id, nom, prenom, email),
+          collaborateur:collaborateurs_entreprise!projets_taches_collaborateur_id_fkey(id, nom, prenom, email, role),
           equipe:equipes!projets_taches_equipe_id_fkey(id, nom)
         `)
         .eq('projet_id', projetId)
@@ -473,11 +654,22 @@ export default function GestionProjets() {
 
   // Fonction pour ouvrir un module réutilisable
   const handleOpenReusableModule = async (moduleCode: string) => {
-    const canReuse = await canReuseModule('gestion-projets', moduleCode);
-    if (canReuse) {
-      navigateToReusableModule(moduleCode, onNavigate);
-    } else {
-      alert(`Le module ${getModuleLabel(moduleCode)} doit être activé pour utiliser cette fonctionnalité`);
+    try {
+      const canReuse = await canReuseModule('gestion-projets', moduleCode);
+      if (canReuse) {
+        // Naviguer vers le module via window.location.hash
+        const moduleRoute = moduleCode === 'clients' ? '#clients' :
+                           moduleCode === 'collaborateurs' ? '#collaborateurs' :
+                           moduleCode === 'gestion-equipe' ? '#gestion-equipe' :
+                           moduleCode === 'documents' ? '#documents' :
+                           `#${moduleCode}`;
+        window.location.hash = moduleRoute;
+      } else {
+        alert(`Le module ${getModuleLabel(moduleCode)} doit être activé pour utiliser cette fonctionnalité`);
+      }
+    } catch (error) {
+      console.error('❌ Erreur ouverture module réutilisable:', error);
+      alert('Erreur lors de l\'ouverture du module');
     }
   };
 
@@ -582,23 +774,33 @@ export default function GestionProjets() {
           </div>
         </div>
 
-        <select
-          value={selectedEntreprise}
-          onChange={(e) => {
-            setSelectedEntreprise(e.target.value);
-            setFormData((prev) => ({ ...prev, entreprise_id: e.target.value }));
-            loadClients(e.target.value);
-            loadCollaborateurs(e.target.value);
-            loadEquipes(e.target.value);
-          }}
-          className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
-        >
-          {entreprises.map((ent) => (
-            <option key={ent.id} value={ent.id} className="bg-gray-800">
-              {ent.nom}
-            </option>
-          ))}
-        </select>
+        {/* Sélection Entreprise - UNIQUEMENT pour super_admin plateforme ou utilisateurs avec plusieurs entreprises */}
+        {!isClient && entreprises.length > 1 && (
+          <select
+            value={selectedEntreprise}
+            onChange={(e) => {
+              setSelectedEntreprise(e.target.value);
+              setFormData((prev) => ({ ...prev, entreprise_id: e.target.value }));
+              loadClients(e.target.value);
+              loadCollaborateurs(e.target.value);
+              loadEquipes(e.target.value);
+            }}
+            className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+          >
+            {entreprises.map((ent) => (
+              <option key={ent.id} value={ent.id} className="bg-gray-800">
+                {ent.nom}
+              </option>
+            ))}
+          </select>
+        )}
+        {/* Pour les clients, afficher le nom de leur entreprise */}
+        {isClient && entreprises.length === 1 && (
+          <div className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white">
+            <span className="text-sm text-gray-300">Entreprise : </span>
+            <span className="font-semibold">{entreprises[0]?.nom || 'Chargement...'}</span>
+          </div>
+        )}
 
         <select
           value={filterStatut}
@@ -665,12 +867,16 @@ export default function GestionProjets() {
                     onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
                     className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
                   >
-                    <option value="" className="bg-gray-800">Aucun client</option>
-                    {clients.map((client) => (
-                      <option key={client.id} value={client.id} className="bg-gray-800">
-                        {client.entreprise_nom || `${client.prenom} ${client.nom}`}
-                      </option>
-                    ))}
+                    <option value="" className="bg-gray-800">Aucun membre</option>
+                    {clients.map((member) => {
+                      const displayName = `${member.nom || ''} ${member.prenom || ''}`.trim();
+                      const suffix = member.entreprise_nom ? `(${member.entreprise_nom})` : '';
+                      return (
+                        <option key={member.id} value={member.id} className="bg-gray-800">
+                          {displayName} {suffix}
+                        </option>
+                      );
+                    })}
                   </select>
                   <button
                     type="button"
@@ -692,7 +898,7 @@ export default function GestionProjets() {
                     <option value="" className="bg-gray-800">Aucun responsable</option>
                     {collaborateurs.map((collab) => (
                       <option key={collab.id} value={collab.id} className="bg-gray-800">
-                        {collab.prenom} {collab.nom} ({collab.email})
+                        {collab.prenom} {collab.nom} {collab.role ? `[${collab.role}]` : ''} ({collab.email})
                       </option>
                     ))}
                   </select>

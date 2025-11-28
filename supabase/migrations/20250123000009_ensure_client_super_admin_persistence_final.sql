@@ -234,3 +234,6 @@ BEGIN
   RAISE NOTICE '   - Le rôle client_super_admin est maintenant PERMANENT dans la base de données';
 END $$;
 
+
+
+

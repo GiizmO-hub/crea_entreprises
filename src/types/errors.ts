@@ -18,3 +18,6 @@ export interface ApiError {
 
 export type ErrorType = SupabaseError | ApiError | Error | unknown;
 
+
+
+

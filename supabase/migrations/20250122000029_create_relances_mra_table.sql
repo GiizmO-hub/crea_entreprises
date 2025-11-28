@@ -71,3 +71,6 @@ CREATE POLICY "Users can manage relances_mra of their entreprises"
 
 COMMENT ON TABLE relances_mra IS 'Table pour gérer les relances MRA (Mise en Recouvrement d''Avoirs)';
 
+
+
+

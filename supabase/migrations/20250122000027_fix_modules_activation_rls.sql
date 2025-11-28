@@ -57,3 +57,6 @@ CREATE POLICY "Super admin peut supprimer des modules"
 
 COMMENT ON FUNCTION is_super_admin IS 'Vérifier si l''utilisateur actuel est super admin';
 
+
+
+

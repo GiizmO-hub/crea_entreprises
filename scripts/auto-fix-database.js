@@ -199,3 +199,6 @@ async function checkAndFixDatabase() {
 // Exécuter
 checkAndFixDatabase().catch(console.error);
 
+
+
+

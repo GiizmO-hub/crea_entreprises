@@ -115,3 +115,6 @@ BEGIN
   RAISE NOTICE 'Colonnes finales de documents: %', col_list;
 END $$;
 
+
+
+

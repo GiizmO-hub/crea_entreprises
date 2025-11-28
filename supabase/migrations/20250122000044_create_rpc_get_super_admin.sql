@@ -39,3 +39,6 @@ $$;
 
 COMMENT ON FUNCTION get_super_admin_user_id IS 'Retourne l''ID (UUID) du super admin depuis auth.users ou utilisateurs';
 
+
+
+

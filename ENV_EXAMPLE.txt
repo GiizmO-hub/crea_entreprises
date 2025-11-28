@@ -5,3 +5,6 @@ VITE_SUPABASE_URL=https://votre-projet.supabase.co
 VITE_SUPABASE_ANON_KEY=votre_cle_anon_supabase
 
 
+
+
+

@@ -117,3 +117,6 @@ CREATE TRIGGER update_documents_updated_at
 
 COMMENT ON TABLE documents IS 'Table pour gérer tous les documents de l''entreprise';
 
+
+
+

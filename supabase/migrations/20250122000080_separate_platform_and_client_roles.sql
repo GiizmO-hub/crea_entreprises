@@ -382,3 +382,6 @@ GRANT EXECUTE ON FUNCTION delete_entreprise_complete(uuid) TO authenticated;
 --   - Gère son espace client uniquement
 --   - PEUT supprimer son entreprise (pas de protection)
 
+
+
+

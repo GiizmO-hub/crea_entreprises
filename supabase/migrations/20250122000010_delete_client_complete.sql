@@ -190,3 +190,6 @@ $$;
 
 COMMENT ON FUNCTION delete_client_soft IS 'Supprime uniquement le client sans supprimer les données associées (abonnement, utilisateur, etc.).';
 
+
+
+

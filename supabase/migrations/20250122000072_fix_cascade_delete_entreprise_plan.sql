@@ -282,3 +282,6 @@ COMMENT ON FUNCTION delete_entreprise_complete(uuid) IS 'Supprime une entreprise
 
 GRANT EXECUTE ON FUNCTION delete_entreprise_complete(uuid) TO authenticated;
 
+
+
+

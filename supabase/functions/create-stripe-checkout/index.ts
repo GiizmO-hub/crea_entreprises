@@ -1,0 +1,175 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno';
+
+// ✅ CORRECTION CORS: Headers complets pour preflight
+const buildCorsHeaders = (origin?: string) => ({
+  'Access-Control-Allow-Origin': origin || '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Max-Age': '86400',
+});
+
+serve(async (req: Request) => {
+  const origin = req.headers.get('Origin') || req.headers.get('origin') || '*';
+  const corsHeaders = buildCorsHeaders(origin);
+  
+  // ✅ CORRECTION CORS: Répondre correctement aux requêtes OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { 
+      status: 200,
+      headers: corsHeaders 
+    });
+  }
+
+  try {
+    // Récupérer les variables d'environnement
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
+    const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
+
+    if (!stripeSecretKey) {
+      console.error('STRIPE_SECRET_KEY non configuré dans les secrets Edge Functions');
+      return new Response(
+        JSON.stringify({ 
+          error: 'STRIPE_SECRET_KEY non configuré',
+          details: 'Veuillez ajouter STRIPE_SECRET_KEY dans Supabase Dashboard → Settings → Edge Functions → Secrets'
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // ✅ CORRECTION: Vérifier que les variables d'environnement Supabase sont présentes
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Variables Supabase manquantes');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Configuration Supabase manquante',
+          details: 'Vérifiez que SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont configurés'
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: '2024-06-20',
+      httpClient: Stripe.createFetchHttpClient(),
+    });
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Récupérer le token d'authentification
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Non authentifié' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Vérifier l'utilisateur
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Utilisateur non authentifié' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Récupérer les données de la requête
+    const { paiement_id, success_url, cancel_url } = await req.json();
+
+    if (!paiement_id) {
+      return new Response(
+        JSON.stringify({ error: 'paiement_id requis' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Récupérer les infos du paiement
+    const { data: paiementInfo, error: paiementError } = await supabase.rpc(
+      'get_paiement_info_for_stripe',
+      { p_paiement_id: paiement_id }
+    );
+
+    if (paiementError) {
+      console.error('Erreur RPC get_paiement_info_for_stripe:', paiementError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Erreur lors de la récupération des informations de paiement',
+          details: paiementError.message,
+          code: paiementError.code
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!paiementInfo || !paiementInfo.success) {
+      console.error('Paiement non trouvé ou invalide:', paiementInfo);
+      return new Response(
+        JSON.stringify({ 
+          error: paiementInfo?.error || 'Paiement non trouvé',
+          details: paiementInfo
+        }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Créer la session Stripe Checkout
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'eur',
+            product_data: {
+              name: `Abonnement pour ${paiementInfo.entreprise_nom || 'Entreprise'}`,
+              description: `Création d'entreprise et activation de l'abonnement`,
+            },
+            unit_amount: Math.round((paiementInfo.montant_ttc || 0) * 100), // Convertir en centimes
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: success_url || `${req.headers.get('origin') || 'http://localhost:5173'}/success?session_id={CHECKOUT_SESSION_ID}&paiement_id=${paiement_id}`,
+      cancel_url: cancel_url || `${req.headers.get('origin') || 'http://localhost:5173'}/cancel?paiement_id=${paiement_id}`,
+      client_reference_id: paiement_id, // ✅ IMPORTANT: Stocker le paiement_id pour le webhook
+      metadata: {
+        paiement_id: paiement_id, // ✅ Double stockage pour sécurité
+        entreprise_id: paiementInfo.entreprise_id || '',
+        plan_id: paiementInfo.plan_id || '',
+      },
+      customer_email: paiementInfo.client_email || paiementInfo.entreprise_email,
+    });
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        session_id: session.id,
+        url: session.url,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Erreur création session Stripe:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    const errorDetails = error instanceof Error ? {
+      name: error.name,
+      stack: error.stack,
+    } : {};
+    
+    return new Response(
+      JSON.stringify({
+        error: errorMessage,
+        details: errorDetails,
+        hint: 'Vérifiez les logs de l\'Edge Function dans Supabase Dashboard pour plus de détails'
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+

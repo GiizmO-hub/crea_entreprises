@@ -20,3 +20,6 @@ CORRECTIONS À APPLIQUER DANS Parametres.tsx:
      <EntrepriseAccordion entreprises={entrepriseConfigs} loading={loadingConfig} />
    </div>
 
+
+
+

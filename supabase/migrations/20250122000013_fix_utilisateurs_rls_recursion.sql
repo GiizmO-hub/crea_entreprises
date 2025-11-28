@@ -102,3 +102,6 @@ BEGIN
   RAISE NOTICE 'Les super_admins peuvent voir tous les utilisateurs';
 END $$;
 
+
+
+

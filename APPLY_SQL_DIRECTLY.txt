@@ -1,0 +1,34 @@
+═══════════════════════════════════════════════════════════════════
+  🚀 APPLICATION DIRECTE DE LA MIGRATION - ÉTAPES SIMPLES
+═══════════════════════════════════════════════════════════════════
+
+📋 MIGRATION À APPLIQUER :
+   20250123000062_fix_valider_paiement_carte_automatisation_complete.sql
+
+✅ MÉTHODE LA PLUS RAPIDE (2 MINUTES) :
+
+1. Ouvrez ce lien dans votre navigateur :
+   https://supabase.com/dashboard/project/ewlozuwvrteopotfizcr/sql/new
+
+2. Ouvrez le fichier SQL :
+   APPLY_THIS_SQL.sql
+   (dans le dossier racine du projet)
+
+3. Sélectionnez TOUT le contenu (Cmd+A)
+
+4. Copiez (Cmd+C)
+
+5. Collez dans l'éditeur SQL du Dashboard (Cmd+V)
+
+6. Cliquez sur "Run" ou "Exécuter" (en bas à droite)
+
+7. Attendez 10-20 secondes
+
+8. ✅ C'est terminé !
+
+═══════════════════════════════════════════════════════════════════
+
+💡 ALTERNATIVE : Le fichier SQL est aussi ici :
+   supabase/migrations/20250123000062_fix_valider_paiement_carte_automatisation_complete.sql
+
+═══════════════════════════════════════════════════════════════════

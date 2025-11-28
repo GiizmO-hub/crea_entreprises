@@ -212,3 +212,6 @@ COMMENT ON FUNCTION create_espace_membre_from_client_unified IS 'Crée un espace
 
 GRANT EXECUTE ON FUNCTION create_espace_membre_from_client_unified(uuid, uuid, text, uuid, uuid[]) TO authenticated;
 
+
+
+

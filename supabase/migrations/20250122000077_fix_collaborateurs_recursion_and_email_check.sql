@@ -353,3 +353,6 @@ COMMENT ON FUNCTION create_collaborateur_with_email_check IS 'Crée un collabora
 
 GRANT EXECUTE ON FUNCTION create_collaborateur_with_email_check TO authenticated;
 
+
+
+

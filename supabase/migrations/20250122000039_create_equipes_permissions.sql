@@ -280,3 +280,6 @@ COMMENT ON TABLE equipes IS 'Équipes de travail dans l''entreprise';
 COMMENT ON TABLE collaborateurs_equipes IS 'Liaison many-to-many entre collaborateurs et équipes';
 COMMENT ON TABLE permissions_dossiers IS 'Permissions d''accès aux dossiers par rôle';
 
+
+
+

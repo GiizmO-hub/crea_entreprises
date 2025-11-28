@@ -185,3 +185,6 @@ SELECT sync_all_client_spaces_modules();
 COMMENT ON FUNCTION trigger_sync_modules_on_abonnement_change IS 'Synchronise automatiquement les modules des espaces clients quand un abonnement est créé ou modifié.';
 COMMENT ON FUNCTION trigger_sync_modules_on_plan_modules_change IS 'Synchronise automatiquement les modules des espaces clients quand les modules d''un plan sont modifiés.';
 
+
+
+

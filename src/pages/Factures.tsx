@@ -107,15 +107,25 @@ export default function Factures() {
     if (!user) return;
 
     try {
-      const { data } = await supabase
+      // ✅ SIMPLIFIER : Charger toutes les entreprises - les RLS policies filtreront automatiquement
+      // Si super_admin PLATEFORME → RLS permet de voir toutes
+      // Si utilisateur normal → RLS permet de voir uniquement les siennes
+      console.log('🔄 [Factures] Chargement entreprises (RLS filtrera automatiquement)');
+      
+      const { data, error } = await supabase
         .from('entreprises')
         .select('id, nom')
-        .eq('user_id', user.id)
         .order('nom');
 
+      if (error) {
+        console.error('❌ [Factures] Erreur chargement entreprises:', error);
+        throw error;
+      }
+      
+      console.log(`✅ [Factures] Entreprises chargées: ${data?.length || 0}`);
       setEntreprises(data || []);
     } catch (error) {
-      console.error('Erreur chargement entreprises:', error);
+      console.error('❌ [Factures] Erreur chargement entreprises:', error);
     }
   };
 

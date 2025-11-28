@@ -121,3 +121,6 @@ supabase.auth.getSession().then(() => {
   testFunctions();
 });
 
+
+
+

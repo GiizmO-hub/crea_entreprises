@@ -40,3 +40,6 @@ $$;
 
 COMMENT ON FUNCTION toggle_client_super_admin IS 'Mise à jour des clients existants : les clients avec role=super_admin sont maintenant client_super_admin pour distinguer des super_admin plateforme.';
 
+
+
+

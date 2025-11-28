@@ -4,7 +4,7 @@
  * Affiche les informations d'un client dans une carte
  */
 
-import { Users, Mail, Edit, Trash2, UserPlus } from 'lucide-react';
+import { Users, Mail, Edit, Trash2, UserPlus, Eye } from 'lucide-react';
 import type { Client } from './types';
 
 interface ClientCardProps {
@@ -12,6 +12,7 @@ interface ClientCardProps {
   onEdit: (client: Client) => void;
   onDelete: (clientId: string) => void;
   onCreateEspaceMembre: (client: Client) => void;
+  onViewDetails?: (clientId: string) => void;
 }
 
 export function ClientCard({
@@ -19,6 +20,7 @@ export function ClientCard({
   onEdit,
   onDelete,
   onCreateEspaceMembre,
+  onViewDetails,
 }: ClientCardProps) {
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-all">
@@ -63,6 +65,16 @@ export function ClientCard({
       )}
 
       <div className="flex gap-2 pt-4 border-t border-white/10">
+        {onViewDetails && (
+          <button
+            onClick={() => onViewDetails(client.id)}
+            className="flex-1 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg transition-all text-sm font-semibold flex items-center justify-center gap-2"
+            title="Voir et modifier tous les détails"
+          >
+            <Eye className="w-4 h-4" />
+            Détails
+          </button>
+        )}
         <button
           onClick={() => onEdit(client)}
           className="flex-1 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-all text-sm font-semibold flex items-center justify-center gap-2"

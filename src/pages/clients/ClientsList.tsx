@@ -19,6 +19,7 @@ interface ClientsListProps {
   onEditClient: (client: Client) => void;
   onDeleteClient: (clientId: string) => void;
   onCreateEspaceMembre: (client: Client) => void;
+  onViewClientDetails?: (clientId: string) => void;
 }
 
 export function ClientsList({
@@ -31,6 +32,7 @@ export function ClientsList({
   onEditClient,
   onDeleteClient,
   onCreateEspaceMembre,
+  onViewClientDetails,
 }: ClientsListProps) {
   // Filtrer les clients selon la recherche
   const filteredClients = useMemo(() => {
@@ -98,6 +100,7 @@ export function ClientsList({
               onEdit={onEditClient}
               onDelete={onDeleteClient}
               onCreateEspaceMembre={onCreateEspaceMembre}
+              onViewDetails={onViewClientDetails}
             />
           ))}
         </div>

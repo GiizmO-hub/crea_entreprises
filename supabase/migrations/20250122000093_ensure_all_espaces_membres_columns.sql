@@ -161,3 +161,6 @@ BEGIN
   RAISE NOTICE '✅✅✅ TOUTES LES COLONNES DE espaces_membres_clients SONT PRÊTES! ✅✅✅';
 END $$;
 
+
+
+

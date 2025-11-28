@@ -10,21 +10,33 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
 
+  // Ne PAS mettre à jour l'état dans le cleanup - cela cause des erreurs removeChild
+  // Le cleanup ne doit pas appeler setState sur un composant démonté
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    if (loading) return;
+    
     setError(null);
     setLoading(true);
 
     try {
-      const { error } = isSignUp
+      const result = isSignUp
         ? await signUp(email, password)
         : await signIn(email, password);
 
-      if (error) {
-        setError(error.message);
+      if (result?.error) {
+        console.error('❌ Erreur authentification:', result.error);
+        setError(result.error.message || 'Erreur lors de la connexion');
+      } else {
+        // Succès - la redirection se fera automatiquement via AuthContext
+        console.log('✅ Authentification réussie');
       }
-    } catch {
-      setError('Une erreur est survenue');
+    } catch (err) {
+      console.error('❌ Erreur inattendue:', err);
+      setError(err instanceof Error ? err.message : 'Une erreur inattendue est survenue');
     } finally {
       setLoading(false);
     }
@@ -85,15 +97,15 @@ export default function Auth() {
               {loading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
               ) : isSignUp ? (
-                <>
+                <span className="flex items-center gap-2">
                   <UserPlus className="w-5 h-5" />
                   Créer un compte
-                </>
+                </span>
               ) : (
-                <>
+                <span className="flex items-center gap-2">
                   <LogIn className="w-5 h-5" />
                   Se connecter
-                </>
+                </span>
               )}
             </button>
           </form>

@@ -579,13 +579,40 @@ export default function Documents() {
         if (error) throw error;
 
         const url = URL.createObjectURL(data);
-        const a = window.document.createElement('a');
-        a.href = url;
-        a.download = `${doc.nom}.${doc.chemin_fichier.split('.').pop()}`;
-        window.document.body.appendChild(a);
-        a.click();
-        window.document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const filename = `${doc.nom}.${doc.chemin_fichier.split('.').pop()}`;
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none;';
+        
+        // Vérifier que le document est disponible
+        if (!document.body) {
+          URL.revokeObjectURL(url);
+          throw new Error('Document body non disponible');
+        }
+        
+        // Ajouter, cliquer, et nettoyer
+        document.body.appendChild(link);
+        link.click();
+        
+        // SOLUTION ROBUSTE : Utiliser remove() qui évite les erreurs removeChild
+        // remove() est plus moderne et gère automatiquement les cas où l'élément n'existe plus
+        try {
+          link.remove(); // Méthode moderne - plus sûre que removeChild
+        } catch (e) {
+          // Fallback : vérifier avant de supprimer avec removeChild
+          if (link.parentNode === document.body) {
+            try {
+              document.body.removeChild(link);
+            } catch (removeError) {
+              // Si déjà supprimé, ignorer silencieusement
+              // Ne pas logger pour éviter le spam de console
+            }
+          }
+        }
+        
+        // Nettoyer l'URL après un délai pour s'assurer que le téléchargement a commencé
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
       }
     } catch (error) {
       console.error('Erreur téléchargement:', error);

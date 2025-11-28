@@ -45,6 +45,7 @@ export const moduleCodeToMenuId: Record<string, string> = {
   'gestion-d-équipe': 'gestion-equipe',
   'gestion_dequipe': 'gestion-equipe',
   'gestion_d_equipe': 'gestion-equipe',
+  'gestion_d_équipe': 'gestion-equipe',
   
   // Modules gestion projets
   'gestion-projets': 'gestion-projets',
@@ -55,10 +56,17 @@ export const moduleCodeToMenuId: Record<string, string> = {
   // Modules comptabilité
   'comptabilite': 'comptabilite',
   'comptabilité': 'comptabilite',
+  'comptabilite-avancee': 'comptabilite',
+  'comptabilite_avancee': 'comptabilite',
+  'comptabilité-avancée': 'comptabilite',
   
   // Modules finance
   'finance': 'finance',
   'finances': 'finance',
+  'previsionnel': 'finance',
+  'ai-previsionnel': 'finance',
+  'gestion-budget': 'finance',
+  'time-tracking': 'finance',
   
   // Modules collaborateurs
   'collaborateurs': 'collaborateurs',
@@ -70,6 +78,34 @@ export const moduleCodeToMenuId: Record<string, string> = {
   'parametres': 'settings',
   'paramètres': 'settings',
   'settings': 'settings',
+  
+  // Autres modules Enterprise
+  'salaries': 'collaborateurs', // Gestion des salariés → collaborateurs
+  'fiches-paie': 'comptabilite',
+  'conges': 'collaborateurs',
+  'automatisations': 'settings',
+  'messagerie': 'settings',
+  'administration': 'settings',
+  'api': 'settings',
+  'api-keys': 'settings',
+  'support_prioritaire': 'settings',
+  'support_dedie': 'settings',
+  'personnalisation': 'settings',
+  'gestion-stock': 'settings',
+  'crm-avance': 'settings',
+  'bilans-comptables': 'comptabilite',
+  'connexions-admin': 'settings',
+  'declarations-admin': 'settings',
+  'documents-entreprise': 'documents',
+  'n8n-automation': 'settings',
+  'modules': 'settings',
+  'gestion-plans': 'settings',
+  'gestion-secteurs': 'settings',
+  'modeles-previsionnels': 'finance',
+  'historiques-ai': 'finance',
+  
+  // Modules abonnements (déjà défini plus haut, mais on peut le garder pour clarté)
+  'abonnements': 'settings',
 };
 
 /**
@@ -151,6 +187,9 @@ export function filterActiveModules(
         if (!isAdminModule) {
           activeMenuIds.add(menuId);
         }
+      } else {
+        // Si le module n'est pas mappé, logger pour debug
+        console.log(`⚠️ Module non mappé: ${moduleCode}`);
       }
     }
   });
@@ -184,4 +223,3 @@ export function extractActiveModules(modulesActifs: Record<string, ModuleValue>)
   
   return active;
 }
-

@@ -30,6 +30,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
+    // Ignorer les erreurs removeChild et NotFoundError qui sont non-critiques
+    if (error.message?.includes('removeChild') || error.message?.includes('NotFoundError') || error.name === 'NotFoundError') {
+      console.debug('⚠️ Erreur non-critique ignorée par ErrorBoundary:', error.message);
+      return { hasError: false }; // Ne pas déclencher l'affichage de l'erreur
+    }
     return {
       hasError: true,
       error,
@@ -37,6 +42,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    // Ignorer les erreurs removeChild qui sont non-critiques
+    // Ces erreurs se produisent lors du démontage des composants
+    if (error.message?.includes('removeChild') || error.name === 'NotFoundError') {
+      console.debug('⚠️ Erreur removeChild ignorée (non-critique):', error.message);
+      // Ne pas mettre l'erreur dans le state pour éviter d'afficher l'UI d'erreur
+      return;
+    }
+    
     // Log l'erreur pour le débogage
     console.error('❌ ErrorBoundary a capturé une erreur:', error, errorInfo);
     

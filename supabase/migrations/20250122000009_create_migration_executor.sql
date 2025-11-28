@@ -138,3 +138,6 @@ $$;
 COMMENT ON FUNCTION apply_fix_date_activation IS 'Ajoute la colonne date_activation à la table abonnement_options si elle manque';
 COMMENT ON FUNCTION apply_fix_mode_paiement IS 'Crée la table abonnements et ajoute la colonne mode_paiement si nécessaire';
 
+
+
+

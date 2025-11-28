@@ -182,3 +182,6 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON TABLE document_folders IS 'Dossiers hiérarchiques pour organiser les documents par client et par catégorie';
 
+
+
+

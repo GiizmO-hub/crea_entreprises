@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Plus, Building2, Edit, Trash2, X } from 'lucide-react';
+import { PaymentChoiceModal } from '../components/PaymentChoiceModal';
 
 interface Entreprise {
   id: string;
@@ -49,6 +50,10 @@ export default function Entreprises() {
   
   const [plans, setPlans] = useState<Array<{ id: string; nom: string }>>([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [currentPaiementId, setCurrentPaiementId] = useState<string | null>(null);
+  const [currentPaiementMontant, setCurrentPaiementMontant] = useState<number>(0);
+  const [currentEntrepriseNom, setCurrentEntrepriseNom] = useState<string>('');
   useEffect(() => {
     if (user) {
       loadEntreprises();
@@ -232,13 +237,31 @@ export default function Entreprises() {
           message += `\n💳 Abonnement créé et actif`;
         }
 
-        alert(message);
+        // ✅ Si un paiement_id est retourné, ouvrir le modal de paiement
+        if (result.paiement_id && result.montant_ttc) {
+          console.log('💰 Paiement créé, ouverture du modal de paiement...');
+          console.log('   Paiement ID:', result.paiement_id);
+          console.log('   Montant TTC:', result.montant_ttc);
+          console.log('   Entreprise:', result.entreprise_nom);
+          
+          // Ouvrir le modal de paiement
+          setCurrentPaiementId(result.paiement_id);
+          setCurrentPaiementMontant(result.montant_ttc);
+          setCurrentEntrepriseNom(result.entreprise_nom || formData.nom);
+          setShowPaymentModal(true);
+          
+          // Fermer le formulaire mais ne pas recharger les entreprises encore
+          setShowForm(false);
+          resetForm();
+        } else {
+          // Pas de paiement, afficher le message et fermer
+          alert(message);
+          setShowForm(false);
+          setEditingId(null);
+          resetForm();
+          await loadEntreprises();
+        }
       }
-
-      setShowForm(false);
-      setEditingId(null);
-      resetForm();
-      await loadEntreprises();
     } catch (error: unknown) {
       console.error('❌ Erreur complète sauvegarde entreprise:', error);
       
@@ -702,6 +725,35 @@ export default function Entreprises() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal de choix de paiement */}
+      {showPaymentModal && currentPaiementId && (
+        <PaymentChoiceModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setCurrentPaiementId(null);
+            setCurrentPaiementMontant(0);
+            setCurrentEntrepriseNom('');
+            loadEntreprises(); // Recharger les entreprises après fermeture
+          }}
+          paiementId={currentPaiementId}
+          montant={currentPaiementMontant}
+          entrepriseNom={currentEntrepriseNom}
+          onPaymentMethodChosen={(method) => {
+            console.log('💳 Méthode de paiement choisie:', method);
+            if (method === 'virement') {
+              // Pour virement, fermer le modal et recharger
+              setShowPaymentModal(false);
+              setCurrentPaiementId(null);
+              setCurrentPaiementMontant(0);
+              setCurrentEntrepriseNom('');
+              loadEntreprises();
+            }
+            // Pour carte, la redirection vers Stripe se fait dans le modal
+          }}
+        />
       )}
 
     </div>

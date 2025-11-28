@@ -61,3 +61,6 @@ CREATE POLICY "Users can manage abonnements of their entreprises"
 COMMENT ON POLICY "Super admin can view all abonnements" ON abonnements IS 'Les super admins peuvent voir tous les abonnements';
 COMMENT ON POLICY "Super admin can manage all abonnements" ON abonnements IS 'Les super admins peuvent gérer tous les abonnements';
 
+
+
+

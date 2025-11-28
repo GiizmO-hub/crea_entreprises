@@ -106,3 +106,6 @@ CREATE POLICY "Users can delete clients of their entreprises"
 COMMENT ON POLICY "Users can view clients of their entreprises" ON clients IS 
   'Les utilisateurs (y compris super_admins) ne peuvent voir que les clients de leurs propres entreprises';
 
+
+
+

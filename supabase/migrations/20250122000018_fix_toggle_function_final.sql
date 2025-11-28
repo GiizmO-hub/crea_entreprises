@@ -129,3 +129,6 @@ $$;
 
 COMMENT ON FUNCTION toggle_module_option IS 'Activer/desactiver une option pour un abonnement (via entreprise_id)';
 
+
+
+

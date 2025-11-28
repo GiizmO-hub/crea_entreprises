@@ -88,3 +88,6 @@ BEGIN
   RAISE NOTICE 'Colonnes finales de la table documents: %', col_list;
 END $$;
 
+
+
+

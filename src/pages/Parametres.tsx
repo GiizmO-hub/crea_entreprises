@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Settings, Building2, Mail, Shield, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users, ShieldOff, Crown } from 'lucide-react';
+import { Settings, Building2, Mail, Shield, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users, ShieldOff, Crown, Eye } from 'lucide-react';
 import CredentialsModal from '../components/CredentialsModal';
 import { sendClientCredentialsEmail } from '../services/emailService';
 import type { ClientCredentialsEmailData } from '../services/emailService';
 import { EspaceMembreModal } from '../pages/clients/EspaceMembreModal';
 import type { Client, EspaceMembreData, Plan, Option } from '../pages/clients/types';
 import { EntrepriseAccordion } from '../components/EntrepriseAccordion';
+import { ClientDetailsModal } from '../components/ClientDetailsModal';
 
 interface ClientInfo {
   id: string;
@@ -64,6 +65,8 @@ export default function Parametres() {
   const [loadingConfig, setLoadingConfig] = useState(false);
   // Cache des rôles confirmés par la fonction RPC pour préserver entre rechargements
   // Initialiser depuis localStorage pour persister même après navigation
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [showClientDetailsModal, setShowClientDetailsModal] = useState(false);
   const [confirmedRolesCache, setConfirmedRolesCache] = useState<Record<string, string>>(() => {
     try {
       const saved = localStorage.getItem('confirmedRolesCache');
@@ -123,12 +126,29 @@ export default function Parametres() {
       }
     };
     
+    // Écouter les événements de création d'entreprise pour recharger automatiquement
+    const handleEntrepriseCreated = () => {
+      console.log('🔄 Événement entrepriseCreated reçu - Rechargement config entreprise et clients');
+      // Recharger la config entreprise (toujours, même si pas sur l'onglet)
+      setTimeout(() => {
+        loadEntrepriseConfig();
+      }, 1000);
+      // Recharger les clients aussi si on est sur l'onglet clients
+      if (activeTab === 'clients' && isSuperAdmin) {
+        setTimeout(() => {
+          loadAllClients();
+        }, 1500);
+      }
+    };
+    
     window.addEventListener('abonnementUpdated', handleAbonnementUpdate);
+    window.addEventListener('entrepriseCreated', handleEntrepriseCreated);
     
     return () => {
       window.removeEventListener('abonnementUpdated', handleAbonnementUpdate);
+      window.removeEventListener('entrepriseCreated', handleEntrepriseCreated);
     };
-  }, [user, activeTab]);
+  }, [user, activeTab, isSuperAdmin]);
 
   const loadPlans = async () => {
     try {
@@ -183,35 +203,12 @@ export default function Parametres() {
     try {
       console.log('🔄 loadEntrepriseConfig: Chargement des entreprises pour user:', user.id);
       
-      // Récupérer TOUTES les entreprises de l'utilisateur connecté (pour gérer 50+ entreprises)
-      // La colonne statut_paiement existe maintenant après la migration
-      let { data: entreprisesData, error: entreprisesError } = await supabase
+      // ✅ Filtrer directement par user_id pour éviter problèmes RLS
+      const { data: entreprisesData, error: entreprisesError } = await supabase
         .from('entreprises')
         .select('id, nom, statut, statut_paiement, created_at, user_id')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
-      
-      // Si pas d'entreprises ou erreur, essayer avec filtre explicite user_id
-      if ((!entreprisesData || entreprisesData.length === 0) || entreprisesError) {
-        console.log('⚠️ Aucune entreprise via RLS ou erreur, tentative avec filtre explicite user_id:', user.id);
-        if (entreprisesError) {
-          console.log('❌ Erreur RLS:', entreprisesError);
-        }
-        
-        const { data: entreprisesDataWithFilter, error: errorWithFilter } = await supabase
-          .from('entreprises')
-          .select('id, nom, statut, statut_paiement, created_at, user_id')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-        
-        if (!errorWithFilter && entreprisesDataWithFilter && entreprisesDataWithFilter.length > 0) {
-          console.log('✅ Entreprises trouvées avec filtre explicite:', entreprisesDataWithFilter.length);
-          entreprisesData = entreprisesDataWithFilter;
-          entreprisesError = null;
-        } else if (errorWithFilter) {
-          console.error('❌ Erreur même avec filtre explicite:', errorWithFilter);
-          entreprisesError = errorWithFilter;
-        }
-      }
 
       if (entreprisesError) {
         console.error('❌ Erreur chargement entreprises:', entreprisesError);
@@ -331,9 +328,32 @@ export default function Parametres() {
     try {
       setLoading(true);
       
-      // Utiliser la vue clients_with_roles pour récupérer les clients avec leurs rôles
-      const { data, error } = await supabase
-        .from('clients_with_roles')
+      // ✅ Récupérer toutes les entreprises de l'utilisateur d'abord
+      const { data: userEntreprises, error: entreprisesError } = await supabase
+        .from('entreprises')
+        .select('id')
+        .eq('user_id', user.id);
+      
+      if (entreprisesError) {
+        console.error('❌ Erreur chargement entreprises pour clients:', entreprisesError);
+        setClients([]);
+        setLoading(false);
+        return;
+      }
+      
+      if (!userEntreprises || userEntreprises.length === 0) {
+        console.log('⚠️ Aucune entreprise trouvée pour charger les clients');
+        setClients([]);
+        setLoading(false);
+        return;
+      }
+      
+      const entrepriseIds = userEntreprises.map(e => e.id);
+      console.log('📦 Entreprises trouvées:', entrepriseIds.length);
+      
+      // ✅ Charger les clients directement depuis la table clients avec filtre par entreprise_id
+      const { data: clientsRaw, error: clientsError } = await supabase
+        .from('clients')
         .select(`
           id,
           entreprise_id,
@@ -341,21 +361,69 @@ export default function Parametres() {
           prenom,
           email,
           created_at,
-          role_code,
-          role_nom,
-          role_niveau,
-          entreprises(nom),
-          espaces_membres_clients(
-            id,
-            actif,
-            user_id
-          )
-        `);
+          role_id,
+          entreprises!inner(nom)
+        `)
+        .in('entreprise_id', entrepriseIds);
 
-      if (error) {
-        console.error('Erreur chargement clients:', error);
+      if (clientsError) {
+        console.error('❌ Erreur chargement clients:', clientsError);
+        console.error('❌ Détails:', JSON.stringify(clientsError, null, 2));
+        setClients([]);
+        setLoading(false);
         return;
       }
+
+      if (!clientsRaw || clientsRaw.length === 0) {
+        console.log('⚠️ Aucun client trouvé pour ces entreprises');
+        setClients([]);
+        setLoading(false);
+        return;
+      }
+
+      console.log('📦 Clients bruts chargés:', clientsRaw.length);
+
+      // ✅ CORRECTION : Utiliser clients_with_roles directement pour obtenir les rôles corrects
+      // Cela prend en compte utilisateurs.role (client_super_admin) en priorité
+      const clientIdsFromRaw = clientsRaw.map((c: { id: string }) => c.id);
+      
+      let clientsWithRolesMap: Record<string, { role_code: string; role_nom: string }> = {};
+      if (clientIdsFromRaw.length > 0) {
+        const { data: clientsWithRolesData } = await supabase
+          .from('clients_with_roles')
+          .select('id, role_code, role_nom')
+          .in('id', clientIdsFromRaw);
+        
+        if (clientsWithRolesData) {
+          clientsWithRolesData.forEach((cwr: { id: string; role_code: string; role_nom: string }) => {
+            clientsWithRolesMap[cwr.id] = { 
+              role_code: cwr.role_code || 'client', 
+              role_nom: cwr.role_nom || 'Client' 
+            };
+          });
+        }
+      }
+
+      // ✅ Transformer les données pour correspondre au format attendu
+      const data = clientsRaw.map((c: any) => {
+        const roleFromView = clientsWithRolesMap[c.id];
+        const entrepriseNom = Array.isArray(c.entreprises) 
+          ? c.entreprises[0]?.nom || 'N/A'
+          : (c.entreprises?.nom || 'N/A');
+        
+        return {
+          id: c.id,
+          entreprise_id: c.entreprise_id,
+          nom: c.nom,
+          prenom: c.prenom,
+          email: c.email,
+          created_at: c.created_at,
+          role_code: roleFromView?.role_code || 'client',
+          role_nom: roleFromView?.role_nom || 'Client',
+          role_niveau: 0,
+          entreprises: { nom: entrepriseNom }
+        };
+      });
 
       if (!data || data.length === 0) {
         setClients([]);
@@ -389,22 +457,21 @@ export default function Parametres() {
       }
       console.log('📦 Espaces chargés:', Object.keys(espacesMap).length, 'espaces pour', clientIds.length, 'clients');
 
-      // ✅ NOUVEAU: Récupérer les rôles directement depuis la table roles via clients.role_id
-      // Plus simple et plus fiable avec la nouvelle structure
-      let rolesMap: Record<string, string> = {};
+      // ✅ Récupérer les codes de rôles par client_id depuis data (déjà chargé avec role_code)
+      const roleCodesMap: Record<string, string> = {};
       
       // Les rôles sont déjà dans data depuis clients_with_roles (role_code)
       data.forEach((c: { id: string; role_code?: string }) => {
         if (c.role_code) {
-          rolesMap[c.id] = c.role_code;
+          roleCodesMap[c.id] = c.role_code;
           console.log(`📌 Rôle récupéré depuis clients_with_roles pour client ${c.id}: "${c.role_code}"`);
         } else {
           // Par défaut, 'client' si pas de rôle défini
-          rolesMap[c.id] = 'client';
+          roleCodesMap[c.id] = 'client';
         }
       });
       
-      console.log(`✅ Rôles récupérés depuis clients_with_roles:`, Object.keys(rolesMap).length, 'clients');
+      console.log(`✅ Rôles récupérés depuis clients_with_roles:`, Object.keys(roleCodesMap).length, 'clients');
 
       // Transformer les données pour correspondre à ClientInfo
       const transformedClients: ClientInfo[] = data.map((client: unknown) => {
@@ -430,7 +497,7 @@ export default function Parametres() {
           entrepriseNom = (c.entreprises as { nom: string }).nom || 'N/A';
         }
         
-        // Récupérer le rôle avec priorité: cache confirmé (localStorage) > cache state > rolesMap > 'client'
+        // Récupérer le rôle avec priorité: cache confirmé (localStorage) > cache state > roleCodesMap > 'client'
         // Le cache a la priorité ABSOLUE car il contient le rôle confirmé par la fonction RPC
         // Vérifier d'abord le cache state, puis localStorage si nécessaire
         let cachedRole = confirmedRolesCache[c.id];
@@ -451,16 +518,38 @@ export default function Parametres() {
           }
         }
         
-        const dbRole = rolesMap[c.id];
-        const clientRole = cachedRole || dbRole || 'client';
+        const dbRole = roleCodesMap[c.id];
+        
+        // ✅ CORRECTION : Toujours prioriser le rôle en DB s'il est client_super_admin
+        // Car le cache localStorage peut contenir une ancienne valeur obsolète
+        let clientRole: string;
+        
+        if (dbRole === 'client_super_admin') {
+          // Si le rôle en DB est client_super_admin, l'utiliser en priorité absolue
+          clientRole = 'client_super_admin';
+          // Mettre à jour le cache pour cohérence
+          if (cachedRole !== 'client_super_admin') {
+            console.log(`🔄 Client ${c.id} (${c.email}): Rôle en DB est client_super_admin, mise à jour du cache (${cachedRole || 'N/A'} → client_super_admin)`);
+            setConfirmedRolesCache(prev => {
+              const updated = { ...prev, [c.id]: 'client_super_admin' };
+              localStorage.setItem('confirmedRolesCache', JSON.stringify(updated));
+              return updated;
+            });
+          }
+        } else {
+          // Pour les autres rôles, utiliser le cache s'il existe, sinon la DB
+          clientRole = cachedRole || dbRole || 'client';
+        }
         
         // Log pour diagnostiquer quelle source est utilisée
-        if (cachedRole && cachedRole !== dbRole) {
+        if (cachedRole && cachedRole !== dbRole && dbRole !== 'client_super_admin') {
           console.log(`🔧 Client ${c.id} (${c.email}): Utilisation du rôle depuis le cache: "${cachedRole}" (DB: "${dbRole || 'non trouvé'}")`);
-        } else if (!rolesMap[c.id] && !cachedRole && c.email) {
+        } else if (!roleCodesMap[c.id] && !cachedRole && c.email) {
           console.warn(`⚠️ Rôle non trouvé pour client ${c.id} (${c.email}), utilisation de 'client' par défaut`);
         } else if (dbRole && !cachedRole) {
           console.log(`📌 Client ${c.id} (${c.email}): Rôle depuis DB: "${dbRole}"`);
+        } else if (dbRole === 'client_super_admin') {
+          console.log(`✅ Client ${c.id} (${c.email}): Rôle client_super_admin confirmé depuis DB`);
         }
         
         const clientInfo: ClientInfo = {
@@ -501,7 +590,7 @@ export default function Parametres() {
         espace_id: c.espace_id,
         espace_actif: c.espace_actif
       })));
-      console.log('🔍 Rôles détectés:', rolesMap);
+      console.log('🔍 Rôles détectés:', roleCodesMap);
       console.log('🔍 Espaces chargés:', Object.keys(espacesMap).length);
     } catch (error) {
       console.error('❌ Erreur chargement clients:', error);
@@ -872,6 +961,7 @@ export default function Parametres() {
             <EntrepriseAccordion 
               entreprises={entrepriseConfigs} 
               loading={loadingConfig}
+              isPlatformUser={isSuperAdmin}
             />
           </div>
         );
@@ -1118,17 +1208,41 @@ export default function Parametres() {
                                       </>
                                     )}
                                   </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedClientId(client.id);
+                                      setShowClientDetailsModal(true);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30 transition-all flex items-center gap-1"
+                                    title="Voir et modifier les détails du client"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    Détails
+                                  </button>
                                 </>
                               ) : (
-                                <button
-                                  onClick={() => handleCreateEspaceClick(client)}
-                                  disabled={!client.email}
-                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                  title={!client.email ? 'Le client doit avoir un email' : 'Créer l\'espace membre avec abonnement'}
-                                >
-                                  <Plus className="w-3 h-3" />
-                                  Créer
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedClientId(client.id);
+                                      setShowClientDetailsModal(true);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30 transition-all flex items-center gap-1"
+                                    title="Voir et modifier les détails du client"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    Détails
+                                  </button>
+                                  <button
+                                    onClick={() => handleCreateEspaceClick(client)}
+                                    disabled={!client.email}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                    title={!client.email ? 'Le client doit avoir un email' : 'Créer l\'espace membre avec abonnement'}
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    Créer
+                                  </button>
+                                </>
                               )}
                               <button
                                 key={`super-admin-${client.id}-${client.role}`}
@@ -1252,6 +1366,19 @@ export default function Parametres() {
           }}
         />
       )}
+
+      {/* Modal Détails Client */}
+      <ClientDetailsModal
+        clientId={selectedClientId}
+        isOpen={showClientDetailsModal}
+        onClose={() => {
+          setShowClientDetailsModal(false);
+          setSelectedClientId(null);
+        }}
+        onUpdate={() => {
+          loadAllClients();
+        }}
+      />
     </div>
   );
 }

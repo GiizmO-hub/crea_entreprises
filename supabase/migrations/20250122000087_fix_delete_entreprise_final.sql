@@ -274,3 +274,6 @@ BEGIN
   RAISE NOTICE '✅ Fonction delete_entreprise_complete corrigée - PLUS AUCUNE dépendance à user_id';
 END $$;
 
+
+
+

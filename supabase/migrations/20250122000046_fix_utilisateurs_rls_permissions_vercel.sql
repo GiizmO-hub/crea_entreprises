@@ -148,3 +148,6 @@ BEGIN
   RAISE NOTICE '✅ Utilisateurs manquants synchronisés depuis auth.users';
 END $$;
 
+
+
+

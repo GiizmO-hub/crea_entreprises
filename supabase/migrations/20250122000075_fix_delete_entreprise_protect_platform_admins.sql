@@ -344,3 +344,6 @@ COMMENT ON FUNCTION delete_entreprise_complete(uuid) IS 'Supprime définitivemen
 
 GRANT EXECUTE ON FUNCTION delete_entreprise_complete(uuid) TO authenticated;
 
+
+
+

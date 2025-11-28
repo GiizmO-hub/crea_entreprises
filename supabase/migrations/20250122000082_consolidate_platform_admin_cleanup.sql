@@ -283,3 +283,6 @@ GRANT SELECT ON super_admins_plateforme TO authenticated;
     * Pas de gestion d'administration
 */
 
+
+
+

@@ -239,3 +239,6 @@ COMMENT ON FUNCTION update_collaborateur IS 'Modifier un collaborateur (super_ad
 COMMENT ON FUNCTION suspendre_collaborateur IS 'Suspendre un collaborateur (statut = suspendue, bannit dans auth.users)';
 COMMENT ON FUNCTION activer_collaborateur IS 'Activer un collaborateur (statut = active, débannit dans auth.users)';
 
+
+
+

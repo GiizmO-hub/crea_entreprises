@@ -128,3 +128,6 @@ COMMENT ON COLUMN espaces_membres_clients.modules_actifs IS 'Modules activés po
 COMMENT ON COLUMN espaces_membres_clients.preferences IS 'Préférences utilisateur (thème, langue, notifications, etc.)';
 COMMENT ON COLUMN espaces_membres_clients.password_temporaire IS 'Mot de passe temporaire généré lors de la création, à changer à la première connexion';
 
+
+
+

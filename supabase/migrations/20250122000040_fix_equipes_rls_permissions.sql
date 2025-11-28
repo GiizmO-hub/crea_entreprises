@@ -141,3 +141,6 @@ CREATE POLICY "Super admins can manage permissions_dossiers"
 
 COMMENT ON FUNCTION is_super_admin() IS 'Vérifie si l''utilisateur actuel est super_admin en accédant à auth.users avec SECURITY DEFINER';
 
+
+
+

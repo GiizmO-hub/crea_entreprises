@@ -158,3 +158,6 @@ $$;
 
 COMMENT ON FUNCTION create_abonnement_complete IS 'Créer un abonnement complet avec plan, options et prix personnalisé (version corrigée)';
 
+
+
+

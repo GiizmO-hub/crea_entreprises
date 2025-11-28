@@ -76,3 +76,6 @@ BEGIN
   RAISE NOTICE 'Utilise maintenant is_super_admin() et auth.users directement';
 END $$;
 
+
+
+

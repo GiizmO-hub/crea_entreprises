@@ -291,3 +291,6 @@ BEGIN
   RAISE NOTICE '   - Gestion de Budget → Facturation (requis)';
 END $$;
 
+
+
+

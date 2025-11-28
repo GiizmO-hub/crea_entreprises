@@ -43,3 +43,6 @@ CREATE INDEX IF NOT EXISTS idx_entreprises_user_id ON entreprises(user_id);
 
 COMMENT ON COLUMN entreprises.user_id IS 'Propriétaire de l''entreprise (utilisateur qui l''a créée)';
 
+
+
+

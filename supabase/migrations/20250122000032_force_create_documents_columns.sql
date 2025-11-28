@@ -236,3 +236,6 @@ CREATE TRIGGER update_documents_updated_at
 -- Commentaire sur la table
 COMMENT ON TABLE documents IS 'Table pour gérer tous les documents de l''entreprise';
 
+
+
+

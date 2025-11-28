@@ -1,0 +1,29 @@
+# CONFIGURATION RAPIDE STRIPE
+
+## 🔑 Secrets à ajouter dans Supabase
+
+URL: https://supabase.com/dashboard/project/ewlozuwvrteopotfizcr/settings/functions
+
+1. STRIPE_SECRET_KEY
+   sk_test_51SXOlcEMmOXNQayfw50s9s0qct4kEulo0NRH2exFEvjhEW7p4NYbKCSAGqjKWDJq4VTu0SA3lMp5UiTneXECQAmM00idhC3wRk
+
+2. STRIPE_WEBHOOK_SECRET
+   whsec_oS5pozHfNYgKrlKMPnvw1bm7tW2caPef
+
+## 🌐 Webhook Stripe
+
+URL: https://dashboard.stripe.com/test/webhooks
+
+Endpoint URL: https://ewlozuwvrteopotfizcr.supabase.co/functions/v1/stripe-webhooks
+
+Événements:
+- checkout.session.completed
+- payment_intent.succeeded
+
+Signing Secret: whsec_oS5pozHfNYgKrlKMPnvw1bm7tW2caPef
+
+## 🧪 Test
+
+Carte de test: 4242 4242 4242 4242
+Date: 12/25
+CVC: 123

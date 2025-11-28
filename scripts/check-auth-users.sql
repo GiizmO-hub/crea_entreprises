@@ -67,3 +67,6 @@ LEFT JOIN clients c ON c.id = emc.client_id
 LEFT JOIN auth.users u ON u.id = emc.user_id
 ORDER BY emc.created_at DESC;
 
+
+
+

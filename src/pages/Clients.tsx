@@ -15,6 +15,7 @@ import { ClientForm } from './clients/ClientForm';
 import { ClientSuperAdmin } from './clients/ClientSuperAdmin';
 import { EspaceMembreModal } from './clients/EspaceMembreModal';
 import { IdentifiantsModal } from './clients/IdentifiantsModal';
+import { ClientDetailsModal } from '../components/ClientDetailsModal';
 
 // Types
 import type {
@@ -56,6 +57,10 @@ export default function Clients() {
     ville: '',
     siret: '',
   });
+
+  // États modal détails client
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [showClientDetailsModal, setShowClientDetailsModal] = useState(false);
 
   // États espace membre
   const [showEspaceMembreModal, setShowEspaceMembreModal] = useState(false);
@@ -101,15 +106,25 @@ export default function Clients() {
     if (!user) return;
 
     try {
-      const { data } = await supabase
+      // ✅ SIMPLIFIER : Charger toutes les entreprises - les RLS policies filtreront automatiquement
+      // Si super_admin PLATEFORME → RLS permet de voir toutes
+      // Si utilisateur normal → RLS permet de voir uniquement les siennes
+      console.log('🔄 [Clients] Chargement entreprises (RLS filtrera automatiquement)');
+      
+      const { data, error } = await supabase
         .from('entreprises')
         .select('id, nom')
-        .eq('user_id', user.id)
         .order('nom');
 
+      if (error) {
+        console.error('❌ [Clients] Erreur chargement entreprises:', error);
+        throw error;
+      }
+      
+      console.log(`✅ [Clients] Entreprises chargées: ${data?.length || 0}`);
       setEntreprises(data || []);
     } catch (error) {
-      console.error('Erreur chargement entreprises:', error);
+      console.error('❌ [Clients] Erreur chargement entreprises:', error);
     }
   };
 
@@ -434,6 +449,10 @@ export default function Clients() {
           onEditClient={handleEdit}
           onDeleteClient={handleDelete}
           onCreateEspaceMembre={handleOpenEspaceMembreModal}
+          onViewClientDetails={(clientId) => {
+            setSelectedClientId(clientId);
+            setShowClientDetailsModal(true);
+          }}
         />
       )}
 
@@ -484,6 +503,19 @@ export default function Clients() {
         onClose={() => {
           setShowIdentifiantsModal(false);
           setClientCredentials(null);
+        }}
+      />
+
+      {/* Modal Détails Client */}
+      <ClientDetailsModal
+        clientId={selectedClientId}
+        isOpen={showClientDetailsModal}
+        onClose={() => {
+          setShowClientDetailsModal(false);
+          setSelectedClientId(null);
+        }}
+        onUpdate={() => {
+          loadClients();
         }}
       />
     </div>

@@ -154,3 +154,6 @@ CREATE POLICY "Users can update abonnement_options of their entreprises"
 COMMENT ON TABLE abonnements IS 'Table des abonnements des entreprises aux plans d''abonnement';
 COMMENT ON TABLE abonnement_options IS 'Table de liaison entre les abonnements et les options supplémentaires souscrites';
 
+
+
+

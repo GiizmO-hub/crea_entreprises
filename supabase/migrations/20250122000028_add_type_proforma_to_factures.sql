@@ -29,3 +29,6 @@ WHERE type IS NULL;
 
 COMMENT ON COLUMN factures.type IS 'Type de document: facture, proforma, ou avoir';
 
+
+
+

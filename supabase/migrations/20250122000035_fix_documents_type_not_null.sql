@@ -123,3 +123,6 @@ BEGIN
   RAISE NOTICE 'Colonnes de la table documents: %', col_list;
 END $$;
 
+
+
+

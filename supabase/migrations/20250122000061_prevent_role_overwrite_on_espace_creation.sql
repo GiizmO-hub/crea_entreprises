@@ -284,3 +284,6 @@ $$;
 
 COMMENT ON FUNCTION create_espace_membre_from_client IS 'Crée ou met à jour un espace membre pour un client. PRÉSERVE le rôle client_super_admin existant lors des mises à jour.';
 
+
+
+

@@ -1,9 +1,10 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import Auth from './pages/Auth';
+import PaymentSuccess from './pages/PaymentSuccess';
 
 // Lazy loading des pages pour optimiser le code splitting
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -32,6 +33,43 @@ const PageLoader = () => (
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
+
+  // ✅ Gérer les routes spéciales (payment-success, etc.)
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '');
+    const path = window.location.pathname;
+    
+    // Si on est sur /payment-success, afficher cette page
+    if (path === '/payment-success' || hash === 'payment-success') {
+      return; // PaymentSuccess gère son propre affichage
+    }
+    
+    // Sinon, utiliser le hash pour la navigation
+    if (hash && hash !== currentPage) {
+      // Mapper les routes aux pages
+      const pageMap: Record<string, string> = {
+        'entreprises': 'entreprises',
+        'clients': 'clients',
+        'factures': 'factures',
+        'abonnements': 'abonnements',
+        'dashboard': 'dashboard',
+        'modules': 'modules',
+        'settings': 'settings',
+        'parametres': 'settings',
+      };
+      
+      const mappedPage = pageMap[hash] || 'dashboard';
+      if (mappedPage !== currentPage) {
+        setCurrentPage(mappedPage);
+      }
+    }
+  }, [currentPage]);
+
+  // ✅ Si on est sur /payment-success, afficher directement PaymentSuccess
+  const path = window.location.pathname;
+  if (path === '/payment-success') {
+    return <PaymentSuccess />;
+  }
 
   if (loading) {
     return (
@@ -146,10 +184,15 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <AppContent />
+        <AppContentWrapper />
       </AuthProvider>
     </ErrorBoundary>
   );
+}
+
+// Wrapper pour s'assurer que le contexte est bien disponible
+function AppContentWrapper() {
+  return <AppContent />;
 }
 
 export default App;

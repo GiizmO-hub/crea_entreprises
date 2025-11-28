@@ -237,3 +237,6 @@ COMMENT ON COLUMN modules_activation.priorite IS 'Priorité d''affichage/implém
 COMMENT ON COLUMN modules_activation.est_cree IS 'Indique si le module est déjà créé/implémenté dans le code';
 COMMENT ON COLUMN modules_metier.est_essentiel IS 'Module essentiel pour ce secteur (toujours visible même si désactivé globalement)';
 
+
+
+
