@@ -40,6 +40,7 @@ export default function Entreprises() {
     nom_client: '',
     prenom_client: '',
     telephone_client: '',
+    password_client: '',
     adresse_client: '',
     code_postal_client: '',
     ville_client: '',
@@ -172,6 +173,9 @@ export default function Entreprises() {
             p_ville_client: formData.creer_client && formData.ville_client?.trim()
               ? formData.ville_client.trim()
               : null,
+            p_password_client: formData.creer_client && formData.password_client?.trim()
+              ? formData.password_client.trim()
+              : null,
             
             // Abonnement
             p_plan_id: formData.plan_id?.trim() || null,
@@ -210,7 +214,7 @@ export default function Entreprises() {
                 await sendClientCredentialsEmail({
                   clientEmail: result.email,
                   email: result.email,
-                  password: result.password,
+                  password: formData.password_client || result.password || '',
                   clientName: formData.nom_client || 'Client',
                   clientPrenom: formData.prenom_client || '',
                   entrepriseNom: formData.nom,
