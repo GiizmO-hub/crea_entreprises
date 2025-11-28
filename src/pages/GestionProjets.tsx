@@ -145,7 +145,7 @@ export default function GestionProjets() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<string>('all');
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
-  const [dependencies, setDependencies] = useState<Array<{ module: string; feature: string }>>([]);
+  const [dependencies, setDependencies] = useState<Array<{ module: string; feature: string; actif?: boolean; est_cree?: boolean; module_depend_de?: string; type_dependance?: string }>>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
