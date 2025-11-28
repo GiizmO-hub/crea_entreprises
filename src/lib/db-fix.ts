@@ -17,7 +17,8 @@ interface DatabaseError {
  * Détecter le type d'erreur et retourner la solution
  */
 export function detectDatabaseError(error: unknown): DatabaseError | null {
-  const errorMessage = error?.message || error?.toString() || '';
+  const errorObj = error as { message?: string } | null;
+  const errorMessage = errorObj?.message || (error?.toString && error.toString()) || '';
 
   // Erreur: colonne manquante
   if (
@@ -104,7 +105,8 @@ export function showDatabaseErrorFix(error: unknown): string {
   const dbError = detectDatabaseError(error);
 
   if (!dbError) {
-    return `Erreur: ${error?.message || 'Erreur inconnue'}`;
+    const errorObj = error as { message?: string } | null;
+    return `Erreur: ${errorObj?.message || 'Erreur inconnue'}`;
   }
 
   let message = `🔧 ${dbError.message}\n\n`;
@@ -178,7 +180,8 @@ export async function checkDatabaseStructure(): Promise<{
     }
   } catch (error: unknown) {
     // Ignorer les erreurs de validation
-    if (!error.message.includes('validation') && !error.message.includes('does not exist')) {
+    const errorObj = error as { message?: string } | null;
+    if (errorObj?.message && !errorObj.message.includes('validation') && !errorObj.message.includes('does not exist')) {
       // Erreur autre que "function does not exist" -> la fonction existe
     }
   }

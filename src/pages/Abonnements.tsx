@@ -329,11 +329,17 @@ export default function Abonnements() {
 
           // Enrichir avec les informations client et options
       interface AbonnementData {
-        id: string;
-        entreprise_id: string;
-        plan_id: string;
-        statut: string;
-        plans_abonnement?: { nom: string };
+        id: any;
+        entreprise_id: any;
+        plan_id: any;
+        statut: any;
+        date_debut: any;
+        date_fin: any;
+        date_prochain_paiement: any;
+        montant_mensuel: any;
+        mode_paiement: any;
+        created_at: any;
+        plans_abonnement?: { nom: string } | { nom: string }[];
       }
       
       interface ModuleData {

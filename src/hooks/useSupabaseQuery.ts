@@ -112,19 +112,21 @@ export function useSupabaseQuery<T>({
           onSuccess?.(result.data as T);
           return;
         } catch (err: unknown) {
-          lastError = err;
+          lastError = err as ErrorType;
           attempts++;
 
           // Ne pas retry si c'est une erreur d'annulation
-          if (err?.name === 'AbortError') {
+          const errorObj = err as { name?: string; code?: string } | null;
+          if (errorObj?.name === 'AbortError') {
             return;
           }
 
           // Ne pas retry pour certaines erreurs
-          if (err?.code === 'PGRST116' || err?.code === '42883') {
-            setError(err);
+          if (errorObj?.code === 'PGRST116' || errorObj?.code === '42883') {
+            const error = err as ErrorType;
+            setError(error);
             setLoading(false);
-            onError?.(err);
+            onError?.(error);
             return;
           }
 
