@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Plus, Building2, Edit, Trash2, X } from 'lucide-react';
+import { Plus, Building2, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
 import { PaymentChoiceModal } from '../components/PaymentChoiceModal';
 
 interface Entreprise {
