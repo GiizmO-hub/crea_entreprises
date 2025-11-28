@@ -133,12 +133,19 @@ export default function Entreprises() {
       
       console.log('📊 Entreprise du client:', entreprise, 'Erreur:', entrepriseError);
       
-      if (!entrepriseError && entreprise) {
+      if (entrepriseError) {
+        console.error('❌ Erreur lors du chargement de l\'entreprise du client:', entrepriseError);
+        setIsClient(false); // Si erreur, considérer comme non-client
+        return;
+      }
+      
+      if (entreprise) {
         console.log('✅ Entreprise chargée pour client:', entreprise.nom);
         setClientEntreprise(entreprise);
         loadMembres(espaceClient.entreprise_id);
       } else {
-        console.error('❌ Impossible de charger l\'entreprise du client:', entrepriseError);
+        console.warn('⚠️ Aucune entreprise trouvée pour le client, entreprise_id:', espaceClient.entreprise_id);
+        setIsClient(false); // Si pas d'entreprise, considérer comme non-client
       }
     } catch (error) {
       console.error('❌ Erreur vérification client:', error);
