@@ -281,7 +281,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
           disponible,
           active,
           est_cree: mod.est_cree || false,
-          icone: mod.icone,
+          icone: iconeString,
         };
       });
 
