@@ -227,12 +227,12 @@ export default function Entreprises() {
                 message += `\n⚠️ Email non envoyé: ${emailError instanceof Error ? emailError.message : 'Erreur inconnue'}`;
                 message += `\n📨 Identifiants à envoyer manuellement:\n`;
                 message += `Email: ${result.email}\n`;
-                message += `Mot de passe: ${result.password}`;
+                message += `Mot de passe: ${formData.password_client || result.password || 'Généré automatiquement'}`;
               }
             } else {
               message += `\n📨 Identifiants:\n`;
               message += `Email: ${result.email}\n`;
-              message += `Mot de passe: ${result.password}\n`;
+              message += `Mot de passe: ${formData.password_client || result.password || 'Généré automatiquement'}\n`;
               message += `\n💡 Pensez à envoyer ces identifiants au client`;
             }
           }
