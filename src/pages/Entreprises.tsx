@@ -292,6 +292,18 @@ export default function Entreprises() {
       ville: entreprise.ville || '',
       capital: 0,
       rcs: '',
+      site_web: entreprise.site_web || '',
+      creer_client: false,
+      email_client: '',
+      nom_client: '',
+      prenom_client: '',
+      telephone_client: '',
+      adresse_client: '',
+      code_postal_client: '',
+      ville_client: '',
+      plan_id: '',
+      creer_client_super_admin: true,
+      envoyer_email: true,
       site_web: '',
     });
     setShowForm(true);

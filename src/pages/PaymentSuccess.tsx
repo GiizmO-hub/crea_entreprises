@@ -41,7 +41,7 @@ export default function PaymentSuccess() {
         // ✅ NOUVEAU : Vérifier d'abord si le paiement est déjà traité
         const { data: currentPaiement, error: fetchError } = await supabase
           .from('paiements')
-          .select('id, statut, stripe_payment_id')
+          .select('id, statut, stripe_payment_id, entreprise_id, montant_ttc')
           .eq('id', paiementId)
           .single();
 
@@ -121,7 +121,7 @@ export default function PaymentSuccess() {
           const { data: factures } = await supabase
             .from('factures')
             .select('id, montant_ttc, date_emission')
-            .eq('entreprise_id', currentPaiement.entreprise_id)
+            .eq('entreprise_id', paiementObj.entreprise_id)
             .eq('statut', 'payee')
             .order('created_at', { ascending: false })
             .limit(5); // Vérifier les 5 dernières factures

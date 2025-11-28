@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Plus, FileText, Edit, Trash2, Search, Building2, X, Receipt, CreditCard, ArrowLeftRight, CheckCircle2, Clock, Download, Minus, AlertTriangle, Send } from 'lucide-react';
@@ -49,6 +50,7 @@ interface RelanceMRA {
 }
 
 export default function Factures() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [factures, setFactures] = useState<Facture[]>([]);
   const [avoirs, setAvoirs] = useState<Facture[]>([]);
@@ -867,7 +869,7 @@ export default function Factures() {
           <Building2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400 mb-4">Vous devez créer une entreprise avant de créer des factures</p>
           <button
-            onClick={() => _onNavigate('entreprises')}
+            onClick={() => navigate('/entreprises')}
             className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
           >
             Créer une entreprise

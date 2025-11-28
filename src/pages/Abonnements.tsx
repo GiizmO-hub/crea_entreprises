@@ -410,7 +410,8 @@ export default function Abonnements() {
           
           const optionsActives = (optionsData || [])
             .map((opt: OptionData) => opt.options_supplementaires)
-            .filter((opt): opt is { id: string; nom: string; prix_mensuel: number; actif?: boolean } => opt !== null && opt !== undefined && opt.actif !== false);
+            .filter((opt): opt is { id: string; nom: string; prix_mensuel: number; actif: boolean } => opt !== null && opt !== undefined && opt.actif !== false)
+            .map(opt => ({ ...opt, actif: opt.actif ?? true }));
 
           const planNom = Array.isArray(ab.plans_abonnement) 
             ? (ab.plans_abonnement[0]?.nom || 'Inconnu')
@@ -997,8 +998,9 @@ export default function Abonnements() {
                   };
                   
                   const modulesInclus = (abonnement.modules || []).filter((mod) => {
-                    const inclus = mod.inclus === true || mod.inclus === 'true' || String(mod.inclus || '').toLowerCase() === 'true';
-                    return inclus;
+                    if (typeof mod.inclus === 'boolean') return mod.inclus;
+                    if (typeof mod.inclus === 'string') return mod.inclus.toLowerCase() === 'true';
+                    return false;
                   }) as ModuleDisplay[];
                   
                   return modulesInclus.length > 0 ? (

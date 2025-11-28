@@ -611,9 +611,11 @@ export default function Parametres() {
       id: client.id,
       entreprise_id: client.entreprise_id,
       entreprise_nom: client.entreprise_nom,
-      nom: client.client_nom,
-      prenom: client.client_prenom,
-      email: client.email,
+      nom: client.client_nom || '',
+      prenom: client.client_prenom || '',
+      email: client.email || '',
+      statut: client.statut || 'actif',
+      created_at: client.created_at || new Date().toISOString(),
     };
 
     setSelectedClientForEspace(clientForModal);
@@ -667,8 +669,8 @@ export default function Parametres() {
           setClientCredentials({
             email: finalEmail,
             password: finalPassword,
-            clientName: selectedClientForEspace.nom || '',
-            clientPrenom: selectedClientForEspace.prenom || undefined,
+            clientName: selectedClientForEspace.client_nom || selectedClientForEspace.nom || '',
+            clientPrenom: selectedClientForEspace.client_prenom || selectedClientForEspace.prenom || undefined,
             entrepriseNom: selectedClientForEspace.entreprise_nom || '',
           });
           
@@ -1344,7 +1346,7 @@ export default function Parametres() {
       {showEspaceModal && selectedClientForEspace && (
         <EspaceMembreModal
           show={showEspaceModal}
-          client={selectedClientForEspace}
+          client={selectedClientForEspace as any}
           plans={plans}
           options={options}
           data={espaceMembreData}
