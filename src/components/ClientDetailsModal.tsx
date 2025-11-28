@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Save, User, Mail, MapPin, Building2, FileText, Tag, Lock, CheckCircle, AlertCircle, CreditCard, Package, Settings, Puzzle, Send, KeyRound, RefreshCw, Bell, Receipt } from 'lucide-react';
+import { X, Save, User, Mail, MapPin, Building2, FileText, Tag, Lock, CheckCircle, AlertCircle, CreditCard, Package, Settings, Puzzle, KeyRound, RefreshCw, Bell } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ClientDetailsModalProps {
@@ -455,7 +455,7 @@ export function ClientDetailsModal({ clientId, isOpen, onClose, onUpdate }: Clie
       const optionsActivesUuids = (formData.options_actives || []).filter(id => id);
 
       // Mettre à jour via RPC pour gérer toutes les validations
-      const { data, error: updateError } = await supabase.rpc('update_client_complete', {
+      const { error: updateError } = await supabase.rpc('update_client_complete', {
         p_client_id: formData.id,
         // Informations client de base
         p_nom: formData.nom || null,

@@ -57,10 +57,11 @@ export function useSupabaseQuery<T>({
         if (cached) {
           const age = Date.now() - cached.timestamp;
           if (age < cached.cacheTime) {
-            setData(cached.data);
+            const cachedData = cached.data as T;
+            setData(cachedData);
             setLoading(false);
             setError(null);
-            onSuccess?.(cached.data);
+            onSuccess?.(cachedData);
             return;
           } else {
             // Cache expiré, le supprimer

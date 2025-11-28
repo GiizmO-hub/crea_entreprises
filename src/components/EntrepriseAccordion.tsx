@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Building2, CheckCircle, Clock, AlertCircle, XCircle, CreditCard, Send, FileText, DollarSign, Mail } from 'lucide-react';
+import { ChevronDown, ChevronUp, Building2, CheckCircle, Clock, AlertCircle, XCircle, CreditCard, Send, FileText, DollarSign } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { sendClientCredentialsEmail } from '../services/emailService';
 
@@ -422,11 +422,11 @@ async function handleValidatePayment(
         if (clientData && entrepriseData) {
           try {
             const emailResult = await sendClientCredentialsEmail({
-              to: data.email,
-              clientName: `${clientData.prenom || ''} ${clientData.nom || ''}`.trim(),
               clientEmail: data.email,
-              clientPassword: data.password,
-              entrepriseName: entrepriseData.nom || '',
+              clientName: `${clientData.prenom || ''} ${clientData.nom || ''}`.trim(),
+              email: data.email,
+              password: data.password,
+              entrepriseNom: entrepriseData.nom || '',
             });
 
             if (emailResult.success) {
@@ -509,7 +509,7 @@ async function handleGenerateInvoice(
         }
 
         // Récupérer l'abonnement pour calculer le montant
-        const { data: abonnements, error: abonnementsError } = await supabase
+        const { data: abonnements } = await supabase
           .from('abonnements')
           .select('montant_mensuel, plan_id')
           .eq('entreprise_id', entrepriseId)
@@ -526,7 +526,7 @@ async function handleGenerateInvoice(
         // Créer la facture
         const numero = `FACT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
         
-        const { data: facture, error: factureError } = await supabase
+        const { error: factureError } = await supabase
           .from('factures')
           .insert({
             entreprise_id: entrepriseId,
@@ -633,11 +633,11 @@ async function handleSendCredentials(
 
       // Envoyer l'email avec les identifiants existants
       const emailResult = await sendClientCredentialsEmail({
-        to: espace.email,
-        clientName: `${client.prenom || ''} ${client.nom || ''}`.trim(),
         clientEmail: espace.email,
-        clientPassword: espace.mot_de_passe_temporaire,
-        entrepriseName: entreprise?.nom || 'Votre entreprise',
+        clientName: `${client.prenom || ''} ${client.nom || ''}`.trim(),
+        email: espace.email,
+        password: espace.mot_de_passe_temporaire || '',
+        entrepriseNom: entreprise?.nom || 'Votre entreprise',
       });
 
       if (emailResult.success) {
@@ -650,11 +650,11 @@ async function handleSendCredentials(
 
     // Envoyer l'email avec les identifiants
     const emailResult = await sendClientCredentialsEmail({
-      to: credentialsData.email || client.email,
-      clientName: `${credentialsData.client_prenom || client.prenom || ''} ${credentialsData.client_nom || client.nom || ''}`.trim(),
       clientEmail: credentialsData.email || client.email,
-      clientPassword: credentialsData.password || '',
-      entrepriseName: credentialsData.entreprise_nom || entreprise?.nom || 'Votre entreprise',
+      clientName: `${credentialsData.client_prenom || client.prenom || ''} ${credentialsData.client_nom || client.nom || ''}`.trim(),
+      email: credentialsData.email || client.email,
+      password: credentialsData.password || '',
+      entrepriseNom: credentialsData.entreprise_nom || entreprise?.nom || 'Votre entreprise',
     });
 
     if (emailResult.success) {

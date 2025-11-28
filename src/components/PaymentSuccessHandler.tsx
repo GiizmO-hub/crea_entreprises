@@ -4,13 +4,12 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { CheckCircle, Loader } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function PaymentSuccessHandler() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const paiementId = searchParams.get('paiement_id');
   const sessionId = searchParams.get('session_id');
   const [loading, setLoading] = useState(true);
