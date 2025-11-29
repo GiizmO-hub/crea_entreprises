@@ -7,12 +7,11 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Plus, Users, Crown, Building2 } from 'lucide-react';
+import { Plus, Users, Building2 } from 'lucide-react';
 
 // Composants
 import { ClientsList } from './clients/ClientsList';
 import { ClientForm } from './clients/ClientForm';
-import { ClientSuperAdmin } from './clients/ClientSuperAdmin';
 import { EspaceMembreModal } from './clients/EspaceMembreModal';
 import { IdentifiantsModal } from './clients/IdentifiantsModal';
 import { ClientDetailsModal } from '../components/ClientDetailsModal';
@@ -29,11 +28,8 @@ import type {
 } from './clients/types';
 
 
-type TabType = 'liste' | 'super-admin';
-
 export default function Clients() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('liste');
   
   // États principaux
   const [clients, setClients] = useState<Client[]>([]);
@@ -41,6 +37,7 @@ export default function Clients() {
   const [loading, setLoading] = useState(true);
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isClient, setIsClient] = useState(false); // Vérifier si c'est un client de l'espace client
 
   // États formulaires
   const [showForm, setShowForm] = useState(false);
@@ -79,52 +76,115 @@ export default function Clients() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [options, setOptions] = useState<Option[]>([]);
 
-  // Charger les données initiales
+  // Vérifier si l'utilisateur est un client de l'espace client
+  const checkIfClient = async () => {
+    if (!user) {
+      setIsClient(false);
+      return;
+    }
+
+    try {
+      const { data: espaceClient } = await supabase
+        .from('espaces_membres_clients')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('actif', true)
+        .maybeSingle();
+
+      setIsClient(!!espaceClient);
+      console.log('👤 [Clients] isClient:', !!espaceClient);
+    } catch (error) {
+      console.error('❌ [Clients] Erreur vérification client:', error);
+      setIsClient(false);
+    }
+  };
+
   useEffect(() => {
     if (user) {
-      loadEntreprises();
-      loadPlans();
-      loadOptions();
+      checkIfClient();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Charger les entreprises une fois qu'on sait si c'est un client
+  useEffect(() => {
+    if (user && isClient !== null) {
+      loadEntreprises();
+      if (!isClient) {
+        // Les plans et options ne sont nécessaires que pour les propriétaires
+        loadPlans();
+        loadOptions();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isClient]);
 
   useEffect(() => {
     if (entreprises.length > 0 && !selectedEntreprise) {
       setSelectedEntreprise(entreprises[0].id);
       setFormData((prev) => ({ ...prev, entreprise_id: entreprises[0].id }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entreprises]);
 
   useEffect(() => {
-    if (selectedEntreprise) {
+    // Charger les clients quand l'entreprise change OU quand isClient change
+    if (isClient || selectedEntreprise) {
       loadClients();
     }
-  }, [selectedEntreprise]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEntreprise, isClient]);
 
   // Chargement des données
   const loadEntreprises = async () => {
     if (!user) return;
 
     try {
-      // ✅ SIMPLIFIER : Charger toutes les entreprises - les RLS policies filtreront automatiquement
-      // Si super_admin PLATEFORME → RLS permet de voir toutes
-      // Si utilisateur normal → RLS permet de voir uniquement les siennes
-      console.log('🔄 [Clients] Chargement entreprises (RLS filtrera automatiquement)');
-      
-      const { data, error } = await supabase
-        .from('entreprises')
-        .select('id, nom')
-        .order('nom');
+      // ✅ Si c'est un client, charger UNIQUEMENT l'entreprise de son espace membre
+      if (isClient) {
+        console.log('👤 [Clients] Client détecté - Chargement de son entreprise uniquement');
+        
+        const { data: espaceClient } = await supabase
+          .from('espaces_membres_clients')
+          .select('entreprise_id')
+          .eq('user_id', user.id)
+          .eq('actif', true)
+          .maybeSingle();
 
-      if (error) {
-        console.error('❌ [Clients] Erreur chargement entreprises:', error);
-        throw error;
+        if (espaceClient?.entreprise_id) {
+          const { data: entreprise, error } = await supabase
+            .from('entreprises')
+            .select('id, nom')
+            .eq('id', espaceClient.entreprise_id)
+            .maybeSingle();
+
+          if (error) throw error;
+          setEntreprises(entreprise ? [entreprise] : []);
+          console.log('✅ [Clients] Entreprise du client chargée:', entreprise?.nom);
+        } else {
+          console.warn('⚠️ [Clients] Aucune entreprise trouvée pour ce client');
+          setEntreprises([]);
+        }
+      } else {
+        // ✅ Si c'est un propriétaire ou super_admin, charger toutes les entreprises (RLS filtrera)
+        console.log('👑 [Clients] Propriétaire/Super Admin - Chargement entreprises (RLS filtrera)');
+        
+        const { data, error } = await supabase
+          .from('entreprises')
+          .select('id, nom')
+          .order('nom');
+
+        if (error) {
+          console.error('❌ [Clients] Erreur chargement entreprises:', error);
+          throw error;
+        }
+        
+        console.log(`✅ [Clients] Entreprises chargées: ${data?.length || 0}`);
+        setEntreprises(data || []);
       }
-      
-      console.log(`✅ [Clients] Entreprises chargées: ${data?.length || 0}`);
-      setEntreprises(data || []);
     } catch (error) {
       console.error('❌ [Clients] Erreur chargement entreprises:', error);
+      setEntreprises([]);
     }
   };
 
@@ -162,20 +222,78 @@ export default function Clients() {
   };
 
   const loadClients = async () => {
-    if (!user || !selectedEntreprise) return;
+    if (!user) return;
 
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('entreprise_id', selectedEntreprise)
-        .order('created_at', { ascending: false });
+      
+      // ✅ Si c'est un client de l'espace client, charger SES CONTACTS (client_contacts)
+      if (isClient) {
+        console.log('👤 [Clients] Client détecté - Chargement de ses contacts (client_contacts)');
+        
+        // Récupérer le client_id et entreprise_id de l'utilisateur
+        const { data: espaceClient } = await supabase
+          .from('espaces_membres_clients')
+          .select('client_id, entreprise_id')
+          .eq('user_id', user.id)
+          .eq('actif', true)
+          .maybeSingle();
 
-      if (error) throw error;
-      setClients(data || []);
+        if (espaceClient?.client_id && espaceClient?.entreprise_id) {
+          // Charger les contacts du client (client_contacts)
+          const { data, error } = await supabase
+            .from('client_contacts')
+            .select('*')
+            .eq('client_id', espaceClient.client_id)
+            .eq('entreprise_id', espaceClient.entreprise_id)
+            .order('created_at', { ascending: false });
+
+          if (error) throw error;
+          
+          // Convertir ClientContact en Client pour la compatibilité avec l'interface
+          const clientsData = (data || []).map(contact => ({
+            id: contact.id,
+            entreprise_id: contact.entreprise_id,
+            nom: contact.nom,
+            prenom: contact.prenom,
+            entreprise_nom: contact.entreprise_nom,
+            email: contact.email,
+            telephone: contact.telephone,
+            adresse: contact.adresse,
+            code_postal: contact.code_postal,
+            ville: contact.ville,
+            siret: contact.siret,
+            statut: contact.statut,
+            created_at: contact.created_at,
+          }));
+          
+          setClients(clientsData);
+          console.log(`✅ [Clients] ${clientsData.length} contacts chargés pour le client`);
+        } else {
+          console.warn('⚠️ [Clients] Aucun client_id ou entreprise_id trouvé pour cet utilisateur');
+          setClients([]);
+        }
+      } else {
+        // ✅ Si c'est un propriétaire ou super_admin, charger les CLIENTS DE LA PLATEFORME (clients)
+        if (!selectedEntreprise) {
+          setClients([]);
+          return;
+        }
+
+        console.log('👑 [Clients] Propriétaire/Super Admin - Chargement clients de la plateforme');
+        const { data, error } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('entreprise_id', selectedEntreprise)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setClients(data || []);
+        console.log(`✅ [Clients] ${data?.length || 0} clients de la plateforme chargés pour l'entreprise`);
+      }
     } catch (error) {
-      console.error('Erreur chargement clients:', error);
+      console.error('❌ [Clients] Erreur chargement clients:', error);
+      setClients([]);
     } finally {
       setLoading(false);
     }
@@ -184,47 +302,191 @@ export default function Clients() {
   // Gestion du formulaire client
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // ✅ Si c'est un client, utiliser client_contacts
+    if (isClient) {
+      try {
+        setLoading(true);
+        
+        // Récupérer le client_id et entreprise_id de l'utilisateur
+        const { data: espaceClient } = await supabase
+          .from('espaces_membres_clients')
+          .select('client_id, entreprise_id')
+          .eq('user_id', user?.id)
+          .eq('actif', true)
+          .maybeSingle();
+
+        if (!espaceClient?.client_id || !espaceClient?.entreprise_id) {
+          alert('Erreur: Impossible de trouver votre espace client');
+          return;
+        }
+
+        const contactData = {
+          client_id: espaceClient.client_id,
+          entreprise_id: espaceClient.entreprise_id,
+          nom: formData.nom,
+          prenom: formData.prenom || null,
+          email: formData.email || null,
+          telephone: formData.telephone || null,
+          adresse: formData.adresse || null,
+          code_postal: formData.code_postal || null,
+          ville: formData.ville || null,
+          entreprise_nom: formData.entreprise_nom || null,
+          siret: formData.siret || null,
+          statut: 'actif' as const,
+          created_by: user?.id,
+        };
+
+        if (editingId) {
+          // Mise à jour d'un contact existant
+          const { error } = await supabase
+            .from('client_contacts')
+            .update(contactData)
+            .eq('id', editingId);
+
+          if (error) throw error;
+          alert('Contact modifié avec succès !');
+        } else {
+          // Création d'un nouveau contact
+          const { error } = await supabase
+            .from('client_contacts')
+            .insert(contactData);
+
+          if (error) throw error;
+          alert('Contact créé avec succès !');
+        }
+
+        // Réinitialiser le formulaire et recharger
+        setFormData({
+          entreprise_id: '',
+          nom: '',
+          prenom: '',
+          entreprise_nom: '',
+          email: '',
+          telephone: '',
+          adresse: '',
+          code_postal: '',
+          ville: '',
+          siret: '',
+        });
+        setEditingId(null);
+        setShowForm(false);
+        loadClients();
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+        console.error('Erreur création/modification contact:', error);
+        alert(`Erreur: ${errorMessage}`);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+    
+    // ✅ Si c'est un propriétaire, utiliser clients (clients de la plateforme)
     if (!selectedEntreprise) {
       alert('Veuillez sélectionner une entreprise');
       return;
     }
 
     try {
+      // Validation des champs requis
+      if (!formData.email || !formData.email.trim()) {
+        alert('⚠️ L\'email est requis');
+        return;
+      }
+
       const dataToSave = {
         entreprise_id: selectedEntreprise,
-        nom: formData.nom || null,
-        prenom: formData.prenom || null,
-        entreprise_nom: formData.entreprise_nom || null,
-        email: formData.email || null,
-        telephone: formData.telephone || null,
-        adresse: formData.adresse || null,
-        code_postal: formData.code_postal || null,
-        ville: formData.ville || null,
-        siret: formData.siret || null,
+        nom: formData.nom?.trim() || null,
+        prenom: formData.prenom?.trim() || null,
+        entreprise_nom: formData.entreprise_nom?.trim() || null,
+        email: formData.email.trim(),
+        telephone: formData.telephone?.trim() || null,
+        adresse: formData.adresse?.trim() || null,
+        code_postal: formData.code_postal?.trim() || null,
+        ville: formData.ville?.trim() || null,
+        siret: formData.siret?.trim() || null,
         updated_at: new Date().toISOString(),
       };
 
+      console.log('💾 Tentative de sauvegarde client:', { editingId, dataToSave });
+
       if (editingId) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('clients')
           .update(dataToSave)
-          .eq('id', editingId);
+          .eq('id', editingId)
+          .select();
 
-        if (error) throw error;
-        alert('Client modifié avec succès!');
+        if (error) {
+          console.error('❌ Erreur UPDATE client:', error);
+          throw error;
+        }
+        console.log('✅ Client modifié:', data);
+        alert('✅ Client modifié avec succès!');
       } else {
-        const { error } = await supabase.from('clients').insert([dataToSave]);
-        if (error) throw error;
-        alert('Client créé avec succès!');
+        const { data, error } = await supabase
+          .from('clients')
+          .insert([dataToSave])
+          .select();
+
+        if (error) {
+          console.error('❌ Erreur INSERT client:', error);
+          console.error('   Code:', error.code);
+          console.error('   Message:', error.message);
+          console.error('   Details:', error.details);
+          console.error('   Hint:', error.hint);
+          throw error;
+        }
+        console.log('✅ Client créé:', data);
+        alert('✅ Client créé avec succès!');
       }
 
       setShowForm(false);
       setEditingId(null);
       resetForm();
       loadClients();
-    } catch (error: any) {
-      console.error('Erreur sauvegarde client:', error);
-      alert(`Erreur: ${error?.message || 'Erreur lors de la sauvegarde'}`);
+    } catch (error: unknown) {
+      console.error('❌ Erreur complète sauvegarde client:', error);
+      
+      let errorMessage = 'Erreur lors de la sauvegarde';
+      let errorDetails = '';
+      
+      if (error && typeof error === 'object') {
+        const err = error as { message?: string; code?: string; details?: string; hint?: string };
+        
+        if (err.message) {
+          errorMessage = err.message;
+        }
+        
+        if (err.code) {
+          errorDetails += `\nCode: ${err.code}`;
+        }
+        
+        if (err.details) {
+          errorDetails += `\nDétails: ${err.details}`;
+        }
+        
+        if (err.hint) {
+          errorDetails += `\nIndication: ${err.hint}`;
+        }
+        
+        // Messages d'erreur spécifiques
+        if (err.code === '23505') {
+          errorMessage = 'Un client avec cet email existe déjà';
+        } else if (err.code === '23503') {
+          errorMessage = 'L\'entreprise sélectionnée n\'existe pas ou vous n\'avez pas les permissions';
+        } else if (err.code === '42501') {
+          errorMessage = 'Permission refusée. Vérifiez vos droits d\'accès.';
+        } else if (err.message?.includes('RLS') || err.message?.includes('policy')) {
+          errorMessage = 'Permission refusée par les règles de sécurité (RLS)';
+          errorDetails += '\n\nVérifiez que vous avez les droits pour créer des clients pour cette entreprise.';
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      alert(`❌ Erreur: ${errorMessage}${errorDetails}\n\nConsultez la console (F12) pour plus de détails.`);
     }
   };
 
@@ -246,6 +508,28 @@ export default function Clients() {
   };
 
   const handleDelete = async (id: string) => {
+    // ✅ Si c'est un client, supprimer depuis client_contacts
+    if (isClient) {
+      if (!confirm('Êtes-vous sûr de vouloir supprimer ce contact ?')) return;
+
+      try {
+        const { error: deleteError } = await supabase
+          .from('client_contacts')
+          .delete()
+          .eq('id', id);
+        
+        if (deleteError) throw deleteError;
+        alert('✅ Contact supprimé avec succès !');
+        loadClients();
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+        console.error('Erreur suppression contact:', error);
+        alert(`Erreur: ${errorMessage}`);
+      }
+      return;
+    }
+
+    // ✅ Si c'est un propriétaire, supprimer depuis clients (clients de la plateforme)
     if (
       !confirm(
         'Supprimer ce client et TOUTES ses données (abonnement, espace membre, utilisateur) ?\n\n⚠️ Cette action est irréversible et libérera l\'email pour une réutilisation.'
@@ -277,9 +561,10 @@ export default function Clients() {
       }
 
       loadClients();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       console.error('Erreur suppression:', error);
-      alert(`Erreur lors de la suppression: ${error.message || 'Erreur inconnue'}`);
+      alert(`Erreur lors de la suppression: ${errorMessage}`);
     }
   };
 
@@ -341,9 +626,10 @@ export default function Clients() {
       } else {
         alert('Erreur: ' + (data?.error || 'Erreur inconnue'));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la création de l\'espace membre';
       console.error('Erreur création espace membre:', error);
-      alert(`Erreur: ${error.message || 'Erreur lors de la création de l\'espace membre'}`);
+      alert(`Erreur: ${errorMessage}`);
     }
   };
 
@@ -390,9 +676,12 @@ export default function Clients() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Clients</h1>
-          <p className="text-gray-300">Gérez vos clients et prospects</p>
+          <p className="text-gray-300">
+            {isClient ? 'Vos informations client' : 'Gérez vos clients et prospects'}
+          </p>
         </div>
-        {activeTab === 'liste' && (
+        {/* Masquer le bouton "Ajouter un client" pour les clients de l'espace client */}
+        {!isClient && (
           <button
             onClick={() => {
               resetForm();
@@ -406,67 +695,28 @@ export default function Clients() {
         )}
       </div>
 
-      {/* Onglets */}
-      <div className="mb-8">
-        <div className="inline-flex rounded-lg bg-white/5 p-1 border border-white/10">
-          <button
-            onClick={() => setActiveTab('liste')}
-            className={`px-6 py-3 font-semibold transition-all rounded-md flex items-center gap-2 ${
-              activeTab === 'liste'
-                ? 'bg-white/10 text-white shadow-lg'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-            }`}
-          >
-            <Users className="w-5 h-5" />
-            Liste des Clients
-          </button>
-          <button
-            onClick={() => setActiveTab('super-admin')}
-            className={`px-6 py-3 font-semibold transition-all rounded-md flex items-center gap-2 ${
-              activeTab === 'super-admin'
-                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 shadow-lg'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-            }`}
-          >
-            <Crown className="w-5 h-5" />
-            Administration Super Admin
-          </button>
-        </div>
-      </div>
 
-      {/* Contenu selon l'onglet */}
-      {activeTab === 'liste' && (
-        <ClientsList
+      {/* Liste des clients */}
+      <ClientsList
           clients={clients}
-          entreprises={entreprises}
-          selectedEntreprise={selectedEntreprise}
+          entreprises={isClient ? [] : entreprises} // Masquer le sélecteur d'entreprise pour les clients
+          selectedEntreprise={isClient ? '' : selectedEntreprise} // Pas d'entreprise sélectionnée pour les clients
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           onEntrepriseChange={(id) => {
-            setSelectedEntreprise(id);
-            setFormData((prev) => ({ ...prev, entreprise_id: id }));
+            if (!isClient) {
+              setSelectedEntreprise(id);
+              setFormData((prev) => ({ ...prev, entreprise_id: id }));
+            }
           }}
           onEditClient={handleEdit}
           onDeleteClient={handleDelete}
-          onCreateEspaceMembre={handleOpenEspaceMembreModal}
+          onCreateEspaceMembre={isClient ? undefined : handleOpenEspaceMembreModal}
           onViewClientDetails={(clientId) => {
             setSelectedClientId(clientId);
             setShowClientDetailsModal(true);
           }}
         />
-      )}
-
-      {activeTab === 'super-admin' && (
-        <ClientSuperAdmin
-          clients={clients}
-          entreprises={entreprises}
-          selectedEntreprise={selectedEntreprise}
-          onEntrepriseChange={(id) => {
-            setSelectedEntreprise(id);
-            setFormData((prev) => ({ ...prev, entreprise_id: id }));
-          }}
-        />
-      )}
 
       {/* Modales */}
       <ClientForm

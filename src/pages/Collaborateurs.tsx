@@ -27,6 +27,9 @@ export default function Collaborateurs() {
   const [entreprises, setEntreprises] = useState<Array<{ id: string; nom: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [hasAccess, setHasAccess] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [clientEntrepriseId, setClientEntrepriseId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingCollaborateur, setEditingCollaborateur] = useState<Collaborateur | null>(null);
@@ -49,30 +52,61 @@ export default function Collaborateurs() {
   });
 
   useEffect(() => {
-    checkSuperAdmin();
+    checkAccess();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
-    if (isSuperAdmin && user) {
-      loadEntreprises();
+    if (hasAccess && user) {
+      if (isSuperAdmin) {
+        loadEntreprises();
+      }
+      // Pour les clients, charger leur entreprise et définir automatiquement l'entreprise_id
+      if (isClient && clientEntrepriseId) {
+        loadClientEntreprise();
+        if (!formData.entreprise_id) {
+          setFormData((prev) => ({ ...prev, entreprise_id: clientEntrepriseId }));
+        }
+      }
       loadCollaborateurs();
     }
-  }, [isSuperAdmin, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAccess, isSuperAdmin, isClient, clientEntrepriseId, user]);
+
+  const loadClientEntreprise = async () => {
+    if (!clientEntrepriseId) return;
+    try {
+      const { data, error } = await supabase
+        .from('entreprises')
+        .select('id, nom')
+        .eq('id', clientEntrepriseId)
+        .maybeSingle();
+
+      if (!error && data) {
+        setEntreprises([data]);
+      }
+    } catch (error) {
+      console.error('Erreur chargement entreprise client:', error);
+    }
+  };
 
   useEffect(() => {
-    if (entreprises.length > 0 && !formData.entreprise_id) {
+    if (entreprises.length > 0 && !formData.entreprise_id && isSuperAdmin) {
       setFormData((prev) => ({ ...prev, entreprise_id: entreprises[0].id }));
     }
-  }, [entreprises]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entreprises, isSuperAdmin]);
 
-  const checkSuperAdmin = async () => {
+  const checkAccess = async () => {
     if (!user) {
       setIsSuperAdmin(false);
+      setHasAccess(false);
+      setIsClient(false);
       return;
     }
 
     try {
-      // Vérifier le rôle dans la table utilisateurs (source de vérité)
+      // 1. Vérifier si c'est un super admin plateforme
       const { data: utilisateur, error } = await supabase
         .from('utilisateurs')
         .select('role')
@@ -82,20 +116,76 @@ export default function Collaborateurs() {
       if (!error && utilisateur) {
         const isAdmin = utilisateur.role === 'super_admin' || utilisateur.role === 'admin';
         console.log('✅ Rôle vérifié dans utilisateurs:', utilisateur.role, '-> isSuperAdmin:', isAdmin);
-        setIsSuperAdmin(isAdmin);
-        return;
+        
+        if (isAdmin) {
+          setIsSuperAdmin(true);
+          setHasAccess(true);
+          setIsClient(false);
+          return;
+        }
       }
 
-      // Fallback: vérifier dans user_metadata si la table utilisateurs n'est pas accessible
-      console.warn('⚠️ Impossible de lire utilisateurs, fallback sur user_metadata:', error);
+      // 2. Si pas super admin, vérifier si c'est un client avec le module activé
+      const { data: espaceClient, error: espaceError } = await supabase
+        .from('espaces_membres_clients')
+        .select('modules_actifs, entreprise_id')
+        .eq('user_id', user.id)
+        .eq('actif', true)
+        .maybeSingle();
+
+      if (!espaceError && espaceClient) {
+        setIsClient(true);
+        setClientEntrepriseId(espaceClient.entreprise_id || null);
+        
+        // Vérifier si le module "collaborateurs" ou "salaries" est activé (toutes les variantes)
+        const modulesActifs = espaceClient.modules_actifs || {};
+        const moduleKeys = Object.keys(modulesActifs);
+        const hasModule = 
+          moduleKeys.some(key => 
+            (key.toLowerCase().includes('collaborateur') || 
+             key.toLowerCase().includes('salarie') ||
+             key.toLowerCase().includes('collaborator')) &&
+            (modulesActifs[key] === true || 
+             modulesActifs[key] === 'true' ||
+             String(modulesActifs[key]).toLowerCase() === 'true')
+          ) ||
+          modulesActifs.collaborateurs === true ||
+          modulesActifs['collaborateurs'] === true ||
+          modulesActifs.salaries === true ||
+          modulesActifs['salaries'] === true ||
+          modulesActifs['gestion-collaborateurs'] === true ||
+          modulesActifs['gestion_collaborateurs'] === true ||
+          modulesActifs['gestion-des-collaborateurs'] === true ||
+          modulesActifs['gestion_des_collaborateurs'] === true;
+
+        console.log('👤 Client détecté, modules actifs:', modulesActifs, '-> hasModule:', hasModule);
+        
+        if (hasModule) {
+          setHasAccess(true);
+          setIsSuperAdmin(false);
+          console.log('✅ Accès autorisé : client avec module collaborateurs activé');
+          return;
+        } else {
+          setHasAccess(false);
+          console.warn('❌ Accès refusé : client sans module collaborateurs activé');
+          return;
+        }
+      }
+
+      // 3. Fallback: vérifier dans user_metadata pour super admin
+      console.warn('⚠️ Impossible de lire utilisateurs/espace client, fallback sur user_metadata');
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const role = authUser?.user_metadata?.role;
       const isAdmin = role === 'super_admin' || role === 'admin';
       console.log('✅ Rôle vérifié dans user_metadata:', role, '-> isSuperAdmin:', isAdmin);
       setIsSuperAdmin(isAdmin);
+      setHasAccess(isAdmin);
+      setIsClient(false);
     } catch (error) {
-      console.error('❌ Erreur vérification super admin:', error);
+      console.error('❌ Erreur vérification accès:', error);
       setIsSuperAdmin(false);
+      setHasAccess(false);
+      setIsClient(false);
     }
   };
 
@@ -116,15 +206,43 @@ export default function Collaborateurs() {
   const loadCollaborateurs = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Chargement des collaborateurs...');
+      console.log('🔄 Chargement des collaborateurs...', { isSuperAdmin, isClient, clientEntrepriseId });
       
-      const { data, error } = await supabase
-        .from('collaborateurs')
-        .select(`
-          *,
-          entreprise:entreprises(id, nom)
-        `)
-        .order('created_at', { ascending: false });
+      let data, error;
+
+      // Utiliser la bonne table selon le rôle
+      if (isClient && clientEntrepriseId) {
+        // Client : utiliser collaborateurs_entreprise
+        console.log('👤 Client : chargement depuis collaborateurs_entreprise');
+        const result = await supabase
+          .from('collaborateurs_entreprise')
+          .select(`
+            *,
+            entreprise:entreprises(id, nom)
+          `)
+          .eq('entreprise_id', clientEntrepriseId)
+          .order('created_at', { ascending: false });
+        data = result.data;
+        error = result.error;
+      } else if (isSuperAdmin) {
+        // Super Admin : utiliser collaborateurs (plateforme)
+        console.log('🔧 Super Admin : chargement depuis collaborateurs');
+        const result = await supabase
+          .from('collaborateurs')
+          .select(`
+            *,
+            entreprise:entreprises(id, nom)
+          `)
+          .order('created_at', { ascending: false });
+        data = result.data;
+        error = result.error;
+      } else {
+        // Aucune table adaptée
+        console.warn('⚠️ Aucun rôle adapté pour charger les collaborateurs');
+        setCollaborateurs([]);
+        setLoading(false);
+        return;
+      }
 
       if (error) {
         console.error('❌ Erreur Supabase:', error);
@@ -155,19 +273,30 @@ export default function Collaborateurs() {
         [key: string]: unknown;
       }
       
-      // Enrichir avec le nom de l'entreprise
+      // Enrichir avec le nom de l'entreprise et normaliser les données
       const collaborateursEnriched = (data || []).map((c: CollaborateurData) => ({
         ...c,
         entreprise_nom: c.entreprise?.nom,
       }));
 
-      const enrichedWithDefaults = (collaborateursEnriched || []).map(c => ({
-        ...c,
-        user_id: c.user_id || '',
-        role: c.role || 'collaborateur',
-        statut: c.statut || 'actif',
-        created_at: c.created_at || new Date().toISOString(),
-      }));
+      // Normaliser les données selon la table utilisée
+      const enrichedWithDefaults = (collaborateursEnriched || []).map(c => {
+        // Si c'est de collaborateurs_entreprise, convertir actif en statut
+        const statut = c.statut || (c.actif === true ? 'active' : c.actif === false ? 'inactif' : 'active');
+        
+        return {
+          ...c,
+          user_id: c.user_id || '',
+          role: c.role || 'collaborateur',
+          statut: statut,
+          created_at: c.created_at || new Date().toISOString(),
+          // Pour collaborateurs_entreprise, ces champs n'existent pas mais on les ajoute pour compatibilité
+          departement: c.departement || '',
+          poste: c.poste || '',
+          date_embauche: c.date_embauche || '',
+          salaire: c.salaire || undefined,
+        };
+      });
       setCollaborateurs(enrichedWithDefaults);
     } catch (error: unknown) {
       console.error('❌ Erreur chargement collaborateurs:', error);
@@ -183,6 +312,16 @@ export default function Collaborateurs() {
     e.preventDefault();
 
     try {
+      // Déterminer l'entreprise_id : client utilise automatiquement son entreprise
+      const entrepriseId = isClient && clientEntrepriseId 
+        ? clientEntrepriseId 
+        : formData.entreprise_id || null;
+
+      if (!entrepriseId) {
+        alert('❌ Erreur : Aucune entreprise sélectionnée');
+        return;
+      }
+
       // Appeler la fonction RPC qui crée automatiquement dans auth.users, utilisateurs et collaborateurs
       const { data, error } = await supabase.rpc('create_collaborateur', {
         p_email: formData.email,
@@ -191,7 +330,7 @@ export default function Collaborateurs() {
         p_prenom: formData.prenom || null,
         p_telephone: formData.telephone || null,
         p_role: formData.role,
-        p_entreprise_id: formData.entreprise_id || null,
+        p_entreprise_id: entrepriseId,
         p_departement: formData.departement || null,
         p_poste: formData.poste || null,
         p_date_embauche: formData.date_embauche || null,
@@ -362,13 +501,17 @@ export default function Collaborateurs() {
     }
   };
 
-  if (!isSuperAdmin) {
+  if (!hasAccess) {
     return (
       <div className="p-8">
         <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-6 text-center">
           <Shield className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-white mb-2">Accès refusé</h2>
-          <p className="text-gray-300">Vous devez être super administrateur pour accéder à cette page.</p>
+          <p className="text-gray-300">
+            {isClient 
+              ? 'Le module "Collaborateurs" n\'est pas activé dans votre abonnement. Contactez votre administrateur pour activer ce module.'
+              : 'Vous devez être super administrateur ou avoir le module "Collaborateurs" activé pour accéder à cette page.'}
+          </p>
         </div>
       </div>
     );
@@ -429,13 +572,15 @@ export default function Collaborateurs() {
           <h1 className="text-3xl font-bold text-white mb-2">Modules</h1>
           <p className="text-gray-300">Gestion des collaborateurs et administrateurs</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg"
-        >
-          <Plus className="w-5 h-5" />
-          Créer Collaborateur
-        </button>
+        {(isSuperAdmin || (isClient && hasAccess)) && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg"
+          >
+            <Plus className="w-5 h-5" />
+            Créer Collaborateur
+          </button>
+        )}
       </div>
 
       {/* Statistiques */}
@@ -818,9 +963,11 @@ export default function Collaborateurs() {
           <p className="text-gray-500 text-sm mb-4">
             {isSuperAdmin 
               ? 'Créez votre premier collaborateur en cliquant sur le bouton "Créer Collaborateur" ci-dessus.'
+              : isClient
+              ? 'Aucun collaborateur trouvé dans votre entreprise.'
               : 'La table collaborateurs n\'existe peut-être pas encore. Vérifiez que la migration SQL a été appliquée.'}
           </p>
-          {isSuperAdmin && (
+          {(isSuperAdmin || (isClient && hasAccess)) && (
             <button
               onClick={() => setShowForm(true)}
               className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all"
@@ -967,21 +1114,35 @@ export default function Collaborateurs() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
-                <select
-                  value={formData.entreprise_id}
-                  onChange={(e) => setFormData({ ...formData, entreprise_id: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
-                >
-                  <option value="">Aucune entreprise</option>
-                  {entreprises.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.nom}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isSuperAdmin && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
+                  <select
+                    value={formData.entreprise_id}
+                    onChange={(e) => setFormData({ ...formData, entreprise_id: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  >
+                    <option value="">Aucune entreprise</option>
+                    {entreprises.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {isClient && clientEntrepriseId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
+                  <input
+                    type="text"
+                    value={entreprises.find(e => e.id === clientEntrepriseId)?.nom || 'Votre entreprise'}
+                    disabled
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-gray-400 cursor-not-allowed"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Le collaborateur sera ajouté à votre entreprise</p>
+                </div>
+              )}
 
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                 <p className="text-xs text-blue-300">
@@ -1111,21 +1272,34 @@ export default function Collaborateurs() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
-                <select
-                  value={formData.entreprise_id}
-                  onChange={(e) => setFormData({ ...formData, entreprise_id: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
-                >
-                  <option value="">Aucune entreprise</option>
-                  {entreprises.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.nom}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isSuperAdmin && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
+                  <select
+                    value={formData.entreprise_id}
+                    onChange={(e) => setFormData({ ...formData, entreprise_id: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                  >
+                    <option value="">Aucune entreprise</option>
+                    {entreprises.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {isClient && clientEntrepriseId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Entreprise</label>
+                  <input
+                    type="text"
+                    value={entreprises.find(e => e.id === clientEntrepriseId)?.nom || 'Votre entreprise'}
+                    disabled
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-gray-400 cursor-not-allowed"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

@@ -17,14 +17,13 @@ export default function PaymentSuccessHandler() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (!paiementId) {
-      setError('ID de paiement manquant');
-      setLoading(false);
-      return;
-    }
-
     // ✅ FORCER LA VALIDATION COMPLÈTE DU PAIEMENT
     const validatePaymentComplete = async () => {
+      if (!paiementId) {
+        setError('ID de paiement manquant');
+        setLoading(false);
+        return;
+      }
       try {
         console.log('🔄 Validation complète du paiement...', paiementId);
         

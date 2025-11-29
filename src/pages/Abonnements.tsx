@@ -108,6 +108,7 @@ export default function Abonnements() {
   useEffect(() => {
     checkSuperAdmin();
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const checkSuperAdmin = async () => {
@@ -329,16 +330,16 @@ export default function Abonnements() {
 
           // Enrichir avec les informations client et options
       interface AbonnementData {
-        id: any;
-        entreprise_id: any;
-        plan_id: any;
-        statut: any;
-        date_debut: any;
-        date_fin: any;
-        date_prochain_paiement: any;
-        montant_mensuel: any;
-        mode_paiement: any;
-        created_at: any;
+        id: string;
+        entreprise_id: string;
+        plan_id: string | null;
+        statut: string;
+        date_debut: string | null;
+        date_fin: string | null;
+        date_prochain_paiement: string | null;
+        montant_mensuel: number | null;
+        mode_paiement: string | null;
+        created_at: string;
         plans_abonnement?: { nom: string } | { nom: string }[];
       }
       

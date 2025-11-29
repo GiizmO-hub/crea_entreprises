@@ -16,9 +16,9 @@ interface ClientsListProps {
   searchTerm: string;
   onSearchChange: (term: string) => void;
   onEntrepriseChange: (entrepriseId: string) => void;
-  onEditClient: (client: Client) => void;
-  onDeleteClient: (clientId: string) => void;
-  onCreateEspaceMembre: (client: Client) => void;
+  onEditClient?: (client: Client) => void;
+  onDeleteClient?: (clientId: string) => void;
+  onCreateEspaceMembre?: (client: Client) => void;
   onViewClientDetails?: (clientId: string) => void;
 }
 

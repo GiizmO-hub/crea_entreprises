@@ -487,9 +487,13 @@ export default function GestionProjets() {
       const projetsWithStats = await Promise.all(
         (data || []).map(async (projet) => {
           try {
-            const { data: statsData } = await supabase.rpc('get_projet_stats', {
+            const { data: statsData, error: statsError } = await supabase.rpc('get_projet_stats', {
               p_projet_id: projet.id
             });
+            
+            if (statsError) {
+              console.warn('⚠️ Erreur chargement stats projet (non bloquant):', statsError);
+            }
             interface StatsData {
               total_taches?: number;
               taches_completees?: number;
@@ -573,9 +577,10 @@ export default function GestionProjets() {
         entreprise_id: selectedEntreprise,
       });
       loadProjets(selectedEntreprise);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       console.error('Erreur sauvegarde projet:', error);
-      alert('❌ Erreur lors de la sauvegarde: ' + (error.message || 'Erreur inconnue'));
+      alert('❌ Erreur lors de la sauvegarde: ' + errorMessage);
     }
   };
 
@@ -611,9 +616,10 @@ export default function GestionProjets() {
       if (error) throw error;
       alert('✅ Projet supprimé avec succès!');
       loadProjets(selectedEntreprise);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       console.error('Erreur suppression projet:', error);
-      alert('❌ Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
+      alert('❌ Erreur lors de la suppression: ' + errorMessage);
     }
   };
 

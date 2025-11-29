@@ -133,6 +133,7 @@ export function ClientDetailsModal({ clientId, isOpen, onClose, onUpdate }: Clie
       loadOptions();
       loadClientData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, clientId]);
   
   const loadPlans = async () => {
@@ -355,8 +356,9 @@ export function ClientDetailsModal({ clientId, isOpen, onClose, onUpdate }: Clie
                 modulesActifs = { ...modulesFromPlan, ...updatedEspace.modules_actifs };
               }
             }
-          } catch (err: any) {
-            console.warn('⚠️ Erreur synchronisation modules (non bloquant):', err?.message);
+          } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+            console.warn('⚠️ Erreur synchronisation modules (non bloquant):', errorMessage);
           }
         }
       } else {
@@ -423,9 +425,10 @@ export function ClientDetailsModal({ clientId, isOpen, onClose, onUpdate }: Clie
         // Préférences
         preferences: preferences,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors du chargement des données';
       console.error('Erreur chargement client:', err);
-      setError(err.message || 'Erreur lors du chargement des données');
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -497,15 +500,16 @@ export function ClientDetailsModal({ clientId, isOpen, onClose, onUpdate }: Clie
         onUpdate?.();
         onClose();
       }, 1500);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la sauvegarde';
       console.error('Erreur sauvegarde:', err);
-      setError(err.message || 'Erreur lors de la sauvegarde');
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleChange = (field: keyof ClientData, value: any) => {
+  const handleChange = (field: keyof ClientData, value: string | number | boolean | null | string[] | Record<string, boolean> | ClientData['preferences']) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -522,7 +526,23 @@ export function ClientDetailsModal({ clientId, isOpen, onClose, onUpdate }: Clie
 
     try {
       // Préparer les données selon le type d'email
-      const emailData: any = {
+      interface EmailData {
+        type: string;
+        client_id: string;
+        client_email: string;
+        client_nom?: string;
+        client_prenom?: string;
+        entreprise_nom?: string;
+        panel_url: string;
+        password?: string;
+        old_plan?: string;
+        new_plan?: string;
+        modules_added?: string[];
+        notification_title?: string;
+        notification_message?: string;
+      }
+      
+      const emailData: EmailData = {
         type: emailType,
         client_id: clientId,
         client_email: formData.email,
@@ -575,9 +595,10 @@ export function ClientDetailsModal({ clientId, isOpen, onClose, onUpdate }: Clie
         setEmailSuccess(null);
       }, 5000);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'envoi de l\'email';
       console.error('Erreur envoi email:', err);
-      setError(err.message || 'Erreur lors de l\'envoi de l\'email');
+      setError(errorMessage);
       setTimeout(() => {
         setError(null);
       }, 5000);

@@ -275,7 +275,7 @@ export default function Modules({ onNavigate }: ModulesProps) {
           code: mod.module_code,
           nom: mod.module_nom || mod.module_code,
           description: mod.module_description || '',
-          categorie: mod.categorie || 'option',
+          categorie: (mod.categorie as 'core' | 'premium' | 'option' | 'admin') || 'option',
           secteur_activite: mod.secteur_activite || 'transversal',
           priorite: mod.priorite || 999,
           disponible,
@@ -430,7 +430,11 @@ export default function Modules({ onNavigate }: ModulesProps) {
                   onClick={() => {
                     setActiveTab(module.id);
                     if (route) {
-                      onNavigate(route);
+                      if (onNavigate) {
+                        onNavigate(route);
+                      } else {
+                        window.location.hash = `#${route}`;
+                      }
                     }
                   }}
                   className={`px-4 py-2 rounded-lg transition-all whitespace-nowrap flex items-center gap-2 ${
@@ -682,8 +686,10 @@ function ModuleCard({
               onClick={(e) => {
                 e.stopPropagation();
                 const route = moduleRoutes[module.code];
-                if (route) {
+                if (route && onNavigate) {
                   onNavigate(route);
+                } else if (route) {
+                  window.location.hash = `#${route}`;
                 }
               }}
               className="flex-1 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg text-xs font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"

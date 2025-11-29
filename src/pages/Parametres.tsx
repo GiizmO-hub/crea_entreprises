@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Settings, Building2, Mail, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users, ShieldOff, Crown, Eye } from 'lucide-react';
+import { Settings, Building2, Mail, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users, ShieldOff, Crown, Eye, MapPin, Phone, EyeOff } from 'lucide-react';
 import CredentialsModal from '../components/CredentialsModal';
 import { sendClientCredentialsEmail } from '../services/emailService';
 import type { ClientCredentialsEmailData } from '../services/emailService';
@@ -33,6 +33,23 @@ export default function Parametres() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [clientEntreprise, setClientEntreprise] = useState<any>(null);
+  const [profileFormData, setProfileFormData] = useState({
+    adresse: '',
+    telephone: '',
+    site_web: '',
+    code_postal: '',
+    ville: '',
+  });
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [clientCredentials, setClientCredentials] = useState<{
     email: string;
@@ -95,6 +112,7 @@ export default function Parametres() {
   useEffect(() => {
     if (user) {
       checkSuperAdmin();
+      checkIfClient();
     }
   }, [user]);
 
@@ -187,9 +205,55 @@ export default function Parametres() {
       const { data, error } = await supabase.rpc('is_platform_super_admin');
       if (!error && data === true) {
         setIsSuperAdmin(true);
+        setIsClient(false); // Super admin plateforme n'est pas un client
       }
     } catch (error) {
       console.error('Erreur vérification super admin:', error);
+    }
+  };
+
+  const checkIfClient = async () => {
+    if (!user) {
+      setIsClient(false);
+      return;
+    }
+    
+    try {
+      // Vérifier si l'utilisateur a un espace membre client
+      const { data: espaceClient, error } = await supabase
+        .from('espaces_membres_clients')
+        .select('entreprise_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (error || !espaceClient) {
+        setIsClient(false);
+        return;
+      }
+      
+      setIsClient(true);
+      
+      // Charger l'entreprise du client
+      const { data: entreprise, error: entrepriseError } = await supabase
+        .from('entreprises')
+        .select('*')
+        .eq('id', espaceClient.entreprise_id)
+        .maybeSingle();
+      
+      if (!entrepriseError && entreprise) {
+        setClientEntreprise(entreprise);
+        // Initialiser les données du formulaire profil avec les données de l'entreprise
+        setProfileFormData({
+          adresse: entreprise.adresse || '',
+          telephone: entreprise.telephone || '',
+          site_web: entreprise.site_web || '',
+          code_postal: entreprise.code_postal || '',
+          ville: entreprise.ville || '',
+        });
+      }
+    } catch (error) {
+      console.error('Erreur vérification client:', error);
+      setIsClient(false);
     }
   };
 
@@ -405,7 +469,21 @@ export default function Parametres() {
       }
 
       // ✅ Transformer les données pour correspondre au format attendu
-      const data = clientsRaw.map((c: any) => {
+      interface ClientRaw {
+        id: string;
+        nom: string | null;
+        prenom: string | null;
+        email: string | null;
+        entreprise_id: string;
+        entreprise_nom: string | null;
+        role_code?: string;
+        role_nom?: string;
+        espace_actif?: boolean;
+        espace_id?: string | null;
+        user_id?: string | null;
+        created_at: string;
+      }
+      const data = clientsRaw.map((c: ClientRaw) => {
         const roleFromView = clientsWithRolesMap[c.id];
         const entrepriseNom = Array.isArray(c.entreprises) 
           ? c.entreprises[0]?.nom || 'N/A'
@@ -927,23 +1005,284 @@ export default function Parametres() {
 
   const tabs = [
     { id: 'profil' as TabType, label: 'Profil', icon: User },
-    { id: 'entreprise' as TabType, label: 'Entreprise', icon: Building },
+    // Masquer l'onglet "Entreprise" pour les clients (seulement pour super admin plateforme)
+    ...(isSuperAdmin && !isClient ? [{ id: 'entreprise' as TabType, label: 'Entreprise', icon: Building }] : []),
     { id: 'facturation' as TabType, label: 'Facturation', icon: FileText },
     { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },
     { id: 'securite' as TabType, label: 'Sécurité', icon: Lock },
     { id: 'abonnement' as TabType, label: 'Abonnement', icon: CreditCard },
     { id: 'donnees' as TabType, label: 'Données', icon: Database },
-    ...(isSuperAdmin ? [{ id: 'clients' as TabType, label: 'Gestion Clients', icon: Users }] : []),
+    ...(isSuperAdmin && !isClient ? [{ id: 'clients' as TabType, label: 'Gestion Clients', icon: Users }] : []),
   ];
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'profil':
+        // Vue Profil pour les clients avec informations entreprise
+        if (isClient && clientEntreprise) {
+          return (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-white mb-4">Profil Utilisateur</h2>
+              
+              {/* Informations de l'entreprise */}
+              <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  Informations de l'entreprise
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Informations non modifiables */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-400 uppercase">Informations non modifiables</h4>
+                    
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2">
+                        <Lock className="w-3 h-3" />
+                        Nom de l'entreprise
+                      </label>
+                      <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white">
+                        {clientEntreprise.nom}
+                      </div>
+                    </div>
+                    
+                    {clientEntreprise.siret && (
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2">
+                          <Lock className="w-3 h-3" />
+                          SIRET
+                        </label>
+                        <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white">
+                          {clientEntreprise.siret}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {clientEntreprise.email && (
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2">
+                          <Lock className="w-3 h-3" />
+                          Email (connexion)
+                        </label>
+                        <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white flex items-center gap-2">
+                          <Mail className="w-4 h-4" />
+                          {clientEntreprise.email}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {clientEntreprise.forme_juridique && (
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Forme juridique</label>
+                        <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white">
+                          {clientEntreprise.forme_juridique}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Informations modifiables */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-400 uppercase">Informations modifiables</h4>
+                    
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Adresse</label>
+                      <input
+                        type="text"
+                        value={profileFormData.adresse}
+                        onChange={(e) => setProfileFormData({ ...profileFormData, adresse: e.target.value })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="123 Rue Example"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">Code postal</label>
+                        <input
+                          type="text"
+                          value={profileFormData.code_postal}
+                          onChange={(e) => setProfileFormData({ ...profileFormData, code_postal: e.target.value })}
+                          className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="75001"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">Ville</label>
+                        <input
+                          type="text"
+                          value={profileFormData.ville}
+                          onChange={(e) => setProfileFormData({ ...profileFormData, ville: e.target.value })}
+                          className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Paris"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2 flex items-center gap-2">
+                        <Phone className="w-4 h-4" />
+                        Téléphone
+                      </label>
+                      <input
+                        type="tel"
+                        value={profileFormData.telephone}
+                        onChange={(e) => setProfileFormData({ ...profileFormData, telephone: e.target.value })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="01 23 45 67 89"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Site web</label>
+                      <input
+                        type="url"
+                        value={profileFormData.site_web}
+                        onChange={(e) => setProfileFormData({ ...profileFormData, site_web: e.target.value })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="https://www.example.com"
+                      />
+                    </div>
+                    
+                    <button
+                      onClick={async () => {
+                        setSavingProfile(true);
+                        try {
+                          const { error } = await supabase
+                            .from('entreprises')
+                            .update({
+                              adresse: profileFormData.adresse || null,
+                              telephone: profileFormData.telephone || null,
+                              site_web: profileFormData.site_web || null,
+                              code_postal: profileFormData.code_postal || null,
+                              ville: profileFormData.ville || null,
+                              updated_at: new Date().toISOString(),
+                            })
+                            .eq('id', clientEntreprise.id);
+                          
+                          if (error) throw error;
+                          
+                          alert('✅ Informations mises à jour avec succès');
+                          // Recharger l'entreprise
+                          await checkIfClient();
+                        } catch (error) {
+                          console.error('Erreur mise à jour entreprise:', error);
+                          alert('❌ Erreur lors de la mise à jour: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
+                        } finally {
+                          setSavingProfile(false);
+                        }
+                      }}
+                      disabled={savingProfile}
+                      className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50"
+                    >
+                      {savingProfile ? 'Enregistrement...' : 'Enregistrer les modifications'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Modification du mot de passe */}
+              <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                  <Lock className="w-5 h-5" />
+                  Changer le mot de passe
+                </h3>
+                
+                <div className="space-y-4 max-w-md">
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-2">Mot de passe actuel</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={passwordData.currentPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Mot de passe actuel"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-2">Nouveau mot de passe</label>
+                    <input
+                      type="password"
+                      value={passwordData.newPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                      className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Nouveau mot de passe"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-2">Confirmer le nouveau mot de passe</label>
+                    <input
+                      type="password"
+                      value={passwordData.confirmPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                      className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Confirmer le nouveau mot de passe"
+                    />
+                  </div>
+                  
+                  <button
+                    onClick={async () => {
+                      if (passwordData.newPassword !== passwordData.confirmPassword) {
+                        alert('❌ Les mots de passe ne correspondent pas');
+                        return;
+                      }
+                      
+                      if (passwordData.newPassword.length < 6) {
+                        alert('❌ Le mot de passe doit contenir au moins 6 caractères');
+                        return;
+                      }
+                      
+                      setSavingPassword(true);
+                      try {
+                        const { error } = await supabase.auth.updateUser({
+                          password: passwordData.newPassword
+                        });
+                        
+                        if (error) throw error;
+                        
+                        alert('✅ Mot de passe modifié avec succès');
+                        setPasswordData({
+                          currentPassword: '',
+                          newPassword: '',
+                          confirmPassword: '',
+                        });
+                      } catch (error) {
+                        console.error('Erreur changement mot de passe:', error);
+                        alert('❌ Erreur lors du changement de mot de passe: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
+                      } finally {
+                        setSavingPassword(false);
+                      }
+                    }}
+                    disabled={savingPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+                    className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50"
+                  >
+                    {savingPassword ? 'Modification...' : 'Modifier le mot de passe'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        
+        // Vue Profil par défaut (pour non-clients)
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-white mb-4">Profil Utilisateur</h2>
             <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
-              <p className="text-gray-400">Gestion de votre profil utilisateur (à implémenter)</p>
+              <p className="text-gray-400">Gestion de votre profil utilisateur</p>
+              <p className="text-gray-500 text-sm mt-2">Email: {user?.email}</p>
             </div>
           </div>
         );

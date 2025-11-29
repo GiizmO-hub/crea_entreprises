@@ -1,113 +1,130 @@
-/**
- * Script pour appliquer la migration de diagnostic directement via PostgreSQL
- * 
- * Usage: node scripts/apply-migration-direct.mjs
- */
-
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import pg from 'pg';
-import { config } from 'dotenv';
+import { join } from 'path';
 
-const { Client } = pg;
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
-// Charger .env
-config({ path: join(__dirname, '..', '.env') });
-
-function extractDbConnection(url) {
-  try {
-    const urlObj = new URL(url);
-    return {
-      host: urlObj.hostname,
-      port: parseInt(urlObj.port || '5432'),
-      database: urlObj.pathname.slice(1) || 'postgres',
-      user: urlObj.username || 'postgres',
-      password: urlObj.password || '',
-      ssl: { rejectUnauthorized: false } // Supabase nécessite SSL
-    };
-  } catch (error) {
-    return null;
-  }
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('❌ Variables d\'environnement manquantes');
+  console.error('   Besoin de: VITE_SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY');
+  console.error('\n📋 Pour appliquer manuellement:');
+  console.error('   1. Ouvrez le Dashboard Supabase');
+  console.error('   2. Allez dans "SQL Editor"');
+  console.error('   3. Copiez-collez le contenu des migrations');
+  process.exit(1);
 }
 
-async function applyMigration() {
-  console.log('🚀 Application de la migration de diagnostic...\n');
-
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
-  
-  if (!databaseUrl) {
-    console.log('⚠️  DATABASE_URL non trouvé dans .env\n');
-    console.log('💡 SOLUTION RECOMMANDÉE - Via Dashboard Supabase:');
-    console.log('   1. Ouvrez: https://supabase.com/dashboard');
-    console.log('   2. Sélectionnez votre projet');
-    console.log('   3. Cliquez sur "SQL Editor" dans le menu gauche');
-    console.log('   4. Cliquez sur "New Query"');
-    console.log('   5. Ouvrez le fichier: supabase/migrations/20250123000038_diagnostic_workflow_complet.sql');
-    console.log('   6. Copiez tout le contenu (Cmd+A puis Cmd+C)');
-    console.log('   7. Collez dans l\'éditeur SQL (Cmd+V)');
-    console.log('   8. Cliquez sur "Run" (ou Cmd+Enter)\n');
-    
-    console.log('💡 Pour une application automatique future:');
-    console.log('   Ajoutez DATABASE_URL dans votre .env');
-    console.log('   Format: postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres');
-    console.log('   (Trouvable dans Supabase Dashboard → Settings → Database → Connection string)\n');
-    return;
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
   }
+});
 
-  console.log('🔗 Tentative de connexion à la base de données...\n');
+async function applySQL(sql) {
+  // Diviser le SQL en blocs (séparés par ;)
+  const blocks = sql.split(';').filter(b => b.trim().length > 0);
   
-  const dbConfig = extractDbConnection(databaseUrl);
-  if (!dbConfig) {
-    console.error('❌ Format de DATABASE_URL invalide');
-    return;
-  }
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i].trim() + ';';
+    
+    try {
+      // Utiliser l'API REST directement
+      const response = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseServiceKey,
+          'Authorization': `Bearer ${supabaseServiceKey}`
+        },
+        body: JSON.stringify({ sql_query: block })
+      });
 
-  const client = new Client(dbConfig);
-  
-  try {
-    await client.connect();
-    console.log('✅ Connecté à la base de données\n');
-    
-    // Lire la migration
-    const migrationPath = join(__dirname, '..', 'supabase', 'migrations', '20250123000038_diagnostic_workflow_complet.sql');
-    console.log('📄 Lecture de la migration:', migrationPath);
-    const migrationSQL = readFileSync(migrationPath, 'utf8');
-    console.log('✅ Migration chargée (' + migrationSQL.length + ' caractères)\n');
-    
-    // Exécuter la migration
-    console.log('🔄 Exécution de la migration...\n');
-    await client.query(migrationSQL);
-    
-    console.log('✅ Migration appliquée avec succès !\n');
-    
-    // Exécuter le diagnostic immédiatement
-    console.log('🔍 Exécution du diagnostic...\n');
-    const result = await client.query('SELECT test_diagnostic_rapide()');
-    console.log(result.rows[0].test_diagnostic_rapide);
-    console.log('');
-    
-    await client.end();
-    console.log('✅ Terminé !\n');
-    
-  } catch (error) {
-    console.error('❌ Erreur lors de l\'application:', error.message);
-    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      console.log('\n💡 Vérifiez votre DATABASE_URL dans .env');
-      console.log('   Format attendu: postgresql://postgres:[password]@[host]:[port]/postgres');
-    } else if (error.message.includes('permission denied') || error.message.includes('access denied')) {
-      console.log('\n💡 Problème de permissions. Vérifiez que:');
-      console.log('   1. Votre DATABASE_URL utilise les bonnes credentials');
-      console.log('   2. Votre utilisateur a les permissions nécessaires');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+    } catch (error) {
+      // Si exec_sql n'existe pas, afficher les instructions
+      console.error(`\n❌ Impossible d'appliquer automatiquement via l'API`);
+      console.error(`   ${error.message}\n`);
+      return false;
     }
-    await client.end();
-    process.exit(1);
+  }
+  
+  return true;
+}
+
+async function applyMigration(filename) {
+  console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  console.log(`📄 Migration: ${filename}`);
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+  try {
+    const filePath = join(process.cwd(), 'supabase', 'migrations', filename);
+    const sql = readFileSync(filePath, 'utf-8');
+    
+    console.log(`✅ Fichier lu: ${filePath}`);
+    
+    const success = await applySQL(sql);
+    
+    if (success) {
+      console.log(`✅ Migration appliquée avec succès !\n`);
+      return true;
+    } else {
+      throw new Error('Échec de l\'application');
+    }
+
+  } catch (error) {
+    console.error(`❌ Erreur: ${error.message}\n`);
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📋 INSTRUCTIONS MANUELLES:');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`1. Ouvrez: https://supabase.com/dashboard/project/_/sql`);
+    console.log(`2. Copiez le contenu de: supabase/migrations/${filename}`);
+    console.log(`3. Collez dans l'éditeur SQL`);
+    console.log(`4. Cliquez sur "Run"`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    
+    return false;
   }
 }
 
-applyMigration().catch(console.error);
+async function main() {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🚀 APPLICATION AUTOMATIQUE DES MIGRATIONS');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
+  const migrations = [
+    '20250130000002_fix_rls_clients_can_view_their_enterprise.sql',
+    '20250130000003_sync_all_client_modules_from_subscriptions.sql'
+  ];
 
+  let successCount = 0;
+  let errorCount = 0;
+
+  for (const migration of migrations) {
+    const success = await applyMigration(migration);
+    if (success) {
+      successCount++;
+    } else {
+      errorCount++;
+    }
+  }
+
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📊 RÉSUMÉ');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`✅ Migrations réussies: ${successCount}/${migrations.length}`);
+  console.log(`❌ Migrations échouées: ${errorCount}/${migrations.length}`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+  if (errorCount > 0) {
+    console.log('⚠️  Veuillez appliquer les migrations manuellement via le Dashboard Supabase.');
+  }
+}
+
+main();

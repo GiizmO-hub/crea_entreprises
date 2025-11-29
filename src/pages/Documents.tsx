@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import {
@@ -100,7 +99,6 @@ const TYPES_FICHIER = [
 ];
 
 export default function Documents() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<DocumentFolder[]>([]);
@@ -152,6 +150,7 @@ export default function Documents() {
       loadFolders();
       loadClients();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEntreprise]);
 
   useEffect(() => {
@@ -857,7 +856,7 @@ export default function Documents() {
           <Building2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400 mb-4">Vous devez créer une entreprise avant de gérer des documents</p>
           <button
-            onClick={() => navigate('/entreprises')}
+            onClick={() => window.location.hash = '#entreprises'}
             className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
           >
             Créer une entreprise

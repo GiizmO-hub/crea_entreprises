@@ -26,6 +26,10 @@ export const moduleCodeToMenuId: Record<string, string> = {
   'gestion-clients': 'clients',
   'gestion-des-clients': 'clients',
   'gestion_des_clients': 'clients',
+  // Modules de base toujours actifs pour clients
+  'dashboard': 'dashboard',
+  'tableau_de_bord': 'dashboard',
+  'tableau-de-bord': 'dashboard',
   
   // Modules facturation
   'facturation': 'factures',
@@ -53,6 +57,18 @@ export const moduleCodeToMenuId: Record<string, string> = {
   'gestion-de-projets': 'gestion-projets',
   'gestion_de_projets': 'gestion-projets',
   
+  // Modules gestion stock
+  'gestion-stock': 'gestion-stock',
+  'gestion_stock': 'gestion-stock',
+  'gestion-de-stock': 'gestion-stock',
+  'gestion_de_stock': 'gestion-stock',
+  'stock': 'gestion-stock',
+  
+  // Modules CRM
+  'crm-avance': 'crm-avance',
+  'crm_avance': 'crm-avance',
+  'crm': 'crm-avance',
+  
   // Modules comptabilité
   'comptabilite': 'comptabilite',
   'comptabilité': 'comptabilite',
@@ -73,6 +89,7 @@ export const moduleCodeToMenuId: Record<string, string> = {
   'gestion-collaborateurs': 'collaborateurs',
   'gestion_des_collaborateurs': 'collaborateurs',
   'gestion-des-collaborateurs': 'collaborateurs',
+  'salaries': 'collaborateurs', // Gestion des salariés → collaborateurs
   
   // Modules paramètres
   'parametres': 'settings',
@@ -91,8 +108,12 @@ export const moduleCodeToMenuId: Record<string, string> = {
   'support_prioritaire': 'settings',
   'support_dedie': 'settings',
   'personnalisation': 'settings',
-  'gestion-stock': 'settings',
-  'crm-avance': 'settings',
+  'gestion-stock': 'gestion-stock',
+  'gestion_stock': 'gestion-stock',
+  'gestion-de-stock': 'gestion-stock',
+  'gestion_de_stock': 'gestion-stock',
+  'crm-avance': 'crm-avance',
+  'crm_avance': 'crm-avance',
   'bilans-comptables': 'comptabilite',
   'connexions-admin': 'settings',
   'declarations-admin': 'settings',

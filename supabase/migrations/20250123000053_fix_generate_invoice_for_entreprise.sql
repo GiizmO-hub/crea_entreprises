@@ -128,7 +128,8 @@ BEGIN
     tva,
     montant_ttc,
     statut,
-    notes
+    notes,
+    source
   )
   VALUES (
     p_entreprise_id,
@@ -145,7 +146,8 @@ BEGIN
       'source', 'generate_invoice_for_entreprise',
       'abonnement_id', v_abonnement_id,
       'message', 'Facture générée automatiquement depuis la plateforme'
-    )
+    ),
+    'plateforme'
   )
   RETURNING id INTO v_facture_id;
 

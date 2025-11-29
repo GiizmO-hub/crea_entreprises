@@ -9,9 +9,9 @@ import type { Client } from './types';
 
 interface ClientCardProps {
   client: Client;
-  onEdit: (client: Client) => void;
-  onDelete: (clientId: string) => void;
-  onCreateEspaceMembre: (client: Client) => void;
+  onEdit?: (client: Client) => void;
+  onDelete?: (clientId: string) => void;
+  onCreateEspaceMembre?: (client: Client) => void;
   onViewDetails?: (clientId: string) => void;
 }
 
@@ -75,14 +75,16 @@ export function ClientCard({
             Détails
           </button>
         )}
-        <button
-          onClick={() => onEdit(client)}
-          className="flex-1 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-all text-sm font-semibold flex items-center justify-center gap-2"
-        >
-          <Edit className="w-4 h-4" />
-          Modifier
-        </button>
-        {client.email && (
+        {onEdit && (
+          <button
+            onClick={() => onEdit(client)}
+            className="flex-1 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-all text-sm font-semibold flex items-center justify-center gap-2"
+          >
+            <Edit className="w-4 h-4" />
+            Modifier
+          </button>
+        )}
+        {client.email && onCreateEspaceMembre && (
           <button
             onClick={() => onCreateEspaceMembre(client)}
             className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg transition-all"
@@ -91,16 +93,18 @@ export function ClientCard({
             <UserPlus className="w-4 h-4" />
           </button>
         )}
-        <button
-          onClick={() => {
-            if (confirm('Êtes-vous sûr de vouloir supprimer ce client ?')) {
-              onDelete(client.id);
-            }
-          }}
-          className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-all"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {onDelete && (
+          <button
+            onClick={() => {
+              if (confirm('Êtes-vous sûr de vouloir supprimer ce client ?')) {
+                onDelete(client.id);
+              }
+            }}
+            className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   );

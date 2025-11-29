@@ -48,64 +48,13 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'comptabilite', label: 'Comptabilité', icon: Calculator, moduleCode: 'comptabilite' },
     { id: 'finance', label: 'Finance', icon: TrendingUp, moduleCode: 'finance' },
     { id: 'gestion-projets', label: 'Gestion Projets', icon: Package, moduleCode: 'gestion-projets' },
+    { id: 'gestion-stock', label: 'Gestion Stock', icon: Package, moduleCode: 'gestion-stock' },
+    { id: 'crm-avance', label: 'CRM Avancé', icon: TrendingUp, moduleCode: 'crm-avance' },
     { id: 'modules', label: 'Modules', icon: Package, superAdminOnly: true, moduleCode: 'modules' },
     { id: 'settings', label: 'Paramètres', icon: Settings, moduleCode: 'settings' },
   ];
 
-  // ✅ Déclarer les fonctions AVANT de les utiliser dans useEffect
-  const checkClientSuperAdmin = async () => {
-    if (!user) {
-      setIsClientSuperAdmin(false);
-      setIsClient(false);
-      return;
-    }
-
-    try {
-      // D'abord vérifier si l'utilisateur est un client (a un espace membre)
-      const { data: espaceClient, error: espaceError } = await supabase
-        .from('espaces_membres_clients')
-        .select('client_id, entreprise_id')
-        .eq('user_id', user.id)
-        .maybeSingle(); // ✅ Utiliser maybeSingle() pour éviter erreur si 0 lignes
-
-      if (espaceError || !espaceClient) {
-        // Pas un client ou erreur
-        setIsClientSuperAdmin(false);
-        setIsClient(false);
-        if (espaceError) {
-          console.log('⚠️ Pas un client ou erreur:', espaceError.code);
-        }
-        return;
-      }
-
-      // ✅ L'utilisateur est un client
-      setIsClient(true);
-      console.log('👤 ✅ Client détecté (a un espace membre)');
-
-      // ✅ Utiliser une fonction RPC pour vérifier le statut client_super_admin (contourne RLS)
-      // Cette fonction permet au client de vérifier son propre statut avec le nouveau rôle spécifique
-      const { data: isSuperAdminResult, error: rpcError } = await supabase.rpc(
-        'check_my_super_admin_status'
-      );
-
-      if (!rpcError && isSuperAdminResult === true) {
-        setIsClientSuperAdmin(true);
-        console.log('👤 ✅ Client super_admin détecté via RPC (rôle: client_super_admin):', true);
-      } else {
-        setIsClientSuperAdmin(false);
-        if (rpcError) {
-          console.warn('⚠️ Erreur RPC check_my_super_admin_status:', rpcError);
-        } else {
-          console.log('👤 Client détecté mais pas client_super_admin');
-        }
-      }
-    } catch (error) {
-      console.error('Erreur vérification client super_admin:', error);
-      setIsClientSuperAdmin(false);
-      setIsClient(false);
-    }
-  };
-
+  // ✅ Déclarer la fonction checkSuperAdmin AVANT de l'utiliser dans useEffect
   const checkSuperAdmin = async () => {
     if (!user) {
       setIsSuperAdmin(false);
@@ -232,18 +181,59 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     setIsClient(isClientFromHook);
   }, [isClientFromHook]);
 
-  // ✅ useEffect pour appeler les fonctions de vérification
+  // ✅ useEffect pour appeler les fonctions de vérification (SÉQUENTIELLEMENT)
   useEffect(() => {
-    if (user) {
-      checkSuperAdmin();
-      checkClientSuperAdmin();
-    } else {
+    if (!user) {
       setIsSuperAdmin(false);
       setIsClientSuperAdmin(false);
       setIsClient(false);
+      return;
     }
+
+    // ✅ LOGIQUE SÉQUENTIELLE : D'abord vérifier si client, PUIS Super Admin plateforme
+    let isMounted = true; // Garde pour éviter les mises à jour si le composant est démonté
+    
+    (async () => {
+      // ÉTAPE 1 : Vérifier si l'utilisateur a un espace_membre_client
+      const { data: espaceClient, error: espaceError } = await supabase
+        .from('espaces_membres_clients')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (!isMounted) return;
+      
+      if (!espaceError && espaceClient) {
+        // ✅ C'EST UN CLIENT - Ne peut pas être Super Admin plateforme
+        console.log('👤 [Layout] Client détecté (a un espace_membre_client) - Pas Super Admin plateforme');
+        setIsClient(true);
+        setIsSuperAdmin(false); // Un client n'est JAMAIS Super Admin plateforme
+        
+        // Vérifier si c'est un client_super_admin
+        const { data: isSuperAdminResult, error: rpcError } = await supabase.rpc('check_my_super_admin_status');
+        if (!isMounted) return;
+        
+        if (!rpcError && isSuperAdminResult === true) {
+          setIsClientSuperAdmin(true);
+          console.log('👤 [Layout] Client super_admin détecté');
+        } else {
+          setIsClientSuperAdmin(false);
+        }
+      } else {
+        // ✅ PAS UN CLIENT - Peut être Super Admin plateforme
+        setIsClient(false);
+        setIsClientSuperAdmin(false);
+        
+        // Vérifier si c'est un Super Admin plateforme
+        await checkSuperAdmin();
+      }
+    })();
+    
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]); // checkSuperAdmin et checkClientSuperAdmin sont stables, pas besoin de les inclure
+  }, [user?.id]); // ✅ Dépendance : seulement user.id pour éviter les re-déclenchements
 
   const handleSignOut = async () => {
     try {
@@ -337,6 +327,8 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                   <button
                     key={item.id}
                     onClick={() => {
+                      // Mettre à jour le hash pour persister la navigation
+                      window.location.hash = item.id;
                       onNavigate(item.id);
                       setSidebarOpen(true);
                     }}
@@ -370,19 +362,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
               {sidebarOpen && (
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{user?.email}</p>
-                  {isClientSuperAdmin && (
+                  {/* Badge uniquement pour Super Admin plateforme, pas pour les clients */}
+                  {isSuperAdmin && !isClient && (
                     <div className="flex items-center gap-2 mt-1">
-                      <Shield className="w-3 h-3 text-yellow-400" />
-                      <span className="text-xs font-semibold text-yellow-400 bg-yellow-500/20 px-2 py-0.5 rounded-full">
-                        Super Admin
+                      <Shield className="w-3 h-3 text-purple-400" />
+                      <span className="text-xs font-semibold text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded-full">
+                        Plateforme
                       </span>
                     </div>
                   )}
+                  {/* Pas de badge pour les clients - ils voient uniquement leur entreprise */}
                 </div>
               )}
-              {!sidebarOpen && isClientSuperAdmin && (
-                <div title="Super Admin">
-                  <Shield className="w-4 h-4 text-yellow-400" />
+              {!sidebarOpen && isSuperAdmin && !isClient && (
+                <div title="Administrateur Plateforme">
+                  <Shield className="w-4 h-4 text-purple-400" />
                 </div>
               )}
             </div>

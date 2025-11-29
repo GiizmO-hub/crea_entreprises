@@ -445,12 +445,12 @@ BEGIN
   BEGIN
     INSERT INTO factures (
       entreprise_id, client_id, numero, type, date_emission, date_echeance,
-      montant_ht, tva, montant_ttc, statut, paiement_id
+      montant_ht, tva, montant_ttc, statut, paiement_id, source
     )
     VALUES (
       v_entreprise_id, v_client_id, v_numero_facture, 'facture',
       CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days',
-      v_montant_ht, v_montant_tva, v_montant_ttc, 'payee', p_paiement_id
+      v_montant_ht, v_montant_tva, v_montant_ttc, 'payee', p_paiement_id, 'plateforme'
     )
     RETURNING id INTO v_facture_id;
     

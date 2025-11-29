@@ -146,7 +146,7 @@ export default function GestionPlans() {
               };
             }
             
-            // Normaliser les valeurs boolean et s'assurer que les modules retournés sont correctement typés
+            // Normaliser les valeurs boolean
             interface ModuleData {
               module_code?: string;
               module_nom?: string;
@@ -163,7 +163,7 @@ export default function GestionPlans() {
               module_code: mod.module_code || '',
               module_nom: mod.module_nom || '',
               module_description: mod.module_description || '',
-              categorie: mod.categorie || '',
+              categorie: mod.categorie || 'core',
               inclus: mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true',
               prix_mensuel: parseFloat(String(mod.prix_mensuel || 0)),
               prix_annuel: parseFloat(String(mod.prix_annuel || 0)),
@@ -281,7 +281,6 @@ export default function GestionPlans() {
       
       if (error instanceof Error) {
         errorMessage = error.message;
-        // Améliorer le message pour les erreurs de contrainte unique
         if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
           if (errorMessage.includes('plans_abonnement_nom_key')) {
             errorMessage = `Un plan avec le nom "${formData.nom}" existe déjà. Veuillez utiliser un nom différent ou modifier le plan existant.`;
@@ -301,7 +300,6 @@ export default function GestionPlans() {
     }
 
     try {
-      // Utiliser la fonction RPC pour supprimer proprement
       const { data, error } = await supabase
         .rpc('delete_plan_abonnement_safe', { p_plan_id: planId });
 
@@ -663,15 +661,15 @@ export default function GestionPlans() {
                               />
                               <h4 className="text-white font-semibold">{module.module_nom}</h4>
                               <span
-                                className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                  module.categorie === 'core'
-                                    ? 'bg-blue-500/20 text-blue-300'
+                                className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                                  module.categorie === 'core' || module.categorie === 'coeur' || !module.categorie
+                                    ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
                                     : module.categorie === 'premium'
                                     ? 'bg-purple-500/20 text-purple-300'
                                     : 'bg-orange-500/20 text-orange-300'
                                 }`}
                               >
-                                {module.categorie}
+                                {module.categorie === 'core' || module.categorie === 'coeur' || !module.categorie ? 'cœur' : module.categorie}
                               </span>
                             </div>
                             {module.module_description && (
