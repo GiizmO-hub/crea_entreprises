@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Mic, Square } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Mic, Square, Volume2 } from 'lucide-react';
 
 interface VoiceInputProps {
   onTranscript: (text: string) => void;
@@ -12,11 +12,23 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [isSupported, setIsSupported] = useState(false);
+  const [confidence, setConfidence] = useState<number>(0);
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
-  const fullTranscriptRef = useRef('');
+  
+  // SOLUTION RADICALE : Stocker TOUS les résultats finaux dans un tableau persistant
+  const allFinalResultsRef = useRef<Array<{text: string, index: number}>>([]);
+  const lastProcessedIndexRef = useRef<number>(-1);
+  const interimTextRef = useRef<string>('');
+  
   const restartTimeoutRef = useRef<any>(null);
-  const isInitializedRef = useRef(false);
+  const lastTranscriptTimeRef = useRef<number>(0);
+
+  // Callback stable pour onTranscript
+  const onTranscriptRef = useRef(onTranscript);
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+  }, [onTranscript]);
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -30,59 +42,143 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
     console.log('✅ Speech Recognition supporté, initialisation...');
     setIsSupported(true);
     
-    // Initialiser la reconnaissance
+    // Configuration optimale pour capturer TOUT
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = language;
-    recognition.maxAlternatives = 1;
+    recognition.maxAlternatives = 5;
+    
+    // Configuration audio optimale pour meilleure capture
+    // Note: Ces paramètres peuvent ne pas être supportés par tous les navigateurs
+    try {
+      if ('webkitSpeechRecognition' in window) {
+        // Chrome/Edge spécifique
+        (recognition as any).grammars = null; // Pas de grammaire restrictive
+      }
+    } catch (e) {
+      console.log('⚠️ Configuration audio avancée non disponible');
+    }
 
     recognition.onstart = () => {
       console.log('✅ Reconnaissance démarrée');
       setIsListening(true);
       isListeningRef.current = true;
-      fullTranscriptRef.current = '';
-      setTranscript('');
+      setConfidence(0);
       if (onStart) {
         onStart();
       }
     };
 
     recognition.onresult = (event: any) => {
-      let interimTranscript = '';
+      // SOLUTION ULTIME : Parcourir TOUS les résultats depuis 0 et accumuler TOUT
+      console.log('📝 ===== ONRESULT APPELÉ =====');
+      console.log('📝 Nombre de résultats:', event.results.length);
+      
+      let allFinalTexts: string[] = [];
+      let interimText = '';
+      let maxConf = 0;
 
-      // CRITIQUE: Parcourir depuis event.resultIndex jusqu'à la fin
-      // event.resultIndex indique où commencer (pour éviter de traiter les mêmes résultats)
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          // CRITIQUE: Ajouter au transcript final accumulé avec += (NE PAS REMPLACER)
-          const before = fullTranscriptRef.current;
-          fullTranscriptRef.current += transcript + ' ';
-          console.log('✅ Résultat final #' + i + ':', transcript);
-          console.log('✅ Avant:', before);
-          console.log('✅ Après:', fullTranscriptRef.current);
+      // PARCOURIR TOUS LES RÉSULTATS DEPUIS 0 (pas depuis le dernier index)
+      // event.results contient TOUS les résultats depuis le début de la session
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (!result || !result.length) {
+          console.log(`⚠️ Résultat [${i}] vide ou invalide`);
+          continue;
+        }
+        
+        console.log(`📝 Traitement résultat [${i}]: isFinal=${result.isFinal}, alternatives=${result.length}`);
+        
+        // Prendre la meilleure alternative
+        let bestText = '';
+        let bestConf = 0;
+        
+        for (let alt = 0; alt < result.length; alt++) {
+          const altText = result[alt]?.transcript?.trim() || '';
+          const altConf = result[alt]?.confidence || 0;
+          
+          console.log(`  📝 Alternative [${i}][${alt}]: "${altText}" (confiance: ${Math.round(altConf * 100)}%)`);
+          
+          if (altText.length > 0 && altConf > bestConf) {
+            bestText = altText;
+            bestConf = altConf;
+          }
+        }
+        
+        if (bestText.length === 0 && result[0]?.transcript) {
+          bestText = result[0].transcript.trim();
+          bestConf = result[0].confidence || 0;
+          console.log(`  📝 Utilisation alternative 0 par défaut: "${bestText}"`);
+        }
+        
+        if (bestText.length === 0) {
+          console.log(`  ⚠️ Aucun texte valide trouvé pour résultat [${i}]`);
+          continue;
+        }
+        
+        if (bestConf > maxConf) {
+          maxConf = bestConf;
+        }
+        
+        if (result.isFinal) {
+          // Résultat final - l'ajouter à la liste
+          allFinalTexts.push(bestText);
+          console.log(`✅ Résultat final [${i}]: "${bestText}" (confiance: ${Math.round(bestConf * 100)}%)`);
         } else {
           // Résultat intermédiaire - remplacer le précédent
-          interimTranscript = transcript;
+          interimText = bestText;
+          interimTextRef.current = bestText;
+          console.log(`🔄 Résultat intermédiaire [${i}]: "${bestText}" (confiance: ${Math.round(bestConf * 100)}%)`);
         }
       }
 
-      // Combiner le transcript final accumulé avec le dernier résultat intermédiaire
-      const fullTranscript = fullTranscriptRef.current.trim() + (interimTranscript ? ' ' + interimTranscript : '');
+      // Mettre à jour le tableau persistant avec TOUS les résultats finaux
+      // NE PAS utiliser Set - on veut TOUS les résultats dans l'ordre
+      if (allFinalTexts.length > 0) {
+        // Ajouter les nouveaux résultats finaux au tableau persistant
+        // Vérifier qu'on n'ajoute pas de doublons consécutifs identiques
+        const lastStored = allFinalResultsRef.current[allFinalResultsRef.current.length - 1]?.text || '';
+        const newResults = allFinalTexts.filter(text => text !== lastStored);
+        
+        if (newResults.length > 0) {
+          allFinalResultsRef.current = [
+            ...allFinalResultsRef.current,
+            ...newResults.map((text, idx) => ({ text, index: allFinalResultsRef.current.length + idx }))
+          ];
+          console.log(`✅ ${newResults.length} nouveaux résultats finaux ajoutés`);
+        }
+        console.log(`✅ Total résultats finaux stockés: ${allFinalResultsRef.current.length}`);
+        console.log(`✅ Tous les textes finaux:`, allFinalResultsRef.current.map(r => r.text));
+      }
+
+      // Construire le transcript complet depuis TOUS les résultats finaux accumulés
+      const allFinalText = allFinalResultsRef.current.map(r => r.text).join(' ').trim();
+      const fullTranscript = allFinalText + (interimText ? ' ' + interimText : '');
+      
       setTranscript(fullTranscript);
       
-      console.log('📝 ===== TRANSCRIPT =====');
-      console.log('📝 Final accumulé:', fullTranscriptRef.current);
-      console.log('📝 Longueur accumulée:', fullTranscriptRef.current.length);
-      console.log('📝 Intermédiaire:', interimTranscript);
-      console.log('📝 Transcript complet:', fullTranscript);
-      console.log('📝 Longueur totale:', fullTranscript.length);
-      console.log('📝 ======================');
+      // Mettre à jour la confiance
+      if (maxConf > 0) {
+        setConfidence(Math.round(maxConf * 100));
+      }
       
-      // Appeler onTranscript avec le transcript complet
+      lastTranscriptTimeRef.current = Date.now();
+      
+      console.log('📝 ===== DÉTAILS TRANSCRIPT =====');
+      console.log('📝 Résultats finaux de cet event:', allFinalTexts);
+      console.log('📝 Résultats finaux accumulés (total):', allFinalResultsRef.current.map(r => r.text));
+      console.log('📝 Texte final accumulé:', allFinalText);
+      console.log('📝 Intermédiaire actuel:', interimText);
+      console.log('📝 Transcript complet affiché:', fullTranscript);
+      console.log('📝 Longueur totale:', fullTranscript.length);
+      console.log('📝 Confiance maximale:', `${Math.round(maxConf * 100)}%`);
+      console.log('📝 Nombre de résultats dans event:', event.results.length);
+      console.log('📝 ============================');
+      
+      // Appeler onTranscript IMMÉDIATEMENT avec TOUT le texte
       if (fullTranscript.trim().length > 0) {
-        onTranscript(fullTranscript.trim());
+        onTranscriptRef.current(fullTranscript.trim());
       }
     };
 
@@ -90,71 +186,62 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
       console.error('❌ Erreur reconnaissance:', event.error);
       
       if (event.error === 'no-speech') {
-        console.log('⚠️ Pas de parole, continuation...');
-        return;
+        return; // Ignorer, continuer
       }
       
       if (event.error === 'aborted') {
-        console.log('⚠️ Reconnaissance interrompue');
         if (isListeningRef.current) {
           setTimeout(() => {
             if (isListeningRef.current && recognitionRef.current) {
               try {
-                console.log('🔄 Redémarrage après interruption...');
                 recognitionRef.current.start();
               } catch (error) {
                 console.error('❌ Erreur redémarrage:', error);
               }
             }
-          }, 500);
+          }, 100);
         }
         return;
       }
       
       if (event.error === 'network') {
-        console.error('❌ Erreur réseau');
         setIsListening(false);
         isListeningRef.current = false;
+        return;
+      }
+
+      if (event.error === 'not-allowed') {
+        setIsListening(false);
+        isListeningRef.current = false;
+        alert('L\'autorisation d\'utiliser le micro est requise.');
         return;
       }
     };
 
     recognition.onend = () => {
-      console.log('⚠️ Reconnaissance terminée');
-      
-      if (restartTimeoutRef.current) {
-        clearTimeout(restartTimeoutRef.current);
-      }
-      
       if (isListeningRef.current && recognitionRef.current) {
         restartTimeoutRef.current = setTimeout(() => {
           if (isListeningRef.current && recognitionRef.current) {
             try {
-              console.log('🔄 Redémarrage automatique...');
               recognitionRef.current.start();
             } catch (error: any) {
-              if (error.message?.includes('already started')) {
-                console.log('✅ Déjà démarré');
-              } else {
+              if (!error.message?.includes('already started')) {
                 console.error('❌ Erreur redémarrage:', error);
                 setIsListening(false);
                 isListeningRef.current = false;
               }
             }
           }
-        }, 100);
+        }, 50);
       } else {
-        console.log('⏹️ Arrêt manuel confirmé');
         setIsListening(false);
       }
     };
 
     recognitionRef.current = recognition;
-    isInitializedRef.current = true;
     console.log('✅ Reconnaissance initialisée');
 
     return () => {
-      console.log('🧹 Nettoyage de la reconnaissance');
       if (restartTimeoutRef.current) {
         clearTimeout(restartTimeoutRef.current);
       }
@@ -163,93 +250,76 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
           recognitionRef.current.stop();
           recognitionRef.current.abort();
         } catch (error) {
-          // Ignorer les erreurs de nettoyage
+          // Ignorer
         }
       }
     };
-  }, [language, onTranscript, onStart]);
+  }, [language, onStart]);
 
-  const startListening = async (e?: React.MouseEvent) => {
+  const startListening = useCallback(async (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
     
-    console.log('🚀 Démarrage demandé, isListening:', isListening);
-    
-    if (!recognitionRef.current) {
-      console.error('❌ Reconnaissance non initialisée');
-      alert('La reconnaissance vocale n\'est pas initialisée. Rechargez la page.');
-      return;
-    }
-    
-    if (isListening) {
-      console.log('⚠️ Déjà en écoute');
+    if (!recognitionRef.current || isListening) {
       return;
     }
     
     try {
-      // Demander l'autorisation du micro
-      try {
-        console.log('🔐 Demande d\'autorisation micro...');
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log('✅ Autorisation micro accordée');
-      } catch (mediaError: any) {
-        console.error('❌ Erreur autorisation micro:', mediaError);
-        if (mediaError.name === 'NotAllowedError' || mediaError.name === 'PermissionDeniedError') {
-          alert('L\'autorisation d\'utiliser le micro est requise pour la saisie vocale.');
-          return;
-        }
-        throw mediaError;
-      }
+      await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        } 
+      }).then(stream => stream.getTracks().forEach(t => t.stop()));
       
-      // Démarrer la reconnaissance
-      console.log('🚀 Démarrage de la reconnaissance...');
+      // RÉINITIALISER TOUT pour un nouveau départ
+      allFinalResultsRef.current = [];
+      lastProcessedIndexRef.current = -1;
+      interimTextRef.current = '';
+      setTranscript('');
+      setConfidence(0);
+      
       recognitionRef.current.start();
-      console.log('✅ Commande start() envoyée');
     } catch (error: any) {
-      console.error('❌ Erreur démarrage:', error);
-      if (error.message?.includes('already started')) {
-        console.log('✅ Déjà démarré');
-        setIsListening(true);
-        isListeningRef.current = true;
-      } else {
-        alert('Erreur lors du démarrage de la reconnaissance vocale: ' + (error.message || 'Erreur inconnue'));
+      if (error.name === 'NotAllowedError') {
+        alert('Autorisation micro requise.');
       }
     }
-  };
+  }, [isListening]);
 
-  const stopListening = (e?: React.MouseEvent) => {
+  const stopListening = useCallback((e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    
-    console.log('⏹️ Arrêt de l\'écoute demandé');
     
     isListeningRef.current = false;
     setIsListening(false);
     
     if (restartTimeoutRef.current) {
       clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
     }
     
-    if (fullTranscriptRef.current.trim().length > 0) {
-      console.log('📤 Envoi du transcript final:', fullTranscriptRef.current);
-      onTranscript(fullTranscriptRef.current);
+    // Construire le texte final depuis tous les résultats accumulés
+    const allFinalText = allFinalResultsRef.current.map(r => r.text).join(' ').trim();
+    const finalText = allFinalText + (interimTextRef.current ? ' ' + interimTextRef.current : '');
+    
+    if (finalText.length > 0) {
+      onTranscriptRef.current(finalText);
     }
     
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
         recognitionRef.current.abort();
-        console.log('✅ Reconnaissance arrêtée');
       } catch (error) {
-        console.log('⚠️ Erreur lors de l\'arrêt (non critique):', error);
+        // Ignorer
       }
     }
-  };
+  }, []);
 
   if (!isSupported) {
     return (
@@ -285,19 +355,13 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
           key={isListening ? 'stop' : 'start'}
           type="button"
           onClick={async (e) => {
-            console.log('🖱️ Bouton cliqué, isListening:', isListening);
-            
             e.preventDefault();
             e.stopPropagation();
             if (e.nativeEvent) {
               e.nativeEvent.stopImmediatePropagation();
             }
-            if ((e as any).cancelable !== false) {
-              (e as any).cancelBubble = true;
-            }
             
             if (!isListening && onStart) {
-              console.log('📞 Appel de onStart()');
               onStart();
             }
             
@@ -313,9 +377,6 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
             if (e.nativeEvent) {
               e.nativeEvent.stopImmediatePropagation();
             }
-            if ((e as any).cancelable !== false) {
-              (e as any).cancelBubble = true;
-            }
             if (!isListening && onStart) {
               onStart();
             }
@@ -325,9 +386,6 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
             e.stopPropagation();
             if (e.nativeEvent) {
               e.nativeEvent.stopImmediatePropagation();
-            }
-            if ((e as any).cancelable !== false) {
-              (e as any).cancelBubble = true;
             }
           }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
@@ -353,17 +411,30 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
           <div className="flex items-center gap-2 text-red-400">
             <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
             <span className="text-sm">En écoute...</span>
+            {confidence > 0 && (
+              <span className="text-xs text-gray-400">({confidence}%)</span>
+            )}
           </div>
         )}
       </div>
 
       {transcript && (
         <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-          <p className="text-sm text-gray-300">
-            <span className="font-semibold">Transcription :</span>
-            <br />
-            <span className="text-white">{transcript}</span>
-          </p>
+          <div className="flex items-start gap-2">
+            <Volume2 className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm text-gray-300">
+                <span className="font-semibold">Transcription :</span>
+                <br />
+                <span className="text-white">{transcript}</span>
+              </p>
+              {confidence > 0 && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Confiance: {confidence}%
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

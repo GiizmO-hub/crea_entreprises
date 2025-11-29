@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Gemini Direct</title>
+  <meta charset="UTF-8">
+</head>
+<body>
+  <h1>Test Gemini Direct</h1>
+  <button id="testBtn">Tester Gemini</button>
+  <pre id="result"></pre>
+
+  <script type="module">
+    // Utiliser les mêmes variables que l'app
+    const SUPABASE_URL = 'https://ewlozuwvrteopotfizcr.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3bG96dXd2cnRlb3BvdGZpenNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI4ODQ2MDAsImV4cCI6MjA0ODQ2MDYwMH0.7qJ8K9L0mN1O2P3Q4R5S6T7U8V9W0X1Y2Z3A4B5C6D7E8F9G0H1I2J3K4L5M6N7O8P9Q0R1S2T3U4V5W6X7Y8Z9A0B1C2D3E4F5G6H7I8J9K0L1M2N3O4P5Q6R7S8T9U0V1W2X3Y4Z5';
+    
+    document.getElementById('testBtn').addEventListener('click', async () => {
+      const resultEl = document.getElementById('result');
+      resultEl.textContent = 'Test en cours...\n\n';
+      
+      const testData = {
+        text: 'creer facture groupe mclem',
+        clients: [
+          {
+            id: 'test-123',
+            entreprise_nom: 'Groupe MCLEM',
+            nom: 'MCLEM',
+          }
+        ],
+        articles: []
+      };
+      
+      try {
+        resultEl.textContent += '📤 Envoi des données...\n';
+        resultEl.textContent += JSON.stringify(testData, null, 2) + '\n\n';
+        
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/parse-invoice-ai`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify(testData),
+        });
+        
+        resultEl.textContent += `📡 Status: ${response.status}\n`;
+        resultEl.textContent += `📡 OK: ${response.ok}\n\n`;
+        
+        const result = await response.json();
+        resultEl.textContent += '📦 Réponse complète:\n';
+        resultEl.textContent += JSON.stringify(result, null, 2) + '\n\n';
+        
+        if (result.success) {
+          resultEl.textContent += `✅ SUCCÈS !\n`;
+          resultEl.textContent += `🤖 IA utilisée: ${result.ai_used ? 'OUI' : 'NON'}\n`;
+          resultEl.textContent += `🔧 Provider: ${result.ai_provider || 'local'}\n\n`;
+          
+          if (result.ai_provider === 'gemini') {
+            resultEl.textContent += '✅ GEMINI FONCTIONNE !\n';
+          } else if (result.ai_provider === 'openai') {
+            resultEl.textContent += '⚠️ Gemini non utilisé, OpenAI utilisé à la place\n';
+          } else {
+            resultEl.textContent += '⚠️ Aucune IA utilisée, parsing local seulement\n';
+          }
+        } else {
+          resultEl.textContent += `❌ ERREUR: ${result.error}\n`;
+        }
+      } catch (error) {
+        resultEl.textContent += `❌ ERREUR: ${error.message}\n`;
+        resultEl.textContent += error.stack;
+      }
+    });
+  </script>
+</body>
+</html>
+

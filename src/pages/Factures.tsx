@@ -2436,19 +2436,19 @@ export default function Factures() {
                   // Mettre à jour le transcript
                   setVoiceTranscript(text);
                   
-                  // Debouncer les appels à l'IA pour éviter trop d'appels
+                  // Debouncer les appels à l'IA pour éviter trop d'appels (réduit à 200ms pour réactivité maximale)
                   if (aiTimeoutRef.current) {
                     clearTimeout(aiTimeoutRef.current);
                   }
                   
-                  // Attendre 1 seconde après le dernier changement avant d'appeler l'IA
+                  // Attendre 200ms après le dernier changement avant d'appeler l'IA (ultra-rapide)
                   aiTimeoutRef.current = setTimeout(async () => {
-                    // Ne pas appeler l'IA si le texte est trop court
-                    if (text.trim().length < 10) {
-                      console.log('⏳ Texte trop court, attente...');
+                    // Ne pas appeler l'IA si le texte est trop court (réduit à 1 caractère pour tester immédiatement)
+                    if (text.trim().length < 1) {
+                      console.log('⏳ Texte vide, attente...');
                       return;
                     }
-                    console.log('🤖 Analyse avec IA (debounced)...');
+                    console.log('🤖 Analyse avec IA (debounced, ultra-rapide, texte:', text, ')...');
                     try {
                       const { data, error } = await supabase.functions.invoke('parse-invoice-ai', {
                         body: {
@@ -2465,8 +2465,66 @@ export default function Factures() {
                       const parsed = parseVoiceInput(text, clients, articles);
                       setParsedVoiceData(parsed);
                       console.log('📝 Données parsées (local):', parsed);
+                      
+                      // Appliquer les données parsées localement
+                      if (parsed.client) {
+                        setFormData(prev => ({ ...prev, client_id: parsed.client }));
+                      }
+                      if (parsed.taux_tva) {
+                        setFormData(prev => ({ ...prev, taux_tva: parsed.taux_tva }));
+                      }
+                      
+                      // Ajouter les lignes au lieu de les remplacer
+                      if (parsed.lignes && parsed.lignes.length > 0) {
+                        setLignes(prevLignes => {
+                          const existingDescriptions = new Set(prevLignes.map(l => l.description.toLowerCase().trim()));
+                          const lignesToAdd = parsed.lignes
+                            .filter((ligne: any) => {
+                              const desc = ligne.description?.toLowerCase().trim() || '';
+                              return desc && !existingDescriptions.has(desc);
+                            })
+                            .map((ligne: any, index: number) => ({
+                              description: ligne.description,
+                              quantite: String(ligne.quantite || 1),
+                              prix_unitaire_ht: String(ligne.prix || 0),
+                              taux_tva: String(ligne.tva || parsed.taux_tva || 20),
+                              montant_ht: 0,
+                              montant_tva: 0,
+                              montant_ttc: 0,
+                              ordre: prevLignes.length + index,
+                            }));
+                          console.log('📝 Ajout de', lignesToAdd.length, 'nouvelles lignes (local, total:', prevLignes.length + lignesToAdd.length, ')');
+                          return [...prevLignes, ...lignesToAdd];
+                        });
+                      } else if (parsed.description) {
+                        setLignes(prevLignes => {
+                          const exists = prevLignes.some(l => 
+                            l.description.toLowerCase().trim() === parsed.description.toLowerCase().trim()
+                          );
+                          if (exists) return prevLignes;
+                          return [...prevLignes, {
+                            description: parsed.description,
+                            quantite: '1',
+                            prix_unitaire_ht: parsed.montant ? String(parsed.montant) : '',
+                            taux_tva: String(parsed.taux_tva || 20),
+                            montant_ht: 0,
+                            montant_tva: 0,
+                            montant_ttc: 0,
+                            ordre: prevLignes.length,
+                          }];
+                        });
+                      }
                     } else if (data?.success && data.parsed) {
                       console.log('✅ Données parsées par IA:', JSON.stringify(data.parsed, null, 2));
+                      console.log('🤖 Provider IA utilisé:', data.ai_provider || 'local');
+                      console.log('🤖 IA utilisée:', data.ai_used ? 'OUI' : 'NON');
+                      if (data.ai_provider === 'gemini') {
+                        console.log('✅ GEMINI FONCTIONNE ET EST UTILISÉ !');
+                      } else if (data.ai_provider === 'openai') {
+                        console.log('⚠️ OpenAI utilisé (Gemini non disponible ou a échoué)');
+                      } else {
+                        console.log('⚠️ Parsing local utilisé (aucune IA disponible)');
+                      }
                       setParsedVoiceData(data.parsed);
                       
                       // Mettre à jour le formulaire en temps réel avec les données de l'IA
@@ -2497,30 +2555,56 @@ export default function Factures() {
                         setFormData(prev => ({ ...prev, ...updates }));
                       }
                       
-                      // Gérer les lignes d'articles
+                      // Gérer les lignes d'articles - AJOUTER au lieu de remplacer
                       if (data.parsed.lignes && data.parsed.lignes.length > 0) {
-                        const newLignes = data.parsed.lignes.map((ligne: any, index: number) => ({
-                          description: ligne.description,
-                          quantite: String(ligne.quantite),
-                          prix_unitaire_ht: String(ligne.prix),
-                          taux_tva: String(ligne.tva || data.parsed.taux_tva || 20),
-                          montant_ht: 0,
-                          montant_tva: 0,
-                          montant_ttc: 0,
-                          ordre: index,
-                        }));
-                        setLignes(newLignes);
+                        setLignes(prevLignes => {
+                          // Créer un Set des descriptions existantes pour éviter les doublons
+                          const existingDescriptions = new Set(prevLignes.map(l => l.description.toLowerCase().trim()));
+                          
+                          // Filtrer les nouvelles lignes qui ne sont pas déjà présentes
+                          const lignesToAdd = data.parsed.lignes
+                            .filter((ligne: any) => {
+                              const desc = ligne.description?.toLowerCase().trim() || '';
+                              return desc && !existingDescriptions.has(desc);
+                            })
+                            .map((ligne: any, index: number) => ({
+                              description: ligne.description,
+                              quantite: String(ligne.quantite || 1),
+                              prix_unitaire_ht: String(ligne.prix || 0),
+                              taux_tva: String(ligne.tva || data.parsed.taux_tva || 20),
+                              montant_ht: 0,
+                              montant_tva: 0,
+                              montant_ttc: 0,
+                              ordre: prevLignes.length + index,
+                            }));
+                          
+                          console.log('📝 Ajout de', lignesToAdd.length, 'nouvelles lignes (total:', prevLignes.length + lignesToAdd.length, ')');
+                          return [...prevLignes, ...lignesToAdd];
+                        });
                       } else if (data.parsed.description) {
-                        setLignes([{
-                          description: data.parsed.description,
-                          quantite: '1',
-                          prix_unitaire_ht: data.parsed.montant ? String(data.parsed.montant) : '',
-                          taux_tva: String(data.parsed.taux_tva || 20),
-                          montant_ht: 0,
-                          montant_tva: 0,
-                          montant_ttc: 0,
-                          ordre: 0,
-                        }]);
+                        setLignes(prevLignes => {
+                          // Vérifier si cette description existe déjà
+                          const exists = prevLignes.some(l => 
+                            l.description.toLowerCase().trim() === data.parsed.description.toLowerCase().trim()
+                          );
+                          
+                          if (exists) {
+                            console.log('📝 Description déjà présente, ignorée');
+                            return prevLignes;
+                          }
+                          
+                          console.log('📝 Ajout d\'une nouvelle ligne avec description');
+                          return [...prevLignes, {
+                            description: data.parsed.description,
+                            quantite: '1',
+                            prix_unitaire_ht: data.parsed.montant ? String(data.parsed.montant) : '',
+                            taux_tva: String(data.parsed.taux_tva || 20),
+                            montant_ht: 0,
+                            montant_tva: 0,
+                            montant_ttc: 0,
+                            ordre: prevLignes.length,
+                          }];
+                        });
                       }
                       
                       // Si on a un montant mais pas de lignes
@@ -2533,6 +2617,55 @@ export default function Factures() {
                       const parsed = parseVoiceInput(text, clients, articles);
                       setParsedVoiceData(parsed);
                       console.log('📝 Données parsées (local):', parsed);
+                      
+                      // Appliquer les données parsées localement
+                      if (parsed.client) {
+                        setFormData(prev => ({ ...prev, client_id: parsed.client }));
+                      }
+                      if (parsed.taux_tva) {
+                        setFormData(prev => ({ ...prev, taux_tva: parsed.taux_tva }));
+                      }
+                      
+                      // Ajouter les lignes au lieu de les remplacer
+                      if (parsed.lignes && parsed.lignes.length > 0) {
+                        setLignes(prevLignes => {
+                          const existingDescriptions = new Set(prevLignes.map(l => l.description.toLowerCase().trim()));
+                          const lignesToAdd = parsed.lignes
+                            .filter((ligne: any) => {
+                              const desc = ligne.description?.toLowerCase().trim() || '';
+                              return desc && !existingDescriptions.has(desc);
+                            })
+                            .map((ligne: any, index: number) => ({
+                              description: ligne.description,
+                              quantite: String(ligne.quantite || 1),
+                              prix_unitaire_ht: String(ligne.prix || 0),
+                              taux_tva: String(ligne.tva || parsed.taux_tva || 20),
+                              montant_ht: 0,
+                              montant_tva: 0,
+                              montant_ttc: 0,
+                              ordre: prevLignes.length + index,
+                            }));
+                          console.log('📝 Ajout de', lignesToAdd.length, 'nouvelles lignes (local, total:', prevLignes.length + lignesToAdd.length, ')');
+                          return [...prevLignes, ...lignesToAdd];
+                        });
+                      } else if (parsed.description) {
+                        setLignes(prevLignes => {
+                          const exists = prevLignes.some(l => 
+                            l.description.toLowerCase().trim() === parsed.description.toLowerCase().trim()
+                          );
+                          if (exists) return prevLignes;
+                          return [...prevLignes, {
+                            description: parsed.description,
+                            quantite: '1',
+                            prix_unitaire_ht: parsed.montant ? String(parsed.montant) : '',
+                            taux_tva: String(parsed.taux_tva || 20),
+                            montant_ht: 0,
+                            montant_tva: 0,
+                            montant_ttc: 0,
+                            ordre: prevLignes.length,
+                          }];
+                        });
+                      }
                     }
                     } catch (error) {
                       console.error('❌ Erreur appel IA:', error);
@@ -2541,8 +2674,57 @@ export default function Factures() {
                       const parsed = parseVoiceInput(text, clients, articles);
                       setParsedVoiceData(parsed);
                       console.log('📝 Données parsées (local):', parsed);
+                      
+                      // Appliquer les données parsées localement
+                      if (parsed.client) {
+                        setFormData(prev => ({ ...prev, client_id: parsed.client }));
+                      }
+                      if (parsed.taux_tva) {
+                        setFormData(prev => ({ ...prev, taux_tva: parsed.taux_tva }));
+                      }
+                      
+                      // Ajouter les lignes au lieu de les remplacer
+                      if (parsed.lignes && parsed.lignes.length > 0) {
+                        setLignes(prevLignes => {
+                          const existingDescriptions = new Set(prevLignes.map(l => l.description.toLowerCase().trim()));
+                          const lignesToAdd = parsed.lignes
+                            .filter((ligne: any) => {
+                              const desc = ligne.description?.toLowerCase().trim() || '';
+                              return desc && !existingDescriptions.has(desc);
+                            })
+                            .map((ligne: any, index: number) => ({
+                              description: ligne.description,
+                              quantite: String(ligne.quantite || 1),
+                              prix_unitaire_ht: String(ligne.prix || 0),
+                              taux_tva: String(ligne.tva || parsed.taux_tva || 20),
+                              montant_ht: 0,
+                              montant_tva: 0,
+                              montant_ttc: 0,
+                              ordre: prevLignes.length + index,
+                            }));
+                          console.log('📝 Ajout de', lignesToAdd.length, 'nouvelles lignes (local, total:', prevLignes.length + lignesToAdd.length, ')');
+                          return [...prevLignes, ...lignesToAdd];
+                        });
+                      } else if (parsed.description) {
+                        setLignes(prevLignes => {
+                          const exists = prevLignes.some(l => 
+                            l.description.toLowerCase().trim() === parsed.description.toLowerCase().trim()
+                          );
+                          if (exists) return prevLignes;
+                          return [...prevLignes, {
+                            description: parsed.description,
+                            quantite: '1',
+                            prix_unitaire_ht: parsed.montant ? String(parsed.montant) : '',
+                            taux_tva: String(parsed.taux_tva || 20),
+                            montant_ht: 0,
+                            montant_tva: 0,
+                            montant_ttc: 0,
+                            ordre: prevLignes.length,
+                          }];
+                        });
+                      }
                     }
-                  }, 1000); // Attendre 1 seconde après le dernier changement
+                  }, 200); // Attendre 200ms après le dernier changement (ultra-rapide)
                 }}
                 onComplete={async () => {
                   // Cette fonction n'est plus appelée automatiquement
@@ -2574,6 +2756,7 @@ export default function Factures() {
                     console.log('🔄 ===== BOUTON CONTINUER CLIQUÉ =====');
                     console.log('📝 voiceTranscript:', voiceTranscript);
                     console.log('📝 Longueur:', voiceTranscript?.length || 0);
+                    console.log('📝 parsedVoiceData (déjà parsé par IA):', parsedVoiceData);
                     console.log('📝 clients:', clients.length);
                     console.log('📝 articles:', articles.length);
                     
@@ -2585,12 +2768,23 @@ export default function Factures() {
                       return;
                     }
                     
-                    console.log('🔄 Re-parsing transcription finale...');
-                    const parsed = parseVoiceInput(finalTranscript, clients, articles);
-                    setParsedVoiceData(parsed);
+                    // UTILISER LES DONNÉES DÉJÀ PARSÉES PAR L'IA (Gemini/OpenAI) si disponibles
+                    let parsed: any;
+                    if (parsedVoiceData && Object.keys(parsedVoiceData).length > 0) {
+                      console.log('✅ Utilisation des données déjà parsées par IA:', parsedVoiceData);
+                      parsed = parsedVoiceData;
+                      // Convertir client_id en client si nécessaire pour compatibilité
+                      if (parsed.client_id && !parsed.client) {
+                        parsed.client = parsed.client_id;
+                      }
+                    } else {
+                      console.log('⚠️ Pas de données IA, re-parsing avec parser local...');
+                      parsed = parseVoiceInput(finalTranscript, clients, articles);
+                      setParsedVoiceData(parsed);
+                    }
                     
-                    console.log('📝 Données parsées:', JSON.stringify(parsed, null, 2));
-                    console.log('📝 Client:', parsed.client ? 'TROUVÉ' : 'NON TROUVÉ');
+                    console.log('📝 Données parsées finales:', JSON.stringify(parsed, null, 2));
+                    console.log('📝 Client:', parsed.client || parsed.client_id ? 'TROUVÉ' : 'NON TROUVÉ');
                     console.log('📝 Lignes:', parsed.lignes?.length || 0);
                     console.log('📝 Description:', parsed.description || 'AUCUNE');
                     console.log('📝 Montant:', parsed.montant || 'AUCUN');
@@ -2606,9 +2800,10 @@ export default function Factures() {
                       const newData = {
                         ...prev,
                         numero,
-                        client_id: parsed.client || prev.client_id,
+                        // Utiliser client_id (format IA) ou client (format local)
+                        client_id: parsed.client_id || parsed.client || prev.client_id,
                         taux_tva: parsed.taux_tva || prev.taux_tva || 20,
-                        date_facturation: parsed.date || prev.date_facturation || new Date().toISOString().split('T')[0],
+                        date_facturation: parsed.date || parsed.date_facturation || prev.date_facturation || new Date().toISOString().split('T')[0],
                         date_echeance: parsed.date_echeance || prev.date_echeance,
                         notes: parsed.notes || prev.notes,
                         montant_ht: parsed.montant && (!parsed.lignes || parsed.lignes.length === 0) ? parsed.montant : prev.montant_ht,
@@ -2647,7 +2842,7 @@ export default function Factures() {
                     }
                     
                     console.log('⏳ Attente 200ms...');
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                    await new Promise(resolve => setTimeout(resolve, 50)); // Réduit à 50ms pour plus de rapidité
                     console.log('✅ Ouverture du formulaire');
                     
                     setShowVoiceInput(false);
