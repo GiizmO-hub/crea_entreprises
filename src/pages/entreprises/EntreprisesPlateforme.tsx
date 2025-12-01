@@ -133,16 +133,27 @@ export default function EntreprisesPlateforme() {
   const loadPlans = async () => {
     try {
       setLoadingPlans(true);
+      console.log('📋 [EntreprisesPlateforme] Chargement des plans...');
       const { data, error } = await supabase
         .from('plans_abonnement')
-        .select('id, nom')
+        .select('id, nom, prix_mensuel, prix_annuel, description')
         .eq('actif', true)
-        .order('prix_mensuel', { ascending: true });
+        .order('ordre', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [EntreprisesPlateforme] Erreur chargement plans:', error);
+        throw error;
+      }
+      
+      console.log(`✅ [EntreprisesPlateforme] ${data?.length || 0} plan(s) chargé(s)`, data);
       setPlans(data || []);
+      
+      if (!data || data.length === 0) {
+        console.warn('⚠️ [EntreprisesPlateforme] Aucun plan actif trouvé dans la base de données');
+      }
     } catch (error) {
-      console.error('Erreur chargement plans:', error);
+      console.error('❌ [EntreprisesPlateforme] Erreur chargement plans:', error);
+      setPlans([]);
     } finally {
       setLoadingPlans(false);
     }
@@ -183,6 +194,12 @@ export default function EntreprisesPlateforme() {
     e.preventDefault();
     if (!user) {
       alert('❌ Vous devez être connecté pour créer une entreprise');
+      return;
+    }
+
+    // ✅ VÉRIFICATION SÉCURITÉ : Seuls les super admins plateforme peuvent créer des entreprises
+    if (!editingId && isSuperAdmin !== true) {
+      alert('❌ Seuls les administrateurs de la plateforme peuvent créer des entreprises');
       return;
     }
 
@@ -366,7 +383,6 @@ export default function EntreprisesPlateforme() {
       plan_id: '',
       creer_client_super_admin: true,
       envoyer_email: true,
-      site_web: '',
     });
     setShowForm(true);
   };
@@ -439,16 +455,19 @@ export default function EntreprisesPlateforme() {
           <h1 className="text-3xl font-bold text-white mb-2">Gestion des Entreprises</h1>
           <p className="text-gray-300">Gérez toutes les entreprises de la plateforme</p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-        >
-          <Plus className="w-5 h-5" />
-          Ajouter une entreprise
-        </button>
+        {/* ✅ Bouton visible UNIQUEMENT pour super admin plateforme */}
+        {isSuperAdmin === true && (
+          <button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            Ajouter une entreprise
+          </button>
+        )}
       </div>
 
       {/* Liste des entreprises */}
@@ -509,14 +528,17 @@ export default function EntreprisesPlateforme() {
         <div className="text-center py-12 bg-white/10 backdrop-blur-lg rounded-xl border border-white/20">
           <Building2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400 mb-4">
-            {isSuperAdmin ? 'Aucune entreprise dans le système' : 'Aucune entreprise créée'}
+            {isSuperAdmin === true ? 'Aucune entreprise dans le système' : 'Aucune entreprise créée'}
           </p>
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-          >
-            {isSuperAdmin ? 'Créer une entreprise' : 'Créer votre première entreprise'}
-          </button>
+          {/* ✅ Bouton visible UNIQUEMENT pour super admin plateforme */}
+          {isSuperAdmin === true && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+            >
+              Créer une entreprise
+            </button>
+          )}
         </div>
       )}
 
@@ -756,12 +778,23 @@ export default function EntreprisesPlateforme() {
                           disabled={loadingPlans}
                         >
                           <option value="">Aucun plan (modules de base uniquement)</option>
-                          {plans.map((plan) => (
-                            <option key={plan.id} value={plan.id}>
-                              {plan.nom}
-                            </option>
-                          ))}
+                          {loadingPlans ? (
+                            <option disabled>Chargement des plans...</option>
+                          ) : plans.length === 0 ? (
+                            <option disabled>Aucun plan disponible</option>
+                          ) : (
+                            plans.map((plan) => (
+                              <option key={plan.id} value={plan.id}>
+                                {plan.nom} {plan.prix_mensuel ? `(${plan.prix_mensuel}€/mois)` : ''}
+                              </option>
+                            ))
+                          )}
                         </select>
+                        {!loadingPlans && plans.length === 0 && (
+                          <p className="mt-2 text-xs text-yellow-400">
+                            ⚠️ Aucun plan actif trouvé. Créez des plans dans "Gestion Plans".
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-6 pt-4">

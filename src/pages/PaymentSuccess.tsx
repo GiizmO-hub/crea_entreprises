@@ -121,7 +121,7 @@ export default function PaymentSuccess() {
           const { data: factures } = await supabase
             .from('factures')
             .select('id, montant_ttc, date_emission')
-            .eq('entreprise_id', paiementObj.entreprise_id)
+            .eq('entreprise_id', currentPaiement.entreprise_id)
             .eq('statut', 'payee')
             .order('created_at', { ascending: false })
             .limit(5); // Vérifier les 5 dernières factures

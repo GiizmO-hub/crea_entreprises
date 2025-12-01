@@ -20,6 +20,7 @@ import {
   UsersRound,
   Shield,
 } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
 
 interface LayoutProps {
   children: ReactNode;
@@ -40,7 +41,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'entreprises', label: 'Mon Entreprise', icon: Building2, moduleCode: 'entreprises' },
     { id: 'clients', label: 'Clients', icon: Users, moduleCode: 'clients' },
     { id: 'abonnements', label: 'Abonnements', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
-    { id: 'gestion-plans', label: 'Gestion Plans', icon: CreditCard, superAdminOnly: true, moduleCode: 'abonnements' },
+    { id: 'gestion-plans', label: 'Gestion Plans', icon: CreditCard, superAdminOnly: true, moduleCode: 'gestion-plans' },
     { id: 'factures', label: 'Facturation', icon: FileText, moduleCode: 'facturation' },
     { id: 'documents', label: 'Documents', icon: FolderOpen, moduleCode: 'documents' },
     { id: 'collaborateurs', label: 'Collaborateurs', icon: UsersRound, moduleCode: 'collaborateurs' },
@@ -169,19 +170,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     }
   };
 
-  // ✅ Utiliser le hook personnalisé pour gérer les modules actifs (après la définition des fonctions)
-  const { activeModules, isClient: isClientFromHook } = useClientModules({
-    menuItems,
-    isSuperAdmin,
-    isClientSuperAdmin,
-  });
-
-  // Mettre à jour isClient depuis le hook
-  useEffect(() => {
-    setIsClient(isClientFromHook);
-  }, [isClientFromHook]);
-
-  // ✅ useEffect pour appeler les fonctions de vérification (SÉQUENTIELLEMENT)
+  // ✅ useEffect pour appeler les fonctions de vérification - PRIORITÉ 1: Super Admin Plateforme
   useEffect(() => {
     if (!user) {
       setIsSuperAdmin(false);
@@ -190,42 +179,53 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       return;
     }
 
-    // ✅ LOGIQUE SÉQUENTIELLE : D'abord vérifier si client, PUIS Super Admin plateforme
-    let isMounted = true; // Garde pour éviter les mises à jour si le composant est démonté
+    let isMounted = true;
     
     (async () => {
-      // ÉTAPE 1 : Vérifier si l'utilisateur a un espace_membre_client
-      const { data: espaceClient, error: espaceError } = await supabase
-        .from('espaces_membres_clients')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      if (!isMounted) return;
-      
-      if (!espaceError && espaceClient) {
-        // ✅ C'EST UN CLIENT - Ne peut pas être Super Admin plateforme
-        console.log('👤 [Layout] Client détecté (a un espace_membre_client) - Pas Super Admin plateforme');
-        setIsClient(true);
-        setIsSuperAdmin(false); // Un client n'est JAMAIS Super Admin plateforme
+      try {
+        // ✅ PRIORITÉ 1 : Vérifier d'abord si c'est un super admin PLATEFORME
+        const { data: isPlatformAdmin, error: platformAdminError } = await supabase.rpc('is_platform_super_admin');
         
-        // Vérifier si c'est un client_super_admin
-        const { data: isSuperAdminResult, error: rpcError } = await supabase.rpc('check_my_super_admin_status');
         if (!isMounted) return;
         
-        if (!rpcError && isSuperAdminResult === true) {
-          setIsClientSuperAdmin(true);
-          console.log('👤 [Layout] Client super_admin détecté');
-        } else {
+        if (!platformAdminError && isPlatformAdmin === true) {
+          // ✅ C'EST UN SUPER ADMIN PLATEFORME - Ignorer complètement l'espace client
+          console.log('✅ [Layout] Super admin PLATEFORME détecté');
+          setIsSuperAdmin(true);
+          setIsClient(false);
           setIsClientSuperAdmin(false);
+          return;
         }
-      } else {
-        // ✅ PAS UN CLIENT - Peut être Super Admin plateforme
-        setIsClient(false);
-        setIsClientSuperAdmin(false);
         
-        // Vérifier si c'est un Super Admin plateforme
-        await checkSuperAdmin();
+        // ✅ PRIORITÉ 2 : Vérifier si c'est un client
+        const { data: espaceClient, error: espaceError } = await supabase
+          .from('espaces_membres_clients')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (!isMounted) return;
+        
+        if (!espaceError && espaceClient) {
+          // ✅ C'EST UN CLIENT
+          setIsClient(true);
+          setIsSuperAdmin(false);
+          const { data: isSuperAdminResult } = await supabase.rpc('check_my_super_admin_status');
+          if (!isMounted) return;
+          setIsClientSuperAdmin(isSuperAdminResult === true);
+        } else {
+          // ✅ PAS UN CLIENT - Vérifier si super admin plateforme (fallback)
+          setIsClient(false);
+          setIsClientSuperAdmin(false);
+          await checkSuperAdmin();
+        }
+      } catch (error) {
+        console.error('Erreur vérification rôle:', error);
+        if (isMounted) {
+          setIsClient(false);
+          setIsClientSuperAdmin(false);
+          setIsSuperAdmin(false);
+        }
       }
     })();
     
@@ -233,7 +233,14 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       isMounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]); // ✅ Dépendance : seulement user.id pour éviter les re-déclenchements
+  }, [user?.id]);
+
+  // ✅ Utiliser le hook personnalisé pour gérer les modules actifs
+  const { activeModules } = useClientModules({
+    menuItems,
+    isSuperAdmin,
+    isClientSuperAdmin,
+  });
 
   const handleSignOut = async () => {
     try {
@@ -357,6 +364,18 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
 
           {/* Footer Sidebar */}
           <div className="p-4 border-t border-white/10 space-y-2">
+            {/* Notifications */}
+            {sidebarOpen && (
+              <div className="mb-2 flex justify-center">
+                <NotificationBell />
+              </div>
+            )}
+            {!sidebarOpen && (
+              <div className="mb-2 flex justify-center">
+                <NotificationBell />
+              </div>
+            )}
+            
             <div className="flex items-center gap-3 px-4 py-2 text-gray-300">
               <UserIcon className="w-5 h-5" />
               {sidebarOpen && (

@@ -262,11 +262,12 @@ export function EntrepriseAccordion({ entreprises, loading, isPlatformUser = fal
                         )}
                       </button>
 
-                      {/* Bouton Générer Facture */}
+                      {/* Bouton Générer Facture - Désactivé si workflow < 100% */}
                       <button
                         onClick={() => handleGenerateInvoice(entreprise.id, setGeneratingInvoices)}
-                        disabled={generatingInvoices.has(entreprise.id)}
+                        disabled={generatingInvoices.has(entreprise.id) || progress < 100}
                         className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-purple-400 font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={progress < 100 ? 'Le workflow doit être à 100% avant de générer la facture' : 'Générer la facture'}
                       >
                         {generatingInvoices.has(entreprise.id) ? (
                           <>
@@ -276,7 +277,7 @@ export function EntrepriseAccordion({ entreprises, loading, isPlatformUser = fal
                         ) : (
                           <>
                             <FileText className="w-4 h-4" />
-                            <span>Générer Facture</span>
+                            <span>Générer Facture {progress < 100 && `(${progress}%)`}</span>
                           </>
                         )}
                       </button>
@@ -469,15 +470,110 @@ async function handleGenerateInvoice(
   setGeneratingInvoices((prev) => new Set(prev).add(entrepriseId));
   
   try {
-    // Récupérer les informations de l'entreprise
+    // Récupérer les informations de l'entreprise avec les compteurs pour vérifier le workflow
     const { data: entreprise, error: entrepriseError } = await supabase
       .from('entreprises')
-      .select('id, nom, email, statut_paiement')
+      .select('id, nom, email, statut_paiement, statut')
       .eq('id', entrepriseId)
       .single();
 
     if (entrepriseError || !entreprise) {
       alert('❌ Erreur: Entreprise non trouvée');
+      return;
+    }
+
+    // ✅ VÉRIFICATION CRITIQUE : Vérifier que le workflow est à 100% avant de générer la facture
+    // Récupérer les compteurs pour calculer le workflow
+    const { count: clientsCount } = await supabase
+      .from('clients')
+      .select('*', { count: 'exact', head: true })
+      .eq('entreprise_id', entrepriseId);
+
+    // Récupérer le client pour vérifier l'espace
+    const { data: firstClient } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('entreprise_id', entrepriseId)
+      .limit(1)
+      .single();
+
+    const { count: espacesCount } = await supabase
+      .from('espaces_membres_clients')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', firstClient?.id || '');
+
+    const { count: abonnementsCount } = await supabase
+      .from('abonnements')
+      .select('*', { count: 'exact', head: true })
+      .eq('entreprise_id', entrepriseId)
+      .eq('statut', 'actif');
+
+    // Vérifier les super admins
+    let superAdminsCount = 0;
+    if (firstClient?.id) {
+      const { data: espaceData } = await supabase
+        .from('espaces_membres_clients')
+        .select('user_id')
+        .eq('client_id', firstClient.id)
+        .maybeSingle();
+
+      if (espaceData?.user_id) {
+        const { data: userData } = await supabase
+          .from('utilisateurs')
+          .select('role')
+          .eq('id', espaceData.user_id)
+          .eq('role', 'client_super_admin')
+          .maybeSingle();
+        
+        if (userData) superAdminsCount = 1;
+      }
+    }
+
+    // Calculer le pourcentage du workflow
+    let steps = 0;
+    let completed = 0;
+    const missingSteps: string[] = [];
+
+    steps++;
+    if (entreprise.statut === 'active') {
+      completed++;
+    } else {
+      missingSteps.push('Entreprise non active');
+    }
+
+    steps++;
+    if (clientsCount && clientsCount > 0) {
+      completed++;
+    } else {
+      missingSteps.push('Aucun client créé');
+    }
+
+    steps++;
+    if (espacesCount && espacesCount > 0) {
+      completed++;
+    } else {
+      missingSteps.push('Aucun espace client créé');
+    }
+
+    steps++;
+    if (abonnementsCount && abonnementsCount > 0) {
+      completed++;
+    } else {
+      missingSteps.push('Aucun abonnement actif');
+    }
+
+    steps++;
+    if (superAdminsCount > 0) {
+      completed++;
+    } else {
+      missingSteps.push('Aucun Super Admin activé');
+    }
+
+    const workflowProgress = Math.round((completed / steps) * 100);
+
+    // ✅ BLOQUER la génération de facture si le workflow n'est pas à 100%
+    if (workflowProgress < 100) {
+      alert(`❌ Impossible de générer la facture : le workflow n'est qu'à ${workflowProgress}%.\n\nLe workflow doit être à 100% avant de générer la facture.\n\nÉtapes manquantes :\n${missingSteps.map(s => `• ${s}`).join('\n')}`);
       return;
     }
 
@@ -523,32 +619,109 @@ async function handleGenerateInvoice(
           alert('⚠️ Aucun abonnement actif trouvé. Montant de la facture: 0€');
         }
 
-        // Créer la facture
-        const numero = `FACT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
-        
-        const { error: factureError } = await supabase
-          .from('factures')
-          .insert({
-            entreprise_id: entrepriseId,
-            client_id: clients.id,
-            numero,
-            type: 'facture',
-            date_emission: new Date().toISOString().split('T')[0],
-            montant_ht: montant,
-            tva: montant * 0.20,
-            montant_ttc: montant * 1.20,
-            statut: 'envoyee'
-          })
-          .select()
-          .single();
+        // ✅ Générer un numéro unique pour la facture
+        const generateUniqueNumero = async (entrepriseId: string, maxRetries: number = 10): Promise<string> => {
+          const prefix = 'FAC';
+          
+          // Chercher tous les numéros existants pour cette entreprise
+          const { data: allNumeros } = await supabase
+            .from('factures')
+            .select('numero')
+            .eq('entreprise_id', entrepriseId);
 
-        if (factureError) {
-          console.error('Erreur création facture:', factureError);
-          alert('❌ Erreur lors de la création de la facture: ' + factureError.message);
+          if (!allNumeros || allNumeros.length === 0) {
+            return `${prefix}-001`;
+          }
+
+          // Extraire tous les numéros numériques
+          const numerosNumeriques: number[] = [];
+          allNumeros.forEach(item => {
+            const numeroStr = item.numero || '';
+            const matches = numeroStr.match(/(\d+)(?!.*\d)/);
+            if (matches && matches[1]) {
+              const num = parseInt(matches[1]);
+              if (!isNaN(num)) {
+                numerosNumeriques.push(num);
+              }
+            }
+          });
+
+          const maxNum = numerosNumeriques.length > 0 ? Math.max(...numerosNumeriques) : 0;
+          let nextNum = maxNum + 1;
+          let numero = `${prefix}-${String(nextNum).padStart(3, '0')}`;
+
+          // Vérifier l'unicité et réessayer si nécessaire
+          let retries = 0;
+          while (retries < maxRetries) {
+            const { data: existing } = await supabase
+              .from('factures')
+              .select('id')
+              .eq('entreprise_id', entrepriseId)
+              .eq('numero', numero)
+              .maybeSingle();
+
+            if (!existing) {
+              return numero;
+            }
+
+            nextNum++;
+            numero = `${prefix}-${String(nextNum).padStart(3, '0')}`;
+            retries++;
+          }
+
+          // Si on n'a pas trouvé, utiliser un timestamp
+          const timestamp = Date.now().toString().slice(-6);
+          return `${prefix}-${timestamp}`;
+        };
+
+        const numero = await generateUniqueNumero(entrepriseId);
+        
+        // ✅ Réessayer avec un nouveau numéro en cas d'erreur de doublon
+        let retries = 0;
+        let numeroFinal = numero;
+        let factureData: any = null;
+        
+        while (retries < 3) {
+          const { data, error: factureError } = await supabase
+            .from('factures')
+            .insert({
+              entreprise_id: entrepriseId,
+              client_id: clients.id,
+              numero: numeroFinal,
+              type: 'facture',
+              date_emission: new Date().toISOString().split('T')[0],
+              montant_ht: montant,
+              tva: montant * 0.20,
+              montant_ttc: montant * 1.20,
+              statut: 'envoyee',
+              source: 'plateforme' // ✅ Facture créée par la plateforme
+            })
+            .select()
+            .single();
+
+          if (!factureError) {
+            factureData = data;
+            break;
+          }
+
+          // Si c'est une erreur de doublon, générer un nouveau numéro
+          if (factureError.code === '23505' && factureError.message?.includes('factures_entreprise_id_numero_key')) {
+            console.warn(`⚠️ [EntrepriseAccordion] Doublon détecté (tentative ${retries + 1}/3), génération d'un nouveau numéro`);
+            numeroFinal = await generateUniqueNumero(entrepriseId);
+            retries++;
+          } else {
+            console.error('Erreur création facture:', factureError);
+            alert('❌ Erreur lors de la création de la facture: ' + factureError.message);
+            return;
+          }
+        }
+
+        if (!factureData) {
+          alert('❌ Impossible de créer la facture après plusieurs tentatives');
           return;
         }
 
-        alert('✅ Facture générée avec succès !\n\nNuméro: ' + numero);
+        alert('✅ Facture générée avec succès !\n\nNuméro: ' + numeroFinal);
         return;
       }
       

@@ -22,6 +22,7 @@ const GestionStock = lazy(() => import('./pages/GestionStock'));
 const GestionCRM = lazy(() => import('./pages/GestionCRM'));
 const GestionPlans = lazy(() => import('./pages/GestionPlans'));
 const Parametres = lazy(() => import('./pages/Parametres'));
+const Notifications = lazy(() => import('./pages/Notifications'));
 
 // Composant de chargement pour les pages lazy-loaded
 const PageLoader = () => (
@@ -37,18 +38,114 @@ const PageLoader = () => (
 function getPageFromHash(): string {
   const hash = window.location.hash.replace('#', '');
   const pageMap: Record<string, string> = {
-    'entreprises': 'entreprises',
-    'clients': 'clients',
-    'factures': 'factures',
-    'abonnements': 'abonnements',
+    // Modules de base
     'dashboard': 'dashboard',
-    'modules': 'modules',
+    'tableau-de-bord': 'dashboard',
+    'tableau_de_bord': 'dashboard',
+    
+    // Modules entreprise
+    'entreprises': 'entreprises',
+    'mon-entreprise': 'entreprises',
+    'mon_entreprise': 'entreprises',
+    
+    // Modules clients
+    'clients': 'clients',
+    'gestion-clients': 'clients',
+    'gestion_clients': 'clients',
+    'gestion-des-clients': 'clients',
+    'gestion_des_clients': 'clients',
+    
+    // Modules facturation
+    'factures': 'factures',
+    'facturation': 'factures',
+    
+    // Modules documents
+    'documents': 'documents',
+    'gestion-documents': 'documents',
+    'gestion_documents': 'documents',
+    'gestion-de-documents': 'documents',
+    'gestion_de_documents': 'documents',
+    'documents-entreprise': 'documents',
+    
+    // Modules collaborateurs
+    'collaborateurs': 'collaborateurs',
+    'gestion-collaborateurs': 'collaborateurs',
+    'gestion_des_collaborateurs': 'collaborateurs',
+    'gestion-des-collaborateurs': 'collaborateurs',
+    'salaries': 'collaborateurs',
+    'conges': 'collaborateurs',
+    
+    // Modules gestion équipe
     'gestion-equipe': 'gestion-equipe',
+    'gestion_equipe': 'gestion-equipe',
+    'gestion-d-equipe': 'gestion-equipe',
+    'gestion-d-équipe': 'gestion-equipe',
+    
+    // Modules gestion projets
     'gestion-projets': 'gestion-projets',
+    'gestion_projets': 'gestion-projets',
+    'gestion-de-projets': 'gestion-projets',
+    'gestion_de_projets': 'gestion-projets',
+    
+    // Modules gestion stock
     'gestion-stock': 'gestion-stock',
+    'gestion_stock': 'gestion-stock',
+    'gestion-de-stock': 'gestion-stock',
+    'gestion_de_stock': 'gestion-stock',
+    'stock': 'gestion-stock',
+    
+    // Modules CRM
     'crm-avance': 'crm-avance',
+    'crm_avance': 'crm-avance',
+    'crm': 'crm-avance',
+    
+    // Modules comptabilité
+    'comptabilite': 'comptabilite',
+    'comptabilité': 'comptabilite',
+    'comptabilite-avancee': 'comptabilite',
+    'comptabilite_avancee': 'comptabilite',
+    'comptabilité-avancée': 'comptabilite',
+    'fiches-paie': 'comptabilite',
+    'bilans-comptables': 'comptabilite',
+    
+    // Modules finance
+    'finance': 'finance',
+    'finances': 'finance',
+    'previsionnel': 'finance',
+    'ai-previsionnel': 'finance',
+    'gestion-budget': 'finance',
+    'time-tracking': 'finance',
+    'modeles-previsionnels': 'finance',
+    'historiques-ai': 'finance',
+    
+    // Modules abonnements
+    'abonnements': 'abonnements',
+    
+    // Modules gestion plans
+    'gestion-plans': 'gestion-plans',
+    'gestion_plans': 'gestion-plans',
+    'gestionPlans': 'gestion-plans',
+    
+    // Modules paramètres
     'settings': 'settings',
     'parametres': 'settings',
+    'paramètres': 'settings',
+    'automatisations': 'settings',
+    'messagerie': 'settings',
+    'administration': 'settings',
+    'api': 'settings',
+    'api-keys': 'settings',
+    'support_prioritaire': 'settings',
+    'support_dedie': 'settings',
+    'personnalisation': 'settings',
+    'connexions-admin': 'settings',
+    'declarations-admin': 'settings',
+    'n8n-automation': 'settings',
+    'gestion-secteurs': 'settings',
+    
+    // Modules système
+    'modules': 'modules',
+    'notifications': 'notifications',
   };
   
   return pageMap[hash] || 'dashboard';
@@ -198,6 +295,12 @@ function AppContent() {
         return (
           <Suspense fallback={<PageLoader />}>
             <Parametres />
+          </Suspense>
+        );
+      case 'notifications':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Notifications />
           </Suspense>
         );
       default:

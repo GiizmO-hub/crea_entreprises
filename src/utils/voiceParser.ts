@@ -135,21 +135,58 @@ function findClient(
             if (textWord.toLowerCase() === clientWord.toLowerCase()) {
               return { id: client.id, name: clientName };
             }
+            
+            // NOUVEAU : Correction des erreurs de transcription courantes
+            // Ex: "cyrille" → "cyril", "marie" → "mari", etc.
+            // Si les mots sont très similaires (distance de Levenshtein <= 1 pour mots courts)
+            const wordSim = similarity(textWord, clientWord);
+            if (wordSim >= 0.8) {
+              // Pour les mots courts (<= 7 caractères), accepter une similarité de 0.8
+              // Pour les mots plus longs, garder 0.9
+              const threshold = Math.max(0.7, clientWord.length <= 7 ? 0.8 : 0.9);
+              if (wordSim >= threshold) {
+                console.log(`✅ Match trouvé par similarité de mot: "${textWord}" ≈ "${clientWord}" (${(wordSim * 100).toFixed(1)}%)`);
+                return { id: client.id, name: clientName };
+              }
+            }
           }
         }
       }
     }
 
-    // Fuzzy matching (seuil réduit pour accepter plus de correspondances)
+    // Fuzzy matching global (seuil réduit pour accepter plus de correspondances)
     const sim = similarity(lowerText, lowerClientName);
     if (sim > 0.4 && (!bestMatch || sim > bestMatch.score)) {
       bestMatch = { client, score: sim, name: clientName };
     }
+    
+    // NOUVEAU : Fuzzy matching par mots individuels pour les noms courts
+    // Ex: "cyrille" vs "cyril" - comparer chaque mot du client avec chaque mot du texte
+    for (const clientWord of clientWords) {
+      if (clientWord.length >= 3) { // Au moins 3 caractères pour éviter les faux positifs
+        for (const textWord of textWords) {
+          if (textWord.length >= 3) {
+            const wordSim = similarity(textWord, clientWord);
+            // Pour les noms courts, accepter une similarité plus faible (0.75)
+            if (wordSim >= 0.75 && (!bestMatch || wordSim > bestMatch.score)) {
+              console.log(`✅ Match potentiel par mot: "${textWord}" ≈ "${clientWord}" (${(wordSim * 100).toFixed(1)}%)`);
+              bestMatch = { client, score: wordSim, name: clientName };
+            }
+          }
+        }
+      }
+    }
   }
 
-  // Seuil réduit pour accepter plus de correspondances
-  if (bestMatch && bestMatch.score > 0.5) {
-    return { id: bestMatch.client.id, name: bestMatch.name };
+  // Seuil réduit pour accepter plus de correspondances (0.5 → 0.7 pour les noms courts)
+  if (bestMatch) {
+    // Pour les noms courts (<= 7 caractères), accepter un seuil plus bas (0.7)
+    // Pour les noms plus longs, garder 0.5
+    const threshold = bestMatch.name.length <= 7 ? 0.7 : 0.5;
+    if (bestMatch.score >= threshold) {
+      console.log(`✅ Client trouvé par fuzzy matching: "${bestMatch.name}" (score: ${(bestMatch.score * 100).toFixed(1)}%)`);
+      return { id: bestMatch.client.id, name: bestMatch.name };
+    }
   }
 
   return null;

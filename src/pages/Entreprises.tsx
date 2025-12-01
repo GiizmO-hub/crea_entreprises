@@ -34,7 +34,18 @@ export default function Entreprises() {
     try {
       setLoading(true);
       
-      // Vérifier si l'utilisateur a un espace_membre_client
+      // ✅ PRIORITÉ 1 : Vérifier d'abord si c'est un super admin PLATEFORME
+      const { data: isPlatformAdmin, error: platformAdminError } = await supabase.rpc('is_platform_super_admin');
+      
+      if (!platformAdminError && isPlatformAdmin === true) {
+        // ✅ C'EST UN SUPER ADMIN PLATEFORME - Route vers EntreprisesPlateforme
+        console.log('👑 [Entreprises Router] Super admin PLATEFORME détecté → Route vers EntreprisesPlateforme');
+        setIsClient(false);
+        setLoading(false);
+        return;
+      }
+      
+      // ✅ PRIORITÉ 2 : Vérifier si l'utilisateur a un espace_membre_client
       const { data: espaceClient, error: espaceError } = await supabase
         .from('espaces_membres_clients')
         .select('id')

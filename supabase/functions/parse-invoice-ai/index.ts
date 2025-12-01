@@ -53,16 +53,20 @@ ${articlesList}
 INSTRUCTIONS CRITIQUES:
 1. Le texte peut être TRÈS COURT (3-4 mots seulement) - sois intelligent et déduis ce qui manque
 2. Si un client est mentionné (même partiellement), trouve le meilleur match dans la liste (tolérance maximale aux erreurs)
-3. Si un nombre est mentionné, c'est probablement un montant (même sans "euros" ou "€")
-4. Si un code article est mentionné (ex: MO1, APP), utilise les informations de l'article correspondant
-5. Détecte TOUS les articles mentionnés, même s'ils sont séparés par "puis", "ensuite", "et", "plus"
-6. Pour les montants, accepte TOUS les formats: "2650", "2650 euros", "2650€", "2 650", "2,650", "2650" seul
-7. Les quantités par défaut sont 1 si non spécifiées
-8. La TVA par défaut est 20% si non spécifiée
-9. Sois TRÈS tolérant avec les erreurs de transcription vocale
-10. Si le texte contient seulement "créer facture [nom client]", crée une facture pour ce client
-11. Si le texte contient "[description] [montant]", crée une ligne d'article avec cette description et ce montant
-12. Même avec 2-3 mots, essaie de trouver le client et/ou le montant
+3. CORRECTION IMPORTANTE : Les erreurs de transcription vocale sont fréquentes (ex: "cyrille" au lieu de "cyril", "marie" au lieu de "mari")
+   - Utilise le fuzzy matching pour trouver le client même avec des erreurs de transcription
+   - Compare chaque mot du texte avec chaque mot des noms de clients
+   - Accepte les erreurs d'ajout/suppression de lettres à la fin des mots (ex: "cyrille" = "cyril")
+4. Si un nombre est mentionné, c'est probablement un montant (même sans "euros" ou "€")
+5. Si un code article est mentionné (ex: MO1, APP), utilise les informations de l'article correspondant
+6. Détecte TOUS les articles mentionnés, même s'ils sont séparés par "puis", "ensuite", "et", "plus"
+7. Pour les montants, accepte TOUS les formats: "2650", "2650 euros", "2650€", "2 650", "2,650", "2650" seul
+8. Les quantités par défaut sont 1 si non spécifiées
+9. La TVA par défaut est 20% si non spécifiée
+10. Sois TRÈS tolérant avec les erreurs de transcription vocale (fautes de frappe, lettres manquantes/ajoutées)
+11. Si le texte contient seulement "créer facture [nom client]", crée une facture pour ce client
+12. Si le texte contient "[description] [montant]", crée une ligne d'article avec cette description et ce montant
+13. Même avec 2-3 mots, essaie de trouver le client et/ou le montant
 
 EXEMPLES:
 - "créer facture groupe mclem" → client_id: id de "Groupe MCLEM", description: "Facture Groupe MCLEM"
@@ -351,7 +355,25 @@ function parseInvoiceTextLocal(
   const lowerText = text.toLowerCase();
   const result: any = {};
 
-  // Trouver le client (AMÉLIORÉ pour fonctionner avec peu de mots)
+  // Fonction de similarité simple (distance de Levenshtein simplifiée)
+  const simpleSimilarity = (str1: string, str2: string): number => {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    if (longer.length === 0) return 1.0;
+    
+    // Distance de Levenshtein simplifiée
+    let distance = 0;
+    for (let i = 0; i < shorter.length; i++) {
+      if (longer[i] !== shorter[i]) distance++;
+    }
+    distance += longer.length - shorter.length;
+    
+    return (longer.length - distance) / longer.length;
+  };
+
+  // Trouver le client (AMÉLIORÉ pour fonctionner avec peu de mots et corriger les erreurs de transcription)
+  let bestClientMatch: { id: string; name: string; score: number } | null = null;
+  
   for (const client of clients) {
     const clientName = (client.entreprise_nom || `${client.prenom || ''} ${client.nom || ''}`.trim() || client.nom || '').toLowerCase();
     if (!clientName) continue;
@@ -369,15 +391,42 @@ function parseInvoiceTextLocal(
     for (const clientWord of clientWords) {
       if (clientWord.length >= 2) {
         for (const textWord of textWords) {
-          if (textWord.length >= 2 && (textWord.includes(clientWord) || clientWord.includes(textWord))) {
-            result.client_id = client.id;
-            break;
+          if (textWord.length >= 2) {
+            // Correspondance exacte ou partielle
+            if (textWord.includes(clientWord) || clientWord.includes(textWord)) {
+              result.client_id = client.id;
+              break;
+            }
+            
+            // NOUVEAU : Correction des erreurs de transcription (ex: "cyrille" → "cyril")
+            const wordSim = simpleSimilarity(textWord, clientWord);
+            // Pour les mots courts (<= 7 caractères), accepter une similarité de 0.75
+            // Pour les mots plus longs, garder 0.85
+            const threshold = clientWord.length <= 7 ? 0.75 : 0.85;
+            if (wordSim >= threshold) {
+              console.log(`✅ Match trouvé par similarité: "${textWord}" ≈ "${clientWord}" (${(wordSim * 100).toFixed(1)}%)`);
+              result.client_id = client.id;
+              break;
+            }
           }
         }
         if (result.client_id) break;
       }
     }
+    
     if (result.client_id) break;
+    
+    // Fuzzy matching global pour les cas difficiles
+    const globalSim = simpleSimilarity(lowerText, clientName);
+    if (globalSim >= 0.7 && (!bestClientMatch || globalSim > bestClientMatch.score)) {
+      bestClientMatch = { id: client.id, name: clientName, score: globalSim };
+    }
+  }
+  
+  // Si aucun match exact, utiliser le meilleur match fuzzy
+  if (!result.client_id && bestClientMatch) {
+    console.log(`✅ Client trouvé par fuzzy matching: "${bestClientMatch.name}" (score: ${(bestClientMatch.score * 100).toFixed(1)}%)`);
+    result.client_id = bestClientMatch.id;
   }
 
   // Extraire le montant (AMÉLIORÉ pour fonctionner avec peu de mots)

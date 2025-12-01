@@ -23,7 +23,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      checkUserRole();
+      checkUserRole().then(() => {
+        // Attendre que le rôle soit vérifié avant de charger les stats
+        if (!loading) {
+          loadStats();
+        }
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -42,7 +47,15 @@ export default function Dashboard() {
     }
 
     try {
-      // Vérifier si l'utilisateur a un espace_membre_client
+      // D'abord vérifier si c'est un super admin plateforme
+      const { data: isPlatformAdmin } = await supabase.rpc('is_platform_super_admin');
+      
+      if (isPlatformAdmin === true) {
+        setIsClient(false);
+        return;
+      }
+
+      // Ensuite vérifier si l'utilisateur a un espace_membre_client
       const { data: espaceClient, error: espaceError } = await supabase
         .from('espaces_membres_clients')
         .select('id, entreprise_id')
@@ -66,23 +79,25 @@ export default function Dashboard() {
     try {
       let entrepriseIds: string[] = [];
 
+      let userClientId: string | null = null;
+      
       if (isClient) {
-        // Pour un client : récupérer son entreprise depuis l'espace membre
+        // Pour un client : récupérer son entreprise ET son client_id depuis l'espace membre
         const { data: espaceClient } = await supabase
           .from('espaces_membres_clients')
-          .select('entreprise_id')
+          .select('entreprise_id, client_id')
           .eq('user_id', user.id)
           .maybeSingle();
 
         if (espaceClient?.entreprise_id) {
           entrepriseIds = [espaceClient.entreprise_id];
+          userClientId = espaceClient.client_id;
         }
       } else {
-        // Pour un super admin plateforme : récupérer toutes les entreprises
+        // Pour un super admin plateforme : récupérer TOUTES les entreprises (pas seulement celles créées par lui)
         const { data: entreprises } = await supabase
           .from('entreprises')
-          .select('id')
-          .eq('user_id', user.id);
+          .select('id');
 
         entrepriseIds = entreprises?.map((e) => e.id) || [];
       }
@@ -102,27 +117,77 @@ export default function Dashboard() {
         nbClients = count || 0;
       }
 
-      // Compter les factures
-      const { count: nbFactures } = await supabase
+      // Compter les factures (pour la plateforme, exclure celles avec source='client')
+      let facturesQuery = supabase
         .from('factures')
         .select('*', { count: 'exact', head: true })
         .in('entreprise_id', entrepriseIds);
+      
+      // Si l'utilisateur n'est pas un client, exclure les factures créées par les clients
+      if (!isClient) {
+        // Pour la plateforme, on ne peut pas filtrer directement par source dans le count
+        // On va récupérer les données et filtrer côté client
+        const { data: allFactures, count: totalCount } = await supabase
+          .from('factures')
+          .select('id, source', { count: 'exact' })
+          .in('entreprise_id', entrepriseIds);
+        
+        const nbFactures = (allFactures || []).filter(f => {
+          const source = f.source || 'plateforme';
+          return source !== 'client';
+        }).length;
+        
+        // Calculer le CA total (factures payées, uniquement celles de la plateforme)
+        const { data: factures } = await supabase
+          .from('factures')
+          .select('montant_ttc, source')
+          .in('entreprise_id', entrepriseIds)
+          .eq('statut', 'payee');
+        
+        const facturesPlateforme = (factures || []).filter(f => {
+          const source = f.source || 'plateforme';
+          return source !== 'client';
+        });
+        
+        const caTotal = facturesPlateforme.reduce((sum, f) => sum + Number(f.montant_ttc || 0), 0);
+        
+        setStats({
+          nbEntreprises: isClient ? 1 : entrepriseIds.length,
+          nbClients,
+          nbFactures,
+          caTotal,
+        });
+        return;
+      } else {
+        // Pour les clients, compter uniquement LEURS factures (filtrées par client_id)
+        if (!userClientId) {
+          setLoading(false);
+          return;
+        }
+        
+        const { count: nbFactures } = await supabase
+          .from('factures')
+          .select('*', { count: 'exact', head: true })
+          .in('entreprise_id', entrepriseIds)
+          .eq('client_id', userClientId);
+        
+        // Calculer le CA total (factures payées, uniquement celles du client)
+        const { data: factures } = await supabase
+          .from('factures')
+          .select('montant_ttc')
+          .in('entreprise_id', entrepriseIds)
+          .eq('client_id', userClientId)
+          .eq('statut', 'payee');
 
-      // Calculer le CA total (factures payées)
-      const { data: factures } = await supabase
-        .from('factures')
-        .select('montant_ttc')
-        .in('entreprise_id', entrepriseIds)
-        .eq('statut', 'payee');
+        const caTotal = factures?.reduce((sum, f) => sum + Number(f.montant_ttc || 0), 0) || 0;
 
-      const caTotal = factures?.reduce((sum, f) => sum + Number(f.montant_ttc || 0), 0) || 0;
-
-      setStats({
-        nbEntreprises: isClient ? 1 : entrepriseIds.length, // Pour un client, toujours 1 entreprise
-        nbClients,
-        nbFactures: nbFactures || 0,
-        caTotal,
-      });
+        setStats({
+          nbEntreprises: isClient ? 1 : entrepriseIds.length, // Pour un client, toujours 1 entreprise
+          nbClients,
+          nbFactures: nbFactures || 0,
+          caTotal,
+        });
+      }
     } catch (error) {
       console.error('Erreur chargement stats:', error);
     } finally {

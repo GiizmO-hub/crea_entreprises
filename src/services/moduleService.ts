@@ -26,10 +26,6 @@ export const moduleCodeToMenuId: Record<string, string> = {
   'gestion-clients': 'clients',
   'gestion-des-clients': 'clients',
   'gestion_des_clients': 'clients',
-  // Modules de base toujours actifs pour clients
-  'dashboard': 'dashboard',
-  'tableau_de_bord': 'dashboard',
-  'tableau-de-bord': 'dashboard',
   
   // Modules facturation
   'facturation': 'factures',
@@ -97,7 +93,6 @@ export const moduleCodeToMenuId: Record<string, string> = {
   'settings': 'settings',
   
   // Autres modules Enterprise
-  'salaries': 'collaborateurs', // Gestion des salariés → collaborateurs
   'fiches-paie': 'comptabilite',
   'conges': 'collaborateurs',
   'automatisations': 'settings',
@@ -108,25 +103,27 @@ export const moduleCodeToMenuId: Record<string, string> = {
   'support_prioritaire': 'settings',
   'support_dedie': 'settings',
   'personnalisation': 'settings',
-  'gestion-stock': 'gestion-stock',
-  'gestion_stock': 'gestion-stock',
-  'gestion-de-stock': 'gestion-stock',
-  'gestion_de_stock': 'gestion-stock',
-  'crm-avance': 'crm-avance',
-  'crm_avance': 'crm-avance',
   'bilans-comptables': 'comptabilite',
   'connexions-admin': 'settings',
   'declarations-admin': 'settings',
   'documents-entreprise': 'documents',
   'n8n-automation': 'settings',
-  'modules': 'settings',
-  'gestion-plans': 'settings',
+  'modules': 'modules',
+  'gestion-plans': 'gestion-plans',
+  'gestion_plans': 'gestion-plans',
+  'gestionPlans': 'gestion-plans',
   'gestion-secteurs': 'settings',
   'modeles-previsionnels': 'finance',
   'historiques-ai': 'finance',
   
-  // Modules abonnements (déjà défini plus haut, mais on peut le garder pour clarté)
-  'abonnements': 'settings',
+  // Modules abonnements
+  'abonnements': 'abonnements',
+  
+  // Modules notifications
+  'notifications': 'notifications',
+  'notification': 'notifications',
+  'gestion-notifications': 'notifications',
+  'gestion_notifications': 'notifications',
 };
 
 /**

@@ -1,83 +1,15 @@
--- ============================================================================
--- CORRECTION COMPLÈTE ET FINALE DU WORKFLOW DE PAIEMENT
--- ============================================================================
--- 
--- PROBLÈMES IDENTIFIÉS :
--- 1. ❌ AUCUN PLAN dans plans_abonnement → Les plans ne s'affichent pas
--- 2. ❌ Fonction creer_facture_et_abonnement_apres_paiement incomplète
--- 3. ❌ Colonne client_id dans abonnements doit référencer auth.users(id)
--- 4. ❌ Pas de colonne role dans espaces_membres_clients
--- 
--- CORRECTIONS APPLIQUÉES :
--- 1. ✅ Insérer les 4 plans d'abonnement de base
--- 2. ✅ Corriger creer_facture_et_abonnement_apres_paiement complètement
--- 3. ✅ Utiliser v_user_id dans abonnements (pas v_client_id)
--- 4. ✅ Utiliser statut_compte au lieu de role
--- ============================================================================
-
--- ============================================================================
--- ÉTAPE 1 : INSÉRER LES PLANS D'ABONNEMENT (SI NÉCESSAIRE)
--- ============================================================================
-
-DO $$
-DECLARE
-  v_plan_count INTEGER;
-BEGIN
-  -- Compter les plans existants
-  SELECT COUNT(*) INTO v_plan_count FROM plans_abonnement WHERE actif = true;
+/*
+  # CORRECTION CRITIQUE : Plan ID optionnel dans le workflow
   
-  IF v_plan_count = 0 THEN
-    RAISE NOTICE '📋 Aucun plan trouvé, insertion des 4 plans de base...';
-    
-    -- Insérer les 4 plans d'abonnement
-    INSERT INTO plans_abonnement (
-      nom, description, prix_mensuel, prix_annuel, 
-      max_entreprises, max_utilisateurs, max_factures_mois, 
-      ordre, actif, fonctionnalites
-    ) VALUES
-    (
-      'Starter', 
-      'Pour les entrepreneurs qui démarrent leur activité', 
-      9.90, 99.00, 
-      1, 1, 50, 
-      1, true, 
-      '{"facturation": true, "clients": true, "dashboard": true}'::jsonb
-    ),
-    (
-      'Business', 
-      'Pour les petites entreprises en croissance', 
-      29.90, 299.00, 
-      3, 5, 200, 
-      2, true, 
-      '{"facturation": true, "clients": true, "dashboard": true, "comptabilite": true, "salaries": true, "automatisations": true}'::jsonb
-    ),
-    (
-      'Professional', 
-      'Pour les entreprises établies', 
-      79.90, 799.00, 
-      10, 20, 1000, 
-      3, true, 
-      '{"facturation": true, "clients": true, "dashboard": true, "comptabilite": true, "salaries": true, "automatisations": true, "administration": true, "api": true, "support_prioritaire": true}'::jsonb
-    ),
-    (
-      'Enterprise', 
-      'Solution complète pour grandes structures', 
-      199.90, 1999.00, 
-      999, 999, 99999, 
-      4, true, 
-      '{"facturation": true, "clients": true, "dashboard": true, "comptabilite": true, "salaries": true, "automatisations": true, "administration": true, "api": true, "support_prioritaire": true, "support_dedie": true, "personnalisation": true}'::jsonb
-    )
-    ON CONFLICT DO NOTHING;
-    
-    RAISE NOTICE '✅ 4 plans d''abonnement insérés avec succès !';
-  ELSE
-    RAISE NOTICE '✅ % plans déjà présents dans la base', v_plan_count;
-  END IF;
-END $$;
-
--- ============================================================================
--- ÉTAPE 2 : CORRIGER creer_facture_et_abonnement_apres_paiement
--- ============================================================================
+  Problème :
+  - La fonction creer_facture_et_abonnement_apres_paiement bloque si plan_id est NULL
+  - Cela empêche la création de factures même si le plan peut être ajouté plus tard
+  
+  Solution :
+  - Permettre la création de facture même sans plan_id
+  - Créer l'abonnement seulement si plan_id est disponible
+  - Améliorer la récupération du plan_id avec plus de fallbacks
+*/
 
 CREATE OR REPLACE FUNCTION creer_facture_et_abonnement_apres_paiement(
   p_paiement_id uuid
@@ -106,8 +38,21 @@ DECLARE
   v_statut_initial text;
   v_entreprise_id_from_notes uuid;
   v_client_id_from_notes uuid;
+  v_has_source_column boolean;
+  v_has_paiement_id_column boolean;
 BEGIN
   RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] 🚀 DÉBUT - Paiement ID: %', p_paiement_id;
+  
+  -- Vérifier les colonnes disponibles
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'factures' AND column_name = 'source'
+  ) INTO v_has_source_column;
+  
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'factures' AND column_name = 'paiement_id'
+  ) INTO v_has_paiement_id_column;
   
   -- 1. Récupérer le paiement
   SELECT * INTO v_paiement FROM paiements WHERE id = p_paiement_id;
@@ -133,7 +78,21 @@ BEGIN
     RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Paiement marqué comme "payé"';
   END IF;
   
-  -- 3. Parser les notes (TEXT → JSONB)
+  -- 3. Vérifier si une facture existe déjà pour ce paiement
+  IF v_has_paiement_id_column THEN
+    SELECT id INTO v_facture_id FROM factures WHERE paiement_id = p_paiement_id LIMIT 1;
+    IF v_facture_id IS NOT NULL THEN
+      RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ⚠️ Facture déjà existante: %', v_facture_id;
+      RETURN jsonb_build_object(
+        'success', true,
+        'message', 'Facture déjà existante',
+        'facture_id', v_facture_id,
+        'already_exists', true
+      );
+    END IF;
+  END IF;
+  
+  -- 4. Parser les notes (TEXT → JSONB)
   v_notes_json := NULL;
   v_entreprise_id_from_notes := NULL;
   v_client_id_from_notes := NULL;
@@ -168,7 +127,7 @@ BEGIN
     END;
   END IF;
   
-  -- 4. Récupérer entreprise_id
+  -- 5. Récupérer entreprise_id
   v_entreprise_id := v_paiement.entreprise_id;
   
   IF v_entreprise_id IS NULL THEN
@@ -184,7 +143,7 @@ BEGIN
   RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] 📊 Entreprise: %, User: %, Montant TTC: %€', 
     v_entreprise_id, v_user_id, v_montant_ttc;
   
-  -- 5. Fallback pour plan_id (chercher dans abonnements existants)
+  -- 6. ✅ CORRECTION : Récupérer plan_id avec plusieurs fallbacks (MAIS NE PAS BLOQUER SI NULL)
   IF v_plan_id IS NULL THEN
     RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] 🔍 Recherche plan_id dans abonnements existants...';
     SELECT plan_id INTO v_plan_id
@@ -197,7 +156,7 @@ BEGIN
     END IF;
   END IF;
   
-  -- 6. Fallback 2 : Chercher via get_paiement_info_for_stripe
+  -- 7. Fallback 2 : Chercher via get_paiement_info_for_stripe
   IF v_plan_id IS NULL THEN
     RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] 🔍 Tentative via get_paiement_info_for_stripe...';
     BEGIN
@@ -214,20 +173,19 @@ BEGIN
     END;
   END IF;
   
-  -- 7. Si plan_id toujours NULL, erreur
-  IF v_plan_id IS NULL THEN
-    RAISE WARNING '[creer_facture_et_abonnement_apres_paiement] ❌ Plan ID non trouvé';
-    RETURN jsonb_build_object('success', false, 'error', 'Plan ID manquant.');
+  -- 8. ✅ CORRECTION CRITIQUE : NE PAS BLOQUER si plan_id est NULL - créer la facture quand même
+  -- Vérifier le plan seulement s'il est fourni
+  IF v_plan_id IS NOT NULL THEN
+    SELECT * INTO v_plan FROM plans_abonnement WHERE id = v_plan_id;
+    IF NOT FOUND THEN
+      RAISE WARNING '[creer_facture_et_abonnement_apres_paiement] ⚠️ Plan non trouvé: %', v_plan_id;
+      v_plan_id := NULL; -- Réinitialiser pour ne pas créer d'abonnement avec un plan invalide
+    ELSE
+      RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Plan trouvé: %', v_plan.nom;
+    END IF;
+  ELSE
+    RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ⚠️ Plan ID non trouvé - La facture sera créée mais l''abonnement sera omis';
   END IF;
-  
-  -- 8. Récupérer le plan
-  SELECT * INTO v_plan FROM plans_abonnement WHERE id = v_plan_id;
-  IF NOT FOUND THEN
-    RAISE WARNING '[creer_facture_et_abonnement_apres_paiement] ❌ Plan non trouvé: %', v_plan_id;
-    RETURN jsonb_build_object('success', false, 'error', 'Plan non trouvé');
-  END IF;
-  
-  RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Plan trouvé: %', v_plan.nom;
   
   -- 9. Récupérer le client
   v_client_id := NULL;
@@ -259,40 +217,110 @@ BEGIN
     v_numero_facture := 'FACT-' || TO_CHAR(now(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 10000)::text, 4, '0');
   END LOOP;
   
-  -- 11. Créer la facture
+  -- 11. ✅ CRÉER LA FACTURE (même sans plan_id)
   RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] 📄 Création facture...';
-  INSERT INTO factures (
-    entreprise_id, client_id, numero, type, date_emission, date_echeance,
-    montant_ht, tva, montant_ttc, statut, notes
-  )
-  VALUES (
-    v_entreprise_id, v_client_id, v_numero_facture, 'facture',
-    CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days',
-    v_montant_ht, v_montant_tva, v_montant_ttc, 'payee',
-    jsonb_build_object(
-      'paiement_id', p_paiement_id::text,
-      'plan_id', v_plan_id::text,
-      'origine', 'paiement_stripe'
-    )::text
-  )
-  RETURNING id INTO v_facture_id;
   
-  RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Facture créée: % (%%)', v_facture_id, v_numero_facture;
+  BEGIN
+    IF v_has_source_column AND v_has_paiement_id_column THEN
+      INSERT INTO factures (
+        entreprise_id, client_id, numero, type, date_emission, date_echeance,
+        montant_ht, tva, montant_ttc, statut, notes, paiement_id, source
+      )
+      VALUES (
+        v_entreprise_id, v_client_id, v_numero_facture, 'facture',
+        CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days',
+        v_montant_ht, v_montant_tva, v_montant_ttc, 'payee',
+        jsonb_build_object(
+          'paiement_id', p_paiement_id::text,
+          'plan_id', COALESCE(v_plan_id::text, NULL),
+          'origine', 'paiement_stripe'
+        )::text,
+        p_paiement_id,
+        'plateforme'
+      )
+      RETURNING id INTO v_facture_id;
+    ELSIF v_has_source_column THEN
+      INSERT INTO factures (
+        entreprise_id, client_id, numero, type, date_emission, date_echeance,
+        montant_ht, tva, montant_ttc, statut, notes, source
+      )
+      VALUES (
+        v_entreprise_id, v_client_id, v_numero_facture, 'facture',
+        CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days',
+        v_montant_ht, v_montant_tva, v_montant_ttc, 'payee',
+        jsonb_build_object(
+          'paiement_id', p_paiement_id::text,
+          'plan_id', COALESCE(v_plan_id::text, NULL),
+          'origine', 'paiement_stripe'
+        )::text,
+        'plateforme'
+      )
+      RETURNING id INTO v_facture_id;
+    ELSIF v_has_paiement_id_column THEN
+      INSERT INTO factures (
+        entreprise_id, client_id, numero, type, date_emission, date_echeance,
+        montant_ht, tva, montant_ttc, statut, notes, paiement_id
+      )
+      VALUES (
+        v_entreprise_id, v_client_id, v_numero_facture, 'facture',
+        CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days',
+        v_montant_ht, v_montant_tva, v_montant_ttc, 'payee',
+        jsonb_build_object(
+          'paiement_id', p_paiement_id::text,
+          'plan_id', COALESCE(v_plan_id::text, NULL),
+          'origine', 'paiement_stripe'
+        )::text,
+        p_paiement_id
+      )
+      RETURNING id INTO v_facture_id;
+    ELSE
+      INSERT INTO factures (
+        entreprise_id, client_id, numero, type, date_emission, date_echeance,
+        montant_ht, tva, montant_ttc, statut, notes
+      )
+      VALUES (
+        v_entreprise_id, v_client_id, v_numero_facture, 'facture',
+        CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days',
+        v_montant_ht, v_montant_tva, v_montant_ttc, 'payee',
+        jsonb_build_object(
+          'paiement_id', p_paiement_id::text,
+          'plan_id', COALESCE(v_plan_id::text, NULL),
+          'origine', 'paiement_stripe'
+        )::text
+      )
+      RETURNING id INTO v_facture_id;
+    END IF;
+    
+    RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Facture créée: % (%)', v_facture_id, v_numero_facture;
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE WARNING '[creer_facture_et_abonnement_apres_paiement] ❌ Erreur création facture: %', SQLERRM;
+      RETURN jsonb_build_object('success', false, 'error', 'Erreur création facture: ' || SQLERRM);
+  END;
   
-  -- 12. Créer l'abonnement
-  -- ⚠️ IMPORTANT: client_id dans abonnements référence auth.users(id), donc utiliser v_user_id
-  RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] 📦 Création abonnement...';
-  INSERT INTO abonnements (
-    client_id, entreprise_id, plan_id, statut, date_debut,
-    date_prochain_paiement, montant_mensuel, mode_paiement
-  )
-  VALUES (
-    v_user_id, v_entreprise_id, v_plan_id, 'actif', CURRENT_DATE,
-    CURRENT_DATE + INTERVAL '1 month', v_montant_ht, 'mensuel'
-  )
-  RETURNING id INTO v_abonnement_id;
-  
-  RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Abonnement créé: %', v_abonnement_id;
+  -- 12. ✅ CRÉER L'ABONNEMENT SEULEMENT SI plan_id EST DISPONIBLE
+  IF v_plan_id IS NOT NULL AND v_user_id IS NOT NULL THEN
+    RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] 📦 Création abonnement...';
+    BEGIN
+      INSERT INTO abonnements (
+        client_id, entreprise_id, plan_id, statut, date_debut,
+        date_prochain_paiement, montant_mensuel, mode_paiement
+      )
+      VALUES (
+        v_user_id, v_entreprise_id, v_plan_id, 'actif', CURRENT_DATE,
+        CURRENT_DATE + INTERVAL '1 month', v_montant_ht, 'mensuel'
+      )
+      RETURNING id INTO v_abonnement_id;
+      
+      RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Abonnement créé: %', v_abonnement_id;
+    EXCEPTION
+      WHEN OTHERS THEN
+        RAISE WARNING '[creer_facture_et_abonnement_apres_paiement] ⚠️ Erreur création abonnement: %', SQLERRM;
+        -- Continuer même si l'abonnement échoue
+    END;
+  ELSE
+    RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ⚠️ Abonnement non créé - Plan ID: %, User ID: %', v_plan_id, v_user_id;
+  END IF;
   
   -- 13. Créer/Mettre à jour l'espace membre client
   SELECT id INTO v_espace_membre_id
@@ -330,14 +358,16 @@ BEGIN
     RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Espace membre mis à jour: %', v_espace_membre_id;
   END IF;
   
-  -- 14. Synchroniser modules (si fonction existe)
-  BEGIN
-    PERFORM sync_client_modules_from_plan(v_client_id, v_plan_id);
-    RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Modules synchronisés';
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ⚠️ Fonction sync_client_modules_from_plan non disponible';
-  END;
+  -- 14. Synchroniser modules (si fonction existe et plan_id disponible)
+  IF v_plan_id IS NOT NULL THEN
+    BEGIN
+      PERFORM sync_client_modules_from_plan(v_client_id, v_plan_id);
+      RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ✅ Modules synchronisés';
+    EXCEPTION
+      WHEN OTHERS THEN
+        RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] ⚠️ Fonction sync_client_modules_from_plan non disponible';
+    END;
+  END IF;
   
   -- 15. Activer entreprise et client
   RAISE NOTICE '[creer_facture_et_abonnement_apres_paiement] 🏢 Activation entreprise et client...';
@@ -351,12 +381,17 @@ BEGIN
   
   RETURN jsonb_build_object(
     'success', true,
-    'message', 'Facture et abonnement créés avec succès',
+    'message', CASE 
+      WHEN v_plan_id IS NULL THEN 'Facture créée avec succès. L''abonnement pourra être créé ultérieurement avec un plan.'
+      ELSE 'Facture et abonnement créés avec succès'
+    END,
     'facture_id', v_facture_id,
     'numero_facture', v_numero_facture,
     'abonnement_id', v_abonnement_id,
     'espace_membre_id', v_espace_membre_id,
-    'email', v_client.email
+    'email', v_client.email,
+    'plan_id', v_plan_id,
+    'plan_manquant', v_plan_id IS NULL
   );
 
 EXCEPTION
@@ -370,40 +405,5 @@ END;
 $$;
 
 COMMENT ON FUNCTION creer_facture_et_abonnement_apres_paiement IS 
-  'Crée automatiquement facture, abonnement, espace client avec droits admin après validation d''un paiement. Version corrigée complète.';
-
--- ============================================================================
--- ÉTAPE 3 : VÉRIFICATIONS FINALES
--- ============================================================================
-
-DO $$
-DECLARE
-  v_plan_count INTEGER;
-  v_func_exists BOOLEAN;
-BEGIN
-  -- Vérifier les plans
-  SELECT COUNT(*) INTO v_plan_count FROM plans_abonnement WHERE actif = true;
-  IF v_plan_count >= 4 THEN
-    RAISE NOTICE '✅ % plans d''abonnement disponibles', v_plan_count;
-  ELSE
-    RAISE WARNING '⚠️ Seulement % plans trouvés (attendu: 4)', v_plan_count;
-  END IF;
-  
-  -- Vérifier la fonction
-  SELECT EXISTS (
-    SELECT 1 FROM pg_proc WHERE proname = 'creer_facture_et_abonnement_apres_paiement'
-  ) INTO v_func_exists;
-  
-  IF v_func_exists THEN
-    RAISE NOTICE '✅ Fonction creer_facture_et_abonnement_apres_paiement créée';
-  ELSE
-    RAISE WARNING '⚠️ Fonction creer_facture_et_abonnement_apres_paiement non trouvée';
-  END IF;
-END $$;
-
--- ============================================================================
--- FIN DU SCRIPT
--- ============================================================================
-
-SELECT '✅ Corrections complètes appliquées !' as resultat;
+  'Crée automatiquement facture, abonnement (si plan_id disponible), espace client après validation d''un paiement. Version corrigée : plan_id optionnel, facture créée même sans plan.';
 

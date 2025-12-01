@@ -119,21 +119,40 @@ export default function Clients() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isClient]);
 
+  // ✅ CORRECTION : Un seul useEffect pour gérer la sélection d'entreprise et le chargement
   useEffect(() => {
     if (entreprises.length > 0 && !selectedEntreprise) {
-      setSelectedEntreprise(entreprises[0].id);
-      setFormData((prev) => ({ ...prev, entreprise_id: entreprises[0].id }));
+      const firstEntrepriseId = entreprises[0].id;
+      console.log('🏢 [Clients] Sélection automatique de la première entreprise:', firstEntrepriseId);
+      setSelectedEntreprise(firstEntrepriseId);
+      setFormData((prev) => ({ ...prev, entreprise_id: firstEntrepriseId }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entreprises]);
 
+  // ✅ CORRECTION : Un seul useEffect pour charger les clients (évite les doubles appels)
   useEffect(() => {
-    // Charger les clients quand l'entreprise change OU quand isClient change
-    if (isClient || selectedEntreprise) {
+    // Ne charger que si on a toutes les conditions nécessaires
+    if (!user) return;
+    
+    // Si c'est un client, charger immédiatement (pas besoin d'entreprise sélectionnée)
+    if (isClient) {
+      console.log('🔄 [Clients] Chargement clients (mode client)');
       loadClients();
+      return;
+    }
+    
+    // Si c'est un propriétaire, attendre qu'une entreprise soit sélectionnée
+    if (selectedEntreprise) {
+      console.log('🔄 [Clients] Chargement clients pour entreprise:', selectedEntreprise);
+      loadClients();
+    } else {
+      // Si pas d'entreprise sélectionnée, vider la liste
+      console.log('⚠️ [Clients] Aucune entreprise sélectionnée, vidage de la liste');
+      setClients([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedEntreprise, isClient]);
+  }, [selectedEntreprise, isClient, user]);
 
   // Chargement des données
   const loadEntreprises = async () => {
@@ -222,24 +241,44 @@ export default function Clients() {
   };
 
   const loadClients = async () => {
-    if (!user) return;
+    if (!user) {
+      console.warn('⚠️ [Clients] Pas d\'utilisateur, arrêt du chargement');
+      return;
+    }
 
     try {
       setLoading(true);
+      console.log('🔄 [Clients] DÉBUT chargement clients - isClient:', isClient, 'selectedEntreprise:', selectedEntreprise);
       
       // ✅ Si c'est un client de l'espace client, charger SES CONTACTS (client_contacts)
       if (isClient) {
         console.log('👤 [Clients] Client détecté - Chargement de ses contacts (client_contacts)');
         
         // Récupérer le client_id et entreprise_id de l'utilisateur
-        const { data: espaceClient } = await supabase
+        const { data: espaceClient, error: espaceError } = await supabase
           .from('espaces_membres_clients')
           .select('client_id, entreprise_id')
           .eq('user_id', user.id)
           .eq('actif', true)
           .maybeSingle();
 
+        if (espaceError) {
+          console.error('❌ [Clients] Erreur récupération espace client:', espaceError);
+          throw espaceError;
+        }
+
         if (espaceClient?.client_id && espaceClient?.entreprise_id) {
+          // ✅ CORRECTION : Charger d'abord le client lui-même depuis clients
+          const { data: clientSelf, error: clientSelfError } = await supabase
+            .from('clients')
+            .select('*')
+            .eq('id', espaceClient.client_id)
+            .maybeSingle();
+
+          if (clientSelfError) {
+            console.error('❌ [Clients] Erreur chargement client lui-même:', clientSelfError);
+          }
+
           // Charger les contacts du client (client_contacts)
           const { data, error } = await supabase
             .from('client_contacts')
@@ -248,10 +287,36 @@ export default function Clients() {
             .eq('entreprise_id', espaceClient.entreprise_id)
             .order('created_at', { ascending: false });
 
-          if (error) throw error;
+          if (error) {
+            console.error('❌ [Clients] Erreur chargement contacts:', error);
+            throw error;
+          }
           
-          // Convertir ClientContact en Client pour la compatibilité avec l'interface
-          const clientsData = (data || []).map(contact => ({
+          // ✅ CORRECTION : Inclure le client lui-même dans la liste
+          const clientsData: Client[] = [];
+          
+          // Ajouter le client lui-même en premier s'il existe
+          if (clientSelf) {
+            clientsData.push({
+              id: clientSelf.id,
+              entreprise_id: clientSelf.entreprise_id,
+              nom: clientSelf.nom,
+              prenom: clientSelf.prenom,
+              entreprise_nom: clientSelf.entreprise_nom,
+              email: clientSelf.email,
+              telephone: clientSelf.telephone,
+              adresse: clientSelf.adresse,
+              code_postal: clientSelf.code_postal,
+              ville: clientSelf.ville,
+              siret: clientSelf.siret,
+              statut: clientSelf.statut,
+              created_at: clientSelf.created_at,
+            });
+            console.log('✅ [Clients] Client lui-même ajouté à la liste');
+          }
+          
+          // Ajouter les contacts
+          const contactsData = (data || []).map(contact => ({
             id: contact.id,
             entreprise_id: contact.entreprise_id,
             nom: contact.nom,
@@ -267,8 +332,10 @@ export default function Clients() {
             created_at: contact.created_at,
           }));
           
+          clientsData.push(...contactsData);
+          
+          console.log(`✅ [Clients] ${clientsData.length} éléments chargés (1 client + ${contactsData.length} contacts)`);
           setClients(clientsData);
-          console.log(`✅ [Clients] ${clientsData.length} contacts chargés pour le client`);
         } else {
           console.warn('⚠️ [Clients] Aucun client_id ou entreprise_id trouvé pour cet utilisateur');
           setClients([]);
@@ -276,26 +343,49 @@ export default function Clients() {
       } else {
         // ✅ Si c'est un propriétaire ou super_admin, charger les CLIENTS DE LA PLATEFORME (clients)
         if (!selectedEntreprise) {
+          console.warn('⚠️ [Clients] Aucune entreprise sélectionnée pour charger les clients');
           setClients([]);
+          setLoading(false);
           return;
         }
 
         console.log('👑 [Clients] Propriétaire/Super Admin - Chargement clients de la plateforme');
+        console.log('   Entreprise sélectionnée:', selectedEntreprise);
+        
+        // ✅ CORRECTION : Ne PAS filtrer par statut pour voir TOUS les clients (y compris en_attente)
         const { data, error } = await supabase
           .from('clients')
           .select('*')
           .eq('entreprise_id', selectedEntreprise)
           .order('created_at', { ascending: false });
 
-        if (error) throw error;
-        setClients(data || []);
+        if (error) {
+          console.error('❌ [Clients] Erreur chargement clients:', error);
+          console.error('   Code:', error.code);
+          console.error('   Message:', error.message);
+          console.error('   Details:', error.details);
+          throw error;
+        }
+        
         console.log(`✅ [Clients] ${data?.length || 0} clients de la plateforme chargés pour l'entreprise`);
+        if (data && data.length > 0) {
+          console.log('   Détails des clients:', data.map(c => ({ 
+            id: c.id, 
+            nom: c.nom, 
+            prenom: c.prenom, 
+            email: c.email,
+            statut: c.statut 
+          })));
+        }
+        setClients(data || []);
       }
     } catch (error) {
       console.error('❌ [Clients] Erreur chargement clients:', error);
-      setClients([]);
+      // ✅ CORRECTION : Ne pas vider la liste en cas d'erreur, garder les clients précédents
+      // setClients([]); // Commenté pour éviter de vider la liste
     } finally {
       setLoading(false);
+      console.log('✅ [Clients] FIN chargement clients');
     }
   };
 
@@ -569,8 +659,9 @@ export default function Clients() {
   };
 
   const resetForm = () => {
+    // Si c'est un client, ne pas réinitialiser entreprise_id (sera défini automatiquement dans handleSubmit)
     setFormData({
-      entreprise_id: selectedEntreprise,
+      entreprise_id: isClient ? '' : selectedEntreprise,
       nom: '',
       prenom: '',
       entreprise_nom: '',
@@ -680,19 +771,17 @@ export default function Clients() {
             {isClient ? 'Vos informations client' : 'Gérez vos clients et prospects'}
           </p>
         </div>
-        {/* Masquer le bouton "Ajouter un client" pour les clients de l'espace client */}
-        {!isClient && (
-          <button
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-          >
-            <Plus className="w-5 h-5" />
-            Ajouter un client
-          </button>
-        )}
+        {/* Bouton "Ajouter un client/contact" - visible pour tous */}
+        <button
+          onClick={() => {
+            resetForm();
+            setShowForm(true);
+          }}
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+        >
+          <Plus className="w-5 h-5" />
+          {isClient ? 'Ajouter un contact' : 'Ajouter un client'}
+        </button>
       </div>
 
 

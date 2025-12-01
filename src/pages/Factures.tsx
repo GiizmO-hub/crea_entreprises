@@ -1,43 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Plus, FileText, Edit, Trash2, Search, Building2, X, Receipt, CreditCard, ArrowLeftRight, CheckCircle2, Clock, Download, Minus, AlertTriangle, Send, Mic } from 'lucide-react';
+import { Plus, FileText, Edit, Trash2, Search, Building2, X, Receipt, CreditCard, ArrowLeftRight, CheckCircle2, Clock, Download, Minus, AlertTriangle, Send, Mic, Bell } from 'lucide-react';
 import { VoiceInput } from '../components/VoiceInput';
 import { parseVoiceInput } from '../utils/voiceParser';
 import { generatePDF } from '../lib/pdfGenerator';
-
-interface Facture {
-  id: string;
-  numero: string;
-  type?: string;
-  client_id: string;
-  entreprise_id: string;
-  date_facturation?: string;
-  date_emission?: string;
-  date_echeance?: string;
-  montant_ht: number;
-  montant_tva?: number;
-  taux_tva?: number;
-  montant_ttc: number;
-  statut: string;
-  created_at: string;
-  client_nom?: string;
-  entreprise_nom?: string;
-  facture_id?: string; // Pour les avoirs liés
-  source?: 'plateforme' | 'client'; // Source de création
-}
-
-interface FactureLigne {
-  id?: string;
-  description: string;
-  quantite: number | string; // Permettre string pour éviter que le curseur bouge
-  prix_unitaire_ht: number | string;
-  taux_tva: number | string;
-  montant_ht: number;
-  montant_tva: number;
-  montant_ttc: number;
-  ordre: number;
-}
+import { createInvoiceNotification } from '../utils/notifications';
+import type { Facture, FactureLigne } from '../types/shared'; // ✅ Utiliser les types partagés
 
 interface RelanceMRA {
   id?: string;
@@ -84,10 +53,24 @@ export default function Factures() {
   const aiTimeoutRef = useRef<any>(null); // Pour debouncer les appels IA
   const [filterType, setFilterType] = useState<string>('all'); // 'all', 'facture', 'proforma', 'avoir', 'recues'
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
-  const [isClient, setIsClient] = useState<boolean | null>(null);
-  const [formData, setFormData] = useState({
+  const [isClient, setIsClient] = useState<boolean>(false);
+  const [userClientId, setUserClientId] = useState<string | null>(null); // ID du client si l'utilisateur est un client
+  const [formData, setFormData] = useState<{
+    numero: string;
+    type: 'facture' | 'proforma';
+    client_id: string;
+    entreprise_id: string;
+    date_facturation: string;
+    date_echeance: string;
+    montant_ht: number;
+    taux_tva: number;
+    statut: string;
+    motif: string;
+    notes: string;
+    source?: 'plateforme' | 'externe' | 'client';
+  }>({
     numero: '',
-    type: 'facture' as 'facture' | 'proforma',
+    type: 'facture',
     client_id: '',
     entreprise_id: '',
     date_facturation: new Date().toISOString().split('T')[0],
@@ -97,6 +80,7 @@ export default function Factures() {
     statut: 'brouillon',
     motif: '',
     notes: '',
+    source: 'plateforme',
   });
   const [lignes, setLignes] = useState<FactureLigne[]>([]);
 
@@ -111,16 +95,18 @@ export default function Factures() {
       try {
         const { data: espaceClient } = await supabase
           .from('espaces_membres_clients')
-          .select('id')
+          .select('id, client_id')
           .eq('user_id', user.id)
           .eq('actif', true)
           .maybeSingle();
 
         setIsClient(!!espaceClient);
-        // Ne pas changer le filtre par défaut - les clients peuvent voir toutes leurs factures
+        setUserClientId(espaceClient?.client_id || null);
+        console.log('👤 [Factures] isClient:', !!espaceClient, 'client_id:', espaceClient?.client_id);
       } catch (error) {
         console.error('Erreur vérification client:', error);
         setIsClient(false);
+        setUserClientId(null);
       }
     };
 
@@ -145,11 +131,19 @@ export default function Factures() {
     if (selectedEntreprise) {
       loadClients(selectedEntreprise);
       loadArticles(selectedEntreprise);
-      loadFactures();
       loadAvoirs();
       loadRelances();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEntreprise]);
+
+  // Recharger les factures quand isClient ou userClientId changent
+  useEffect(() => {
+    if (selectedEntreprise) {
+      loadFactures();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEntreprise, isClient, userClientId]);
 
   const loadEntreprises = async () => {
     if (!user) return;
@@ -221,19 +215,28 @@ export default function Factures() {
     if (!selectedEntreprise) return;
 
     try {
-      // Charger toutes les factures de l'entreprise (clients et plateforme)
-      const { data, error } = await supabase
+      // Construire la requête de base
+      let query = supabase
         .from('factures')
         .select('*')
         .eq('entreprise_id', selectedEntreprise)
-        .in('type', ['facture', 'proforma'])
+        .in('type', ['facture', 'proforma']);
+
+      // Si l'utilisateur est un client, filtrer uniquement ses factures
+      if (isClient && userClientId) {
+        console.log('👤 [Factures] Filtrage par client_id:', userClientId);
+        query = query.eq('client_id', userClientId);
+      }
+      // Note: Pour la plateforme, on ne filtre pas ici - on filtrera après le chargement
+
+      const { data, error } = await query
         .order('created_at', { ascending: false })
         .limit(100);
 
       if (error) throw error;
 
-      // Enrichir avec les noms des clients
-      const facturesEnrichies = await Promise.all(
+      // Enrichir avec les noms des clients et vérifier si la facture est liée à un abonnement
+      let facturesEnrichies = await Promise.all(
         (data || []).map(async (facture) => {
           const { data: client } = await supabase
             .from('clients')
@@ -241,14 +244,72 @@ export default function Factures() {
             .eq('id', facture.client_id)
             .single();
 
+          // Vérifier si la facture est liée à un abonnement
+          const { data: abonnement } = await supabase
+            .from('abonnements')
+            .select('id, plan_id')
+            .eq('facture_id', facture.id)
+            .maybeSingle();
+
+          // Vérifier aussi dans les notes de la facture
+          const notes = facture.notes as any;
+          const hasPlanId = notes && (notes.plan_id || notes.origine === 'paiement_workflow');
+
+          // ✅ Vérifier si la facture a été lue par le client (pour la bulle de notification)
+          let isUnread = false;
+          if (isClient && facture.source === 'plateforme' && (facture.statut === 'envoyee' || facture.statut === 'en_attente')) {
+            // Vérifier si une notification existe et n'a pas été lue
+            if (user?.id) {
+              try {
+                const { data: notification } = await supabase
+                  .from('notifications')
+                  .select('read')
+                  .eq('type', 'invoice')
+                  .eq('metadata->>invoice_id', facture.id)
+                  .eq('user_id', user.id)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                
+                isUnread = notification ? !notification.read : false;
+              } catch (notifError) {
+                console.warn('⚠️ Erreur vérification notification (non bloquant):', notifError);
+                isUnread = false;
+              }
+            }
+          }
+
+          // ✅ NOUVEAU : Côté client, les factures envoyées par la plateforme doivent apparaître comme "valide"
+          let displayStatut = facture.statut;
+          if (isClient && facture.source === 'plateforme') {
+            // Si la facture est envoyée par la plateforme, elle apparaît comme "valide" côté client
+            if (facture.statut === 'envoyee' || facture.statut === 'en_attente' || facture.statut === 'brouillon') {
+              displayStatut = 'valide';
+            }
+          }
+
           return {
             ...facture,
             client_nom: client?.entreprise_nom || `${client?.prenom || ''} ${client?.nom || ''}`.trim() || 'Client',
             type: facture.type || 'facture',
-            source: facture.source || 'client', // Par défaut 'client' si non défini
+            source: facture.source || 'plateforme',
+            isAbonnement: !!abonnement || !!hasPlanId, // Flag pour indiquer si c'est une facture d'abonnement
+            isUnread, // Flag pour indiquer si la facture n'a pas été lue
+            displayStatut, // Statut à afficher (peut différer du statut réel pour les clients)
           };
         })
       );
+
+      // Filtrer selon le rôle
+      if (isClient) {
+        // Client : voir toutes ses factures (déjà filtrées par client_id)
+      } else {
+        // Plateforme : exclure les factures créées par les clients
+        facturesEnrichies = facturesEnrichies.filter(f => {
+          const source = f.source || 'plateforme';
+          return source !== 'client';
+        });
+      }
 
       setFactures(facturesEnrichies);
     } catch (error) {
@@ -440,11 +501,34 @@ export default function Factures() {
   };
 
   const calculateLigneTotals = (ligne: FactureLigne): FactureLigne => {
-    const montant_ht = ligne.quantite * ligne.prix_unitaire_ht;
-    const montant_tva = montant_ht * (ligne.taux_tva / 100);
+    // ✅ Conversion robuste des types
+    const quantite = typeof ligne.quantite === 'number' 
+      ? ligne.quantite 
+      : (ligne.quantite === '' || ligne.quantite === null || ligne.quantite === undefined 
+          ? 0 
+          : parseFloat(String(ligne.quantite)) || 0);
+    
+    const prixUnitaire = typeof ligne.prix_unitaire_ht === 'number'
+      ? ligne.prix_unitaire_ht
+      : (ligne.prix_unitaire_ht === '' || ligne.prix_unitaire_ht === null || ligne.prix_unitaire_ht === undefined
+          ? 0
+          : parseFloat(String(ligne.prix_unitaire_ht)) || 0);
+    
+    const tauxTVA = typeof ligne.taux_tva === 'number'
+      ? ligne.taux_tva
+      : (ligne.taux_tva === '' || ligne.taux_tva === null || ligne.taux_tva === undefined
+          ? 0
+          : parseFloat(String(ligne.taux_tva)) || 0);
+    
+    const montant_ht = quantite * prixUnitaire;
+    const montant_tva = montant_ht * (tauxTVA / 100);
     const montant_ttc = montant_ht + montant_tva;
+    
     return {
       ...ligne,
+      quantite: quantite, // ✅ S'assurer que c'est un number
+      prix_unitaire_ht: prixUnitaire, // ✅ S'assurer que c'est un number
+      taux_tva: tauxTVA, // ✅ S'assurer que c'est un number
       montant_ht: Number(montant_ht.toFixed(2)),
       montant_tva: Number(montant_tva.toFixed(2)),
       montant_ttc: Number(montant_ttc.toFixed(2)),
@@ -482,33 +566,77 @@ export default function Factures() {
     };
   };
 
-  const generateNumero = async (type: 'facture' | 'proforma' | 'avoir' = 'facture') => {
+  const generateNumero = async (type: 'facture' | 'proforma' | 'avoir' = 'facture', maxRetries: number = 10): Promise<string> => {
     if (!selectedEntreprise) return type === 'proforma' ? 'PROFORMA-001' : type === 'avoir' ? 'AVOIR-001' : 'FAC-001';
 
     const prefix = type === 'proforma' ? 'PROFORMA' : type === 'avoir' ? 'AVOIR' : 'FAC';
     const table = type === 'avoir' ? 'avoirs' : 'factures';
 
     try {
-      // Chercher les numéros avec FAC- ou FACT- (pour compatibilité avec anciennes factures)
-      const { data } = await supabase
+      // ✅ Chercher TOUS les numéros existants pour cette entreprise (tous formats)
+      const { data: allNumeros } = await supabase
         .from(table)
         .select('numero')
-        .eq('entreprise_id', selectedEntreprise)
-        .or(`numero.ilike.${prefix}-%,numero.ilike.FACT-%`)
-        .order('numero', { ascending: false })
-        .limit(1);
+        .eq('entreprise_id', selectedEntreprise);
 
-      if (data && data.length > 0) {
-        // Extraire le numéro (gérer FAC-001, FACT-001, FAIT-001)
-        const numeroStr = data[0].numero || '';
-        const match = numeroStr.match(/-(\d+)$/);
-        const lastNum = match ? parseInt(match[1]) : 0;
-        return `${prefix}-${String(lastNum + 1).padStart(3, '0')}`;
+      if (!allNumeros || allNumeros.length === 0) {
+        // Aucune facture existante, commencer à 001
+        const numero = `${prefix}-001`;
+        console.log('🔢 [Factures] Premier numéro généré:', numero);
+        return numero;
       }
-      return `${prefix}-001`;
+
+      // ✅ Extraire tous les numéros numériques (gérer FAC-001, FACT-001, FAC-2025-001, etc.)
+      const numerosNumeriques: number[] = [];
+      allNumeros.forEach(item => {
+        const numeroStr = item.numero || '';
+        // Chercher le dernier groupe de chiffres (ex: FAC-001 -> 1, FAC-2025-123 -> 123)
+        const matches = numeroStr.match(/(\d+)(?!.*\d)/);
+        if (matches && matches[1]) {
+          const num = parseInt(matches[1]);
+          if (!isNaN(num)) {
+            numerosNumeriques.push(num);
+          }
+        }
+      });
+
+      // Trouver le numéro le plus élevé
+      const maxNum = numerosNumeriques.length > 0 ? Math.max(...numerosNumeriques) : 0;
+      let nextNum = maxNum + 1;
+      let numero = `${prefix}-${String(nextNum).padStart(3, '0')}`;
+
+      // ✅ Vérifier l'unicité et réessayer si nécessaire
+      let retries = 0;
+      while (retries < maxRetries) {
+        const { data: existing } = await supabase
+          .from(table)
+          .select('id')
+          .eq('entreprise_id', selectedEntreprise)
+          .eq('numero', numero)
+          .maybeSingle();
+
+        if (!existing) {
+          // Numéro unique trouvé
+          console.log('🔢 [Factures] Numéro unique généré:', numero, `(tentative ${retries + 1})`);
+          return numero;
+        }
+
+        // Numéro existe déjà, essayer le suivant
+        nextNum++;
+        numero = `${prefix}-${String(nextNum).padStart(3, '0')}`;
+        retries++;
+      }
+
+      // Si on n'a pas trouvé après maxRetries, utiliser un timestamp
+      const timestamp = Date.now().toString().slice(-6);
+      numero = `${prefix}-${timestamp}`;
+      console.warn('⚠️ [Factures] Utilisation d\'un numéro avec timestamp après', maxRetries, 'tentatives:', numero);
+      return numero;
     } catch (error) {
-      console.error('Erreur génération numéro:', error);
-      return `${prefix}-001`;
+      console.error('❌ [Factures] Erreur génération numéro:', error);
+      // En cas d'erreur, utiliser un timestamp pour garantir l'unicité
+      const timestamp = Date.now().toString().slice(-6);
+      return `${prefix}-${timestamp}`;
     }
   };
 
@@ -539,25 +667,74 @@ export default function Factures() {
             montant_ttc: (Number(formData.montant_ht) || 0) * (1 + (Number(formData.taux_tva) || 20) / 100),
           };
 
+      // Déterminer la source : préserver la source existante lors de l'édition sauf si c'est un client
+      let factureSource: 'plateforme' | 'client' | 'externe' = 'plateforme';
+      if (editingId) {
+        // Si on modifie, préserver la source existante sauf si c'est un client qui modifie
+        const existingFacture = factures.find(f => f.id === editingId);
+        if (isClient) {
+          factureSource = 'client';
+        } else {
+          const existingSource = existingFacture?.source || formData.source;
+          factureSource = (existingSource === 'externe' ? 'externe' : existingSource === 'client' ? 'client' : 'plateforme') as 'plateforme' | 'client' | 'externe';
+        }
+      } else {
+        // Si on crée, utiliser la source du formulaire ou déterminer selon le rôle
+        if (isClient) {
+          factureSource = 'client';
+        } else {
+          factureSource = (formData.source === 'externe' ? 'externe' : 'plateforme') as 'plateforme' | 'externe';
+        }
+      }
+      
+      // ✅ Générer un numéro unique si nécessaire
+      let numeroFinal = formData.numero;
+      if (!numeroFinal || numeroFinal.trim() === '') {
+        numeroFinal = await generateNumero(formData.type);
+      } else if (!editingId) {
+        // ✅ Vérifier l'unicité du numéro saisi manuellement avant l'insertion
+        const { data: existingFacture } = await supabase
+          .from('factures')
+          .select('id')
+          .eq('entreprise_id', selectedEntreprise)
+          .eq('numero', numeroFinal.trim())
+          .maybeSingle();
+
+        if (existingFacture) {
+          // Numéro existe déjà, générer un nouveau
+          console.warn('⚠️ [Factures] Numéro déjà existant, génération d\'un nouveau:', numeroFinal);
+          numeroFinal = await generateNumero(formData.type);
+        }
+      }
+
       const dataToSave = {
-        numero: formData.numero || (await generateNumero(formData.type)),
+        numero: numeroFinal,
         type: formData.type,
         client_id: formData.client_id,
         entreprise_id: selectedEntreprise,
         date_emission: formData.date_facturation,
         date_echeance: formData.date_echeance || null,
-        montant_ht: totals.montant_ht,
-        tva: totals.montant_tva,
-        montant_ttc: totals.montant_ttc,
+        montant_ht: Number(totals.montant_ht) || 0,
+        tva: Number(totals.montant_tva) || 0,
+        montant_ttc: Number(totals.montant_ttc) || 0,
         statut: formData.statut,
-        notes: formData.notes || null,
-        source: isClient ? 'client' : 'client', // Les factures créées manuellement sont toujours 'client'
+        notes: formData.notes ? String(formData.notes).trim() : null,
+        source: factureSource, // Les factures créées/éditées par les clients ont source='client', celles de la plateforme ont source='plateforme'
         updated_at: new Date().toISOString(),
       };
+      
+      console.log('💾 [Factures] Sauvegarde facture:', {
+        editingId,
+        isClient,
+        source: factureSource,
+        numero: dataToSave.numero,
+        dataToSave: JSON.stringify(dataToSave, null, 2)
+      });
 
       let factureId = editingId;
 
       if (editingId) {
+        console.log('🔄 [Factures] Mise à jour facture existante:', editingId);
         const { error, data } = await supabase
           .from('factures')
           .update(dataToSave)
@@ -565,17 +742,56 @@ export default function Factures() {
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ [Factures] Erreur UPDATE facture:', error);
+          throw error;
+        }
         factureId = data?.id || editingId;
+        console.log('✅ [Factures] Facture mise à jour:', factureId);
       } else {
-        const { data, error } = await supabase
-          .from('factures')
-          .insert([dataToSave])
-          .select()
-          .single();
+        console.log('🆕 [Factures] Création nouvelle facture');
         
-        if (error) throw error;
-        factureId = data?.id;
+        // ✅ Réessayer avec un nouveau numéro en cas d'erreur de doublon
+        let retries = 0;
+        let lastError: any = null;
+        
+        while (retries < 3) {
+          const { data, error } = await supabase
+            .from('factures')
+            .insert([dataToSave])
+            .select()
+            .single();
+          
+          if (!error) {
+            factureId = data?.id;
+            console.log('✅ [Factures] Facture créée:', factureId);
+            break;
+          }
+
+          // Si c'est une erreur de doublon, générer un nouveau numéro et réessayer
+          if (error.code === '23505' && error.message?.includes('factures_entreprise_id_numero_key')) {
+            console.warn(`⚠️ [Factures] Doublon détecté (tentative ${retries + 1}/3), génération d'un nouveau numéro`);
+            dataToSave.numero = await generateNumero(formData.type);
+            lastError = error;
+            retries++;
+          } else {
+            // Autre erreur, arrêter
+            console.error('❌ [Factures] Erreur INSERT facture:', error);
+            console.error('❌ [Factures] Détails erreur:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code
+            });
+            throw error;
+          }
+        }
+
+        // Si on a épuisé les tentatives
+        if (retries >= 3 && !factureId) {
+          console.error('❌ [Factures] Impossible de créer la facture après 3 tentatives');
+          throw lastError || new Error('Impossible de générer un numéro de facture unique');
+        }
       }
 
       // Sauvegarder les lignes si présentes
@@ -591,24 +807,43 @@ export default function Factures() {
         // Préparer les lignes à sauvegarder avec les calculs
         const lignesToSave = lignes.map((ligne, index) => {
           const ligneCalculee = calculateLigneTotals(ligne);
+          // ✅ S'assurer que tous les types sont corrects (convertir string en number si nécessaire)
+          const quantite = typeof ligneCalculee.quantite === 'string' 
+            ? parseFloat(String(ligneCalculee.quantite)) || 0 
+            : Number(ligneCalculee.quantite) || 0;
+          const prixUnitaire = typeof ligneCalculee.prix_unitaire_ht === 'string'
+            ? parseFloat(String(ligneCalculee.prix_unitaire_ht)) || 0
+            : Number(ligneCalculee.prix_unitaire_ht) || 0;
+          const tauxTVA = typeof ligneCalculee.taux_tva === 'string'
+            ? parseFloat(String(ligneCalculee.taux_tva)) || 0
+            : Number(ligneCalculee.taux_tva) || 0;
+          
           return {
             facture_id: factureId,
-            description: ligneCalculee.description,
-            quantite: ligneCalculee.quantite,
-            prix_unitaire_ht: ligneCalculee.prix_unitaire_ht,
-            taux_tva: ligneCalculee.taux_tva,
-            montant_ht: ligneCalculee.montant_ht,
-            tva: ligneCalculee.montant_tva,
-            montant_ttc: ligneCalculee.montant_ttc,
+            description: String(ligneCalculee.description || '').trim(),
+            quantite: quantite,
+            prix_unitaire_ht: prixUnitaire,
+            taux_tva: tauxTVA,
+            montant_ht: Number(ligneCalculee.montant_ht) || 0,
+            tva: Number(ligneCalculee.montant_tva) || 0,
+            montant_ttc: Number(ligneCalculee.montant_ttc) || 0,
             ordre: index,
           };
         });
 
-        const { error: lignesError } = await supabase
-          .from('facture_lignes')
-          .insert(lignesToSave);
+        console.log('💾 [Factures] Lignes à sauvegarder:', JSON.stringify(lignesToSave, null, 2));
 
-        if (lignesError) throw lignesError;
+        const { error: lignesError, data: lignesData } = await supabase
+          .from('facture_lignes')
+          .insert(lignesToSave)
+          .select();
+
+        if (lignesError) {
+          console.error('❌ [Factures] Erreur insertion lignes:', lignesError);
+          throw lignesError;
+        }
+        
+        console.log('✅ [Factures] Lignes sauvegardées:', lignesData?.length || 0);
       } else if (factureId && lignes.length === 0 && editingId) {
         // Supprimer les lignes si on modifie et qu'il n'y en a plus
         const { error: deleteError } = await supabase.from('facture_lignes').delete().eq('facture_id', factureId);
@@ -623,9 +858,28 @@ export default function Factures() {
       await loadFactures();
       await loadAvoirs();
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      console.error('Erreur sauvegarde facture:', error);
-      alert('Erreur lors de la sauvegarde: ' + errorMessage);
+      console.error('❌ [Factures] Erreur complète sauvegarde facture:', error);
+      
+      let errorMessage = 'Erreur inconnue';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        // Gérer les erreurs Supabase
+        const supabaseError = error as any;
+        if (supabaseError.message) {
+          errorMessage = supabaseError.message;
+        } else if (supabaseError.details) {
+          errorMessage = supabaseError.details;
+        } else if (supabaseError.hint) {
+          errorMessage = supabaseError.hint;
+        } else if (supabaseError.code) {
+          errorMessage = `Erreur ${supabaseError.code}`;
+        }
+      }
+      
+      console.error('❌ [Factures] Message d\'erreur final:', errorMessage);
+      alert(`Erreur lors de la sauvegarde: ${errorMessage}\n\nVérifiez la console pour plus de détails.`);
     }
   };
 
@@ -678,15 +932,46 @@ export default function Factures() {
     setShowForm(true);
   };
 
-  const generateAvoirNumero = (factureNumero: string): string => {
+  const generateAvoirNumero = async (factureNumero: string): Promise<string> => {
     // Convertir FACT-001 -> AVOIR-001, PROFORMA-001 -> AVOIR-001
     const num = factureNumero.split('-')[1];
-    return `AVOIR-${num || '001'}`;
+    let baseNumero = `AVOIR-${num || '001'}`;
+    
+    // ✅ Vérifier l'unicité et ajuster si nécessaire
+    if (selectedEntreprise) {
+      let retries = 0;
+      let numeroFinal = baseNumero;
+      
+      while (retries < 10) {
+        const { data: existing } = await supabase
+          .from('avoirs')
+          .select('id')
+          .eq('entreprise_id', selectedEntreprise)
+          .eq('numero', numeroFinal)
+          .maybeSingle();
+
+        if (!existing) {
+          return numeroFinal;
+        }
+
+        // Numéro existe, essayer avec un suffixe
+        const baseNum = num ? parseInt(num) : 1;
+        const nextNum = baseNum + retries + 1;
+        numeroFinal = `AVOIR-${String(nextNum).padStart(3, '0')}`;
+        retries++;
+      }
+      
+      // Si on n'a pas trouvé, utiliser un timestamp
+      const timestamp = Date.now().toString().slice(-6);
+      return `AVOIR-${timestamp}`;
+    }
+    
+    return baseNumero;
   };
 
-  const handleCreateAvoir = (facture: Facture) => {
+  const handleCreateAvoir = async (facture: Facture) => {
     setFacturePourAvoir(facture);
-    const numeroAvoir = generateAvoirNumero(facture.numero);
+    const numeroAvoir = await generateAvoirNumero(facture.numero);
     setFormData({
       numero: numeroAvoir,
       type: 'facture' as 'facture' | 'proforma',
@@ -717,7 +1002,7 @@ export default function Factures() {
       const montant_ttc = montant_ht + montant_tva;
 
       // Générer le numéro d'avoir basé sur la facture
-      const numeroAvoir = formData.numero || generateAvoirNumero(facturePourAvoir.numero);
+      const numeroAvoir = formData.numero || await generateAvoirNumero(facturePourAvoir.numero);
 
       // Créer l'avoir
       const { error: avoirError } = await supabase.from('avoirs').insert([{
@@ -790,6 +1075,47 @@ export default function Factures() {
 
       if (error) throw error;
 
+      // ✅ NOUVEAU : Si la facture est envoyée par la plateforme (source = 'plateforme') et passe à 'envoyee', notifier le client
+      if (!isAvoir && nouveauStatut === 'envoyee' && doc.source === 'plateforme' && doc.client_id && !isClient) {
+        try {
+          console.log('🔔 [Factures] Tentative d\'envoi de notification pour facture:', doc.numero);
+          
+          // Récupérer le user_id du client depuis espaces_membres_clients
+          const { data: espaceClient, error: espaceError } = await supabase
+            .from('espaces_membres_clients')
+            .select('user_id, client_id')
+            .eq('client_id', doc.client_id)
+            .eq('actif', true)
+            .maybeSingle();
+
+          if (espaceError) {
+            console.error('❌ [Factures] Erreur récupération espace client:', espaceError);
+          }
+
+          if (espaceClient?.user_id) {
+            console.log('✅ [Factures] Espace client trouvé, user_id:', espaceClient.user_id);
+            
+            // Créer la notification
+            const notifResult = await createInvoiceNotification(
+              espaceClient.user_id,
+              doc.numero,
+              doc.id,
+              'created'
+            );
+            
+            if (notifResult.success) {
+              console.log('✅ [Factures] Notification créée avec succès pour facture', doc.numero);
+            } else {
+              console.error('❌ [Factures] Erreur création notification:', notifResult.error);
+            }
+          } else {
+            console.warn('⚠️ [Factures] Aucun espace client trouvé pour client_id:', doc.client_id);
+          }
+        } catch (notifError) {
+          console.error('❌ [Factures] Erreur lors de l\'envoi de la notification:', notifError);
+        }
+      }
+
       await loadFactures();
       await loadAvoirs();
     } catch (error: unknown) {
@@ -835,25 +1161,30 @@ export default function Factures() {
         .eq('facture_id', doc.id)
         .order('ordre');
       
-      interface LigneFacture {
+      interface LigneFactureDB {
         description: string;
         quantite: number;
         prix_unitaire_ht: number;
         taux_tva?: number;
+        montant_ht?: number;
+        tva?: number;
+        montant_tva?: number;
+        montant_ttc?: number;
+        ordre?: number;
       }
-      const lignesArray = (lignesData || []).map((ligne: LigneFacture) => ({
+      const lignesArray = (lignesData || []).map((ligne: LigneFactureDB) => ({
         description: ligne.description,
         quantite: ligne.quantite,
         prix_unitaire_ht: ligne.prix_unitaire_ht,
         taux_tva: ligne.taux_tva || 20,
-        montant_ht: ligne.montant_ht,
+        montant_ht: ligne.montant_ht || 0,
         montant_tva: ligne.tva || ligne.montant_tva || 0,
-        montant_ttc: ligne.montant_ttc,
+        montant_ttc: ligne.montant_ttc || 0,
         ordre: ligne.ordre || 0,
       }));
 
       // Générer le PDF
-      generatePDF({
+      await generatePDF({
         type: (doc.type || (isAvoir ? 'avoir' : 'facture')) as 'facture' | 'proforma' | 'avoir',
         numero: doc.numero,
         date_emission: doc.date_facturation || (doc as any).date_emission || doc.created_at,
@@ -884,6 +1215,7 @@ export default function Factures() {
         motif: isAvoir && 'motif' in documentData ? (documentData as { motif?: string }).motif : undefined,
         notes: documentData.notes,
         statut: doc.statut,
+        entreprise_id: doc.entreprise_id, // Passer l'ID de l'entreprise pour charger les paramètres
       });
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
@@ -905,6 +1237,7 @@ export default function Factures() {
       statut: 'brouillon',
       motif: '',
       notes: '',
+      source: 'plateforme' as 'plateforme' | 'externe' | 'client', // ✅ Réinitialiser la source
     });
     setLignes([]);
     setEditingId(null);
@@ -989,18 +1322,41 @@ export default function Factures() {
     
     let matchesType = false;
     
-    if (isClient === true && filterType === 'recues') {
-      // Pour les clients : filtre "Factures reçues" = uniquement les factures créées par la plateforme
-      matchesType = doc.docType === 'facture' && doc.source === 'plateforme';
-    } else {
-      // Pour tous les autres filtres (Tous, Factures, Proforma, Avoirs) : filtres normaux
-      matchesType = filterType === 'all' || 
-        (filterType === 'facture' && doc.docType === 'facture' && doc.type === 'facture') ||
-        (filterType === 'proforma' && doc.docType === 'facture' && doc.type === 'proforma') ||
-        (filterType === 'avoir' && doc.docType === 'avoir');
+    if (filterType === 'recues') {
+      if (isClient) {
+        // Côté client : afficher uniquement les factures envoyées par la plateforme (source = 'plateforme')
+        matchesType = doc.docType === 'facture' && doc.source === 'plateforme';
+      } else {
+        // Côté plateforme : afficher uniquement les factures reçues de l'extérieur (source = 'externe' ou pas de client_id)
+        matchesType = doc.docType === 'facture' && (doc.source === 'externe' || (!doc.source && !doc.client_id));
+      }
+    } else if (filterType === 'facture') {
+      matchesType = doc.docType === 'facture' && doc.type === 'facture';
+    } else if (filterType === 'proforma') {
+      matchesType = doc.docType === 'facture' && doc.type === 'proforma';
+    } else if (filterType === 'avoir') {
+      matchesType = doc.docType === 'avoir';
+    } else if (filterType === 'all') {
+      if (isClient) {
+        matchesType = true;
+      } else {
+        const source = doc.source || 'plateforme';
+        matchesType = source !== 'client';
+      }
     }
     
     return matchesSearch && matchesType;
+  });
+  
+  // Log de débogage pour comprendre le filtrage
+  console.log('🔍 [Factures] Filtrage documents:', {
+    totalDocuments: allDocuments.length,
+    filteredCount: filteredDocuments.length,
+    filterType,
+    isClient,
+    facturesCount: factures.length,
+    avoirsCount: avoirs.length,
+    sampleSources: allDocuments.slice(0, 5).map(d => ({ numero: d.numero, source: d.source || 'non défini' })),
   });
 
   const facturesEnRetard = factures.filter(f => isFactureEnRetard(f));
@@ -1115,18 +1471,16 @@ export default function Factures() {
         >
           Tous
         </button>
-        {isClient === true && (
-          <button
-            onClick={() => setFilterType('recues')}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              filterType === 'recues'
-                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                : 'bg-white/10 text-gray-300 hover:bg-white/15'
-            }`}
-          >
-            Factures reçues
-          </button>
-        )}
+        <button
+          onClick={() => setFilterType('recues')}
+          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+            filterType === 'recues'
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+              : 'bg-white/10 text-gray-300 hover:bg-white/15'
+          }`}
+        >
+          Factures reçues
+        </button>
         <button
           onClick={() => setFilterType('facture')}
           className={`px-4 py-2 rounded-lg font-medium transition-all ${
@@ -1214,22 +1568,62 @@ export default function Factures() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-2">
-                      <h3 className="text-lg font-bold text-white">{doc.numero}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-white">{doc.numero}</h3>
+                        {/* ✅ Bulle de notification pour les factures non lues (côté client) */}
+                        {isClient && (doc as any).isUnread && (
+                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Nouvelle facture non lue"></span>
+                        )}
+                      </div>
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           isAvoir
                             ? 'bg-orange-500/20 text-orange-400'
                             : isProforma
                             ? 'bg-yellow-500/20 text-yellow-400'
-                            : doc.statut === 'payee'
+                            : (doc as any).displayStatut === 'payee' || doc.statut === 'payee'
                             ? 'bg-green-500/20 text-green-400'
-                            : doc.statut === 'envoyee' || doc.statut === 'valide'
+                            : (doc as any).displayStatut === 'valide' || doc.statut === 'envoyee' || doc.statut === 'valide'
                             ? 'bg-blue-500/20 text-blue-400'
                             : 'bg-gray-500/20 text-gray-400'
                         }`}
                       >
-                        {isAvoir ? 'Avoir' : isProforma ? 'Proforma' : doc.statut}
+                        {isAvoir ? 'Avoir' : isProforma ? 'Proforma' : ((doc as any).displayStatut || doc.statut)}
                       </span>
+                      {/* ✅ Badges pour les types de factures (uniquement côté client pour les factures reçues de la plateforme) */}
+                      {!isAvoir && !isProforma && isClient && doc.source === 'plateforme' && (
+                        <>
+                          {(doc as any).isAbonnement ? (
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400">
+                              Abonnement
+                            </span>
+                          ) : (
+                            (() => {
+                              const notes = doc.notes as any;
+                              const factureType = notes?.type_facture || 'services';
+                              if (factureType === 'services') {
+                                return (
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400">
+                                    Services
+                                  </span>
+                                );
+                              } else {
+                                return (
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400">
+                                    Autres
+                                  </span>
+                                );
+                              }
+                            })()
+                          )}
+                        </>
+                      )}
+                      {/* Badge Abonnement pour les factures liées à un abonnement (côté plateforme) */}
+                      {!isAvoir && !isProforma && !isClient && (doc as any).isAbonnement && (
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400">
+                          Abonnement
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-300 mb-1">Client: {doc.client_nom}</p>
                     <div className="flex items-center gap-4 text-sm text-gray-400">
@@ -1410,22 +1804,46 @@ export default function Factures() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Statut *
-                </label>
-                <select
-                  value={formData.statut}
-                  onChange={(e) => setFormData({ ...formData, statut: e.target.value })}
-                  required
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="brouillon">Brouillon</option>
-                  <option value="envoyee">Envoyée</option>
-                  <option value="en_attente">En attente</option>
-                  <option value="payee">Payée</option>
-                  <option value="annulee">Annulée</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Statut *
+                  </label>
+                  <select
+                    value={formData.statut}
+                    onChange={(e) => setFormData({ ...formData, statut: e.target.value })}
+                    required
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="brouillon">Brouillon</option>
+                    <option value="envoyee">Envoyée</option>
+                    <option value="en_attente">En attente</option>
+                    <option value="payee">Payée</option>
+                    <option value="annulee">Annulée</option>
+                  </select>
+                </div>
+                {/* ✅ NOUVEAU : Champ pour marquer les factures reçues de l'extérieur (uniquement côté plateforme) */}
+                {!isClient && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Origine
+                    </label>
+                    <select
+                      value={formData.source || 'plateforme'}
+                      onChange={(e) => {
+                        const newSource = e.target.value as 'plateforme' | 'externe';
+                        setFormData({ ...formData, source: newSource });
+                      }}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="plateforme">Facture envoyée par la plateforme</option>
+                      <option value="externe">Facture reçue de l'extérieur</option>
+                    </select>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {formData.source === 'externe' ? 'Cette facture apparaîtra dans "Factures reçues"' : 'Cette facture sera envoyée aux clients'}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1504,28 +1922,12 @@ export default function Factures() {
                               type="text"
                               value={ligne.description}
                               onChange={(e) => {
+                                // ✅ Ne mettre à jour que la description, sans recherche automatique
                                 const value = e.target.value;
                                 updateLigne(index, { description: value });
-                                
-                                // Rechercher un article par code ou libellé
-                                if (value && selectedEntreprise) {
-                                  const articleTrouve = articles.find(
-                                    a => a.code.toUpperCase() === value.toUpperCase().trim() ||
-                                         a.code.toUpperCase().startsWith(value.toUpperCase().trim())
-                                  );
-                                  
-                                  if (articleTrouve) {
-                                    // Remplir automatiquement les champs
-                                    updateLigne(index, {
-                                      description: articleTrouve.libelle,
-                                      prix_unitaire_ht: articleTrouve.prix_unitaire_ht,
-                                      taux_tva: articleTrouve.taux_tva,
-                                    });
-                                  }
-                                }
                               }}
                               onKeyDown={(e) => {
-                                // Si on appuie sur Tab ou Enter après avoir tapé un code, chercher l'article
+                                // ✅ Rechercher l'article uniquement sur Tab ou Enter (pas pendant la saisie)
                                 if ((e.key === 'Tab' || e.key === 'Enter') && ligne.description && selectedEntreprise) {
                                   const articleTrouve = articles.find(
                                     a => a.code.toUpperCase() === ligne.description.toUpperCase().trim()
@@ -1533,6 +1935,30 @@ export default function Factures() {
                                   
                                   if (articleTrouve) {
                                     e.preventDefault();
+                                    // ✅ Remplir les champs sans déplacer le focus automatiquement
+                                    updateLigne(index, {
+                                      description: articleTrouve.libelle,
+                                      prix_unitaire_ht: articleTrouve.prix_unitaire_ht,
+                                      taux_tva: articleTrouve.taux_tva,
+                                    });
+                                    // ✅ Si Tab, laisser le navigateur gérer le focus normalement
+                                    // ✅ Si Enter, empêcher le comportement par défaut mais ne pas déplacer le focus
+                                    if (e.key === 'Enter') {
+                                      // Ne rien faire de plus, juste empêcher le submit du formulaire
+                                    }
+                                  }
+                                }
+                              }}
+                              onBlur={(e) => {
+                                // ✅ Rechercher l'article quand on quitte le champ (blur)
+                                const value = e.target.value?.trim();
+                                if (value && selectedEntreprise) {
+                                  const articleTrouve = articles.find(
+                                    a => a.code.toUpperCase() === value.toUpperCase()
+                                  );
+                                  
+                                  if (articleTrouve) {
+                                    // ✅ Remplir les champs sans déplacer le focus
                                     updateLigne(index, {
                                       description: articleTrouve.libelle,
                                       prix_unitaire_ht: articleTrouve.prix_unitaire_ht,
@@ -1543,6 +1969,7 @@ export default function Factures() {
                               }}
                               placeholder="Code (ex: MO1) ou Description"
                               className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              autoComplete="off"
                             />
                             {ligne.description && articles.some(a => a.code.toUpperCase() === ligne.description.toUpperCase().trim()) && (
                               <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg p-2 text-xs text-gray-300 z-10">
@@ -1565,9 +1992,14 @@ export default function Factures() {
                                 const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
                                 updateLigne(index, { quantite: value });
                               }}
+                              onFocus={(e) => {
+                                // ✅ Sélectionner le texte au focus pour faciliter la saisie
+                                e.target.select();
+                              }}
                               placeholder="Qté"
                               min="0"
                               className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              tabIndex={index + 1}
                             />
                           </div>
                           <div className="col-span-4 md:col-span-2">

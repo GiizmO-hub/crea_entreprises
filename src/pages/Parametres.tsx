@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Settings, Building2, Mail, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users, ShieldOff, Crown, Eye, MapPin, Phone, EyeOff } from 'lucide-react';
+import { Settings, Building2, Mail, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users, ShieldOff, Crown, Eye, MapPin, Phone, EyeOff, Image, Palette, Type, Layout, Save, Sparkles } from 'lucide-react';
 import CredentialsModal from '../components/CredentialsModal';
 import { sendClientCredentialsEmail } from '../services/emailService';
 import type { ClientCredentialsEmailData } from '../services/emailService';
@@ -24,7 +24,7 @@ interface ClientInfo {
   created_at: string;
 }
 
-type TabType = 'profil' | 'entreprise' | 'facturation' | 'notifications' | 'securite' | 'abonnement' | 'donnees' | 'clients';
+type TabType = 'profil' | 'entreprise' | 'facturation' | 'documents' | 'notifications' | 'securite' | 'abonnement' | 'donnees' | 'clients';
 
 export default function Parametres() {
   const { user } = useAuth();
@@ -60,7 +60,7 @@ export default function Parametres() {
   } | null>(null);
   const [resendingEmail, setResendingEmail] = useState<string | null>(null);
   const [showEspaceModal, setShowEspaceModal] = useState(false);
-  const [selectedClientForEspace, setSelectedClientForEspace] = useState<ClientInfo | null>(null);
+  const [selectedClientForEspace, setSelectedClientForEspace] = useState<Client | null>(null);
   const [espaceMembreData, setEspaceMembreData] = useState<EspaceMembreData>({
     password: '',
     plan_id: '',
@@ -84,6 +84,13 @@ export default function Parametres() {
   // Initialiser depuis localStorage pour persister même après navigation
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [showClientDetailsModal, setShowClientDetailsModal] = useState(false);
+  
+  // États pour la configuration des documents
+  const [documentParams, setDocumentParams] = useState<any>(null);
+  const [loadingDocumentParams, setLoadingDocumentParams] = useState(false);
+  const [savingDocumentParams, setSavingDocumentParams] = useState(false);
+  const [generatingMentions, setGeneratingMentions] = useState(false);
+  const [selectedEntrepriseForDocs, setSelectedEntrepriseForDocs] = useState<string | null>(null);
   const [confirmedRolesCache, setConfirmedRolesCache] = useState<Record<string, string>>(() => {
     try {
       const saved = localStorage.getItem('confirmedRolesCache');
@@ -130,32 +137,80 @@ export default function Parametres() {
   // Cela évite d'écraser le state local avec des données potentiellement obsolètes
 
   useEffect(() => {
+    // ✅ Variable pour suivre si le composant est monté
+    let isMounted = true;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    
+    const clearAllTimeouts = () => {
+      timeouts.forEach(timeout => clearTimeout(timeout));
+      timeouts.length = 0;
+    };
+    
     if (user && activeTab === 'entreprise') {
       loadEntrepriseConfig();
+    }
+    if (user && activeTab === 'documents') {
+      // Pour les clients, attendre que clientEntreprise soit chargé
+      if (isClient) {
+        if (clientEntreprise) {
+          loadDocumentParams();
+        } else {
+          // Recharger checkIfClient pour obtenir clientEntreprise
+          checkIfClient();
+          // Charger les paramètres après un délai pour laisser le temps à checkIfClient
+          const timeout = setTimeout(() => {
+            if (isMounted) loadDocumentParams();
+          }, 1000);
+          timeouts.push(timeout);
+        }
+      } else {
+        // Pour les utilisateurs plateforme, charger les entreprises d'abord si nécessaire
+        if (entrepriseConfigs.length === 0) {
+          loadEntrepriseConfig();
+          // Charger les paramètres après un délai pour laisser le temps à loadEntrepriseConfig
+          const timeout = setTimeout(() => {
+            if (isMounted) loadDocumentParams();
+          }, 1000);
+          timeouts.push(timeout);
+        } else {
+          loadDocumentParams();
+        }
+      }
     }
     
     // Écouter les événements de mise à jour d'abonnement pour recharger la config
     const handleAbonnementUpdate = () => {
-      if (activeTab === 'entreprise') {
+      if (activeTab === 'entreprise' && isMounted) {
         console.log('🔄 Rechargement config entreprise après mise à jour abonnement');
-        setTimeout(() => {
-          loadEntrepriseConfig();
+        const timeout = setTimeout(() => {
+          if (isMounted) loadEntrepriseConfig();
         }, 500);
+        timeouts.push(timeout);
       }
     };
     
     // Écouter les événements de création d'entreprise pour recharger automatiquement
     const handleEntrepriseCreated = () => {
+      if (!isMounted) return;
       console.log('🔄 Événement entrepriseCreated reçu - Rechargement config entreprise et clients');
       // Recharger la config entreprise (toujours, même si pas sur l'onglet)
-      setTimeout(() => {
-        loadEntrepriseConfig();
+      const timeout1 = setTimeout(() => {
+        if (isMounted) loadEntrepriseConfig();
       }, 1000);
+      timeouts.push(timeout1);
       // Recharger les clients aussi si on est sur l'onglet clients
       if (activeTab === 'clients' && isSuperAdmin) {
-        setTimeout(() => {
-          loadAllClients();
+        const timeout2 = setTimeout(() => {
+          if (isMounted) loadAllClients();
         }, 1500);
+        timeouts.push(timeout2);
+      }
+      // Recharger les paramètres documents si on est sur cet onglet
+      if (activeTab === 'documents') {
+        const timeout3 = setTimeout(() => {
+          if (isMounted) loadDocumentParams();
+        }, 1500);
+        timeouts.push(timeout3);
       }
     };
     
@@ -163,10 +218,12 @@ export default function Parametres() {
     window.addEventListener('entrepriseCreated', handleEntrepriseCreated);
     
     return () => {
+      isMounted = false;
+      clearAllTimeouts();
       window.removeEventListener('abonnementUpdated', handleAbonnementUpdate);
       window.removeEventListener('entrepriseCreated', handleEntrepriseCreated);
     };
-  }, [user, activeTab, isSuperAdmin]);
+  }, [user, activeTab, isSuperAdmin, isClient, clientEntreprise, entrepriseConfigs.length]);
 
   const loadPlans = async () => {
     try {
@@ -242,6 +299,7 @@ export default function Parametres() {
       
       if (!entrepriseError && entreprise) {
         setClientEntreprise(entreprise);
+        setSelectedEntrepriseForDocs(entreprise.id);
         // Initialiser les données du formulaire profil avec les données de l'entreprise
         setProfileFormData({
           adresse: entreprise.adresse || '',
@@ -257,6 +315,206 @@ export default function Parametres() {
     }
   };
 
+  // Charger les paramètres de documents
+  const loadDocumentParams = async () => {
+    if (!user) return;
+    
+    setLoadingDocumentParams(true);
+    try {
+      // Déterminer l'entreprise_id
+      let entrepriseId: string | null = null;
+      
+      if (isClient && clientEntreprise) {
+        entrepriseId = clientEntreprise.id;
+      } else if (selectedEntrepriseForDocs) {
+        entrepriseId = selectedEntrepriseForDocs;
+      } else if (entrepriseConfigs.length > 0) {
+        entrepriseId = entrepriseConfigs[0].id;
+        setSelectedEntrepriseForDocs(entrepriseId);
+      }
+      
+      if (!entrepriseId) {
+        console.log('⚠️ Aucune entreprise trouvée pour charger les paramètres de documents');
+        setDocumentParams(null);
+        setLoadingDocumentParams(false);
+        return;
+      }
+      
+      const { data, error } = await supabase
+        .from('parametres_documents')
+        .select('*')
+        .eq('entreprise_id', entrepriseId)
+        .maybeSingle();
+      
+      // Gérer les erreurs : 404 = table n'existe pas encore, PGRST116 = pas de ligne
+      if (error) {
+        // Si la table n'existe pas encore (migration non appliquée), créer juste la config par défaut
+        if (error.code === '42P01' || error.message?.includes('does not exist') || error.message?.includes('relation') || error.message?.includes('table')) {
+          console.warn('⚠️ Table parametres_documents n\'existe pas encore. Utilisation de la configuration par défaut.');
+          // Créer une configuration par défaut sans sauvegarder
+          const defaultParams = {
+            entreprise_id: entrepriseId,
+            logo_position: 'left',
+            logo_size: 40,
+            show_entreprise_nom: true,
+            show_entreprise_adresse: true,
+            show_entreprise_contact: true,
+            show_entreprise_siret: true,
+            primary_color: '#3b82f6',
+            secondary_color: '#6b7280',
+            text_color: '#1f2937',
+            header_font: 'helvetica',
+            header_font_size: 24,
+            body_font: 'helvetica',
+            body_font_size: 10,
+            footer_text: '',
+            capital_social: '',
+            rcs: '',
+            tva_intracommunautaire: '',
+          };
+          setDocumentParams(defaultParams);
+          setLoadingDocumentParams(false);
+          return;
+        }
+        // PGRST116 = pas de ligne retournée (normal si pas encore de config)
+        if (error.code !== 'PGRST116') {
+          throw error;
+        }
+      }
+      
+      if (data) {
+        setDocumentParams(data);
+      } else {
+        // Créer une configuration par défaut
+        const defaultParams = {
+          entreprise_id: entrepriseId,
+          logo_position: 'left',
+          logo_size: 40,
+          show_entreprise_nom: true,
+          show_entreprise_adresse: true,
+          show_entreprise_contact: true,
+          show_entreprise_siret: true,
+          primary_color: '#3b82f6',
+          secondary_color: '#6b7280',
+          text_color: '#1f2937',
+          header_font: 'helvetica',
+          header_font_size: 24,
+          body_font: 'helvetica',
+          body_font_size: 10,
+          footer_text: '',
+          capital_social: '',
+          rcs: '',
+          tva_intracommunautaire: '',
+        };
+        setDocumentParams(defaultParams);
+      }
+    } catch (error) {
+      console.error('Erreur chargement paramètres documents:', error);
+      alert('❌ Erreur lors du chargement des paramètres: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
+    } finally {
+      setLoadingDocumentParams(false);
+    }
+  };
+
+  // Générer les mentions légales avec IA
+  const generateLegalMentions = async () => {
+    if (!user || !documentParams) return;
+
+    const entrepriseId = isClient && clientEntreprise 
+      ? clientEntreprise.id 
+      : selectedEntrepriseForDocs || documentParams.entreprise_id;
+
+    if (!entrepriseId) {
+      alert('❌ Aucune entreprise sélectionnée');
+      return;
+    }
+
+    setGeneratingMentions(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Non authentifié');
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/generate-legal-mentions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseAnonKey,
+          },
+          body: JSON.stringify({ entreprise_id: entrepriseId }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erreur lors de la génération');
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.mentions) {
+        setDocumentParams({
+          ...documentParams,
+          footer_text: result.mentions.footer_text || '',
+          capital_social: result.mentions.capital_social || '',
+          rcs: result.mentions.rcs || '',
+          tva_intracommunautaire: result.mentions.tva_intracommunautaire || '',
+        });
+        alert(`✅ Mentions légales générées avec succès !\n\nIA utilisée: ${result.ai_provider === 'gemini' ? 'Google Gemini' : result.ai_provider === 'openai' ? 'OpenAI' : 'Par défaut'}`);
+      } else {
+        throw new Error('Réponse invalide de l\'API');
+      }
+    } catch (error) {
+      console.error('Erreur génération mentions légales:', error);
+      alert('❌ Erreur lors de la génération: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
+    } finally {
+      setGeneratingMentions(false);
+    }
+  };
+
+  // Sauvegarder les paramètres de documents
+  const saveDocumentParams = async () => {
+    if (!user || !documentParams) return;
+    
+    setSavingDocumentParams(true);
+    try {
+      const { data, error } = await supabase
+        .from('parametres_documents')
+        .upsert({
+          ...documentParams,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'entreprise_id'
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        // Si la table n'existe pas encore, informer l'utilisateur
+        if (error.code === '42P01' || error.message?.includes('does not exist') || error.message?.includes('relation') || error.message?.includes('table')) {
+          alert('⚠️ La table parametres_documents n\'existe pas encore.\n\nVeuillez appliquer la migration SQL dans Supabase:\n20250131000001_create_parametres_documents.sql\n\nLes paramètres seront sauvegardés après l\'application de la migration.');
+          return;
+        }
+        throw error;
+      }
+      
+      setDocumentParams(data);
+      alert('✅ Paramètres enregistrés avec succès !');
+    } catch (error) {
+      console.error('Erreur sauvegarde paramètres documents:', error);
+      alert('❌ Erreur lors de la sauvegarde: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
+    } finally {
+      setSavingDocumentParams(false);
+    }
+  };
+
   const loadEntrepriseConfig = async () => {
     if (!user) {
       console.log('⚠️ loadEntrepriseConfig: Pas d\'utilisateur connecté');
@@ -267,11 +525,17 @@ export default function Parametres() {
     try {
       console.log('🔄 loadEntrepriseConfig: Chargement des entreprises pour user:', user.id);
       
-      // ✅ Filtrer directement par user_id pour éviter problèmes RLS
-      const { data: entreprisesData, error: entreprisesError } = await supabase
+      // ✅ Si super admin plateforme, charger TOUTES les entreprises
+      // Sinon, charger uniquement les entreprises de l'utilisateur
+      let query = supabase
         .from('entreprises')
-        .select('id, nom, statut, statut_paiement, created_at, user_id')
-        .eq('user_id', user.id)
+        .select('id, nom, statut, statut_paiement, created_at, user_id');
+      
+      if (!isSuperAdmin) {
+        query = query.eq('user_id', user.id);
+      }
+      
+      const { data: entreprisesData, error: entreprisesError } = await query
         .order('created_at', { ascending: false });
 
       if (entreprisesError) {
@@ -392,30 +656,52 @@ export default function Parametres() {
     try {
       setLoading(true);
       
-      // ✅ Récupérer toutes les entreprises de l'utilisateur d'abord
-      const { data: userEntreprises, error: entreprisesError } = await supabase
-        .from('entreprises')
-        .select('id')
-        .eq('user_id', user.id);
+      // ✅ Si super admin plateforme, charger TOUTES les entreprises
+      // Sinon, charger uniquement les entreprises de l'utilisateur
+      let entrepriseIds: string[] = [];
       
-      if (entreprisesError) {
-        console.error('❌ Erreur chargement entreprises pour clients:', entreprisesError);
-        setClients([]);
-        setLoading(false);
-        return;
+      if (isSuperAdmin) {
+        // Super admin plateforme voit TOUTES les entreprises
+        const { data: allEntreprises, error: entreprisesError } = await supabase
+          .from('entreprises')
+          .select('id');
+        
+        if (entreprisesError) {
+          console.error('❌ Erreur chargement toutes les entreprises:', entreprisesError);
+          setClients([]);
+          setLoading(false);
+          return;
+        }
+        
+        entrepriseIds = allEntreprises?.map(e => e.id) || [];
+        console.log('👑 Super Admin: Chargement clients de TOUTES les entreprises:', entrepriseIds.length);
+      } else {
+        // Utilisateur normal : charger uniquement ses entreprises
+        const { data: userEntreprises, error: entreprisesError } = await supabase
+          .from('entreprises')
+          .select('id')
+          .eq('user_id', user.id);
+        
+        if (entreprisesError) {
+          console.error('❌ Erreur chargement entreprises pour clients:', entreprisesError);
+          setClients([]);
+          setLoading(false);
+          return;
+        }
+        
+        if (!userEntreprises || userEntreprises.length === 0) {
+          console.log('⚠️ Aucune entreprise trouvée pour charger les clients');
+          setClients([]);
+          setLoading(false);
+          return;
+        }
+        
+        entrepriseIds = userEntreprises.map(e => e.id);
+        console.log('📦 Entreprises trouvées:', entrepriseIds.length);
       }
-      
-      if (!userEntreprises || userEntreprises.length === 0) {
-        console.log('⚠️ Aucune entreprise trouvée pour charger les clients');
-        setClients([]);
-        setLoading(false);
-        return;
-      }
-      
-      const entrepriseIds = userEntreprises.map(e => e.id);
-      console.log('📦 Entreprises trouvées:', entrepriseIds.length);
       
       // ✅ Charger les clients directement depuis la table clients avec filtre par entreprise_id
+      // ✅ CORRECTION : Récupérer TOUS les champs créés lors de la création d'entreprise
       const { data: clientsRaw, error: clientsError } = await supabase
         .from('clients')
         .select(`
@@ -424,6 +710,13 @@ export default function Parametres() {
           nom,
           prenom,
           email,
+          telephone,
+          adresse,
+          code_postal,
+          ville,
+          siret,
+          entreprise_nom,
+          statut,
           created_at,
           role_id,
           entreprises!inner(nom)
@@ -469,25 +762,37 @@ export default function Parametres() {
       }
 
       // ✅ Transformer les données pour correspondre au format attendu
+      // Le type réel retourné par Supabase inclut entreprises comme array ou object
       interface ClientRaw {
         id: string;
         nom: string | null;
         prenom: string | null;
         email: string | null;
-        entreprise_id: string;
+        telephone: string | null;
+        adresse: string | null;
+        code_postal: string | null;
+        ville: string | null;
+        siret: string | null;
         entreprise_nom: string | null;
-        role_code?: string;
-        role_nom?: string;
-        espace_actif?: boolean;
-        espace_id?: string | null;
-        user_id?: string | null;
+        statut: string | null;
+        entreprise_id: string;
+        role_id?: string | null;
         created_at: string;
+        entreprises?: { nom: string } | Array<{ nom: string }> | null;
       }
       const data = clientsRaw.map((c: ClientRaw) => {
         const roleFromView = clientsWithRolesMap[c.id];
-        const entrepriseNom = Array.isArray(c.entreprises) 
-          ? c.entreprises[0]?.nom || 'N/A'
-          : (c.entreprises?.nom || 'N/A');
+        // Extraire le nom de l'entreprise depuis la structure Supabase
+        // ✅ PRIORITÉ : Utiliser entreprise_nom de la table clients (créé lors de la création)
+        // Sinon, utiliser le nom depuis la relation entreprises
+        let entrepriseNom = c.entreprise_nom || 'N/A';
+        if (entrepriseNom === 'N/A' || !entrepriseNom) {
+          if (Array.isArray(c.entreprises) && c.entreprises.length > 0) {
+            entrepriseNom = c.entreprises[0]?.nom || 'N/A';
+          } else if (c.entreprises && typeof c.entreprises === 'object' && 'nom' in c.entreprises) {
+            entrepriseNom = (c.entreprises as { nom: string }).nom || 'N/A';
+          }
+        }
         
         return {
           id: c.id,
@@ -495,6 +800,13 @@ export default function Parametres() {
           nom: c.nom,
           prenom: c.prenom,
           email: c.email,
+          telephone: c.telephone,
+          adresse: c.adresse,
+          code_postal: c.code_postal,
+          ville: c.ville,
+          siret: c.siret,
+          entreprise_nom: entrepriseNom,
+          statut: c.statut,
           created_at: c.created_at,
           role_code: roleFromView?.role_code || 'client',
           role_nom: roleFromView?.role_nom || 'Client',
@@ -559,6 +871,13 @@ export default function Parametres() {
           nom?: string;
           prenom?: string;
           email: string;
+          telephone?: string | null;
+          adresse?: string | null;
+          code_postal?: string | null;
+          ville?: string | null;
+          siret?: string | null;
+          entreprise_nom?: string | null;
+          statut?: string | null;
           created_at: string;
           entreprises?: { nom: string } | null | Array<{ nom: string }>;
           espaces_membres_clients?: Array<{ id: string; actif: boolean; user_id: string | null }> | null;
@@ -567,12 +886,15 @@ export default function Parametres() {
         // Récupérer l'espace depuis la map (plus fiable que le JOIN)
         const espace = espacesMap[c.id] || null;
         
-        // Gérer le nom de l'entreprise (peut être array ou object)
-        let entrepriseNom = 'N/A';
-        if (Array.isArray(c.entreprises) && c.entreprises.length > 0) {
-          entrepriseNom = c.entreprises[0]?.nom || 'N/A';
-        } else if (c.entreprises && typeof c.entreprises === 'object' && 'nom' in c.entreprises) {
-          entrepriseNom = (c.entreprises as { nom: string }).nom || 'N/A';
+        // ✅ CORRECTION : Utiliser entreprise_nom depuis les données récupérées (créé lors de la création)
+        // Sinon, utiliser le nom depuis la relation entreprises
+        let entrepriseNom = c.entreprise_nom || 'N/A';
+        if (entrepriseNom === 'N/A' || !entrepriseNom) {
+          if (Array.isArray(c.entreprises) && c.entreprises.length > 0) {
+            entrepriseNom = c.entreprises[0]?.nom || 'N/A';
+          } else if (c.entreprises && typeof c.entreprises === 'object' && 'nom' in c.entreprises) {
+            entrepriseNom = (c.entreprises as { nom: string }).nom || 'N/A';
+          }
         }
         
         // Récupérer le rôle avec priorité: cache confirmé (localStorage) > cache state > roleCodesMap > 'client'
@@ -692,7 +1014,7 @@ export default function Parametres() {
       nom: client.client_nom || '',
       prenom: client.client_prenom || '',
       email: client.email || '',
-      statut: client.statut || 'actif',
+      statut: 'actif', // Valeur par défaut car ClientInfo n'a pas de statut
       created_at: client.created_at || new Date().toISOString(),
     };
 
@@ -747,8 +1069,8 @@ export default function Parametres() {
           setClientCredentials({
             email: finalEmail,
             password: finalPassword,
-            clientName: selectedClientForEspace.client_nom || selectedClientForEspace.nom || '',
-            clientPrenom: selectedClientForEspace.client_prenom || selectedClientForEspace.prenom || undefined,
+            clientName: selectedClientForEspace.nom || '',
+            clientPrenom: selectedClientForEspace.prenom || undefined,
             entrepriseNom: selectedClientForEspace.entreprise_nom || '',
           });
           
@@ -1005,28 +1327,30 @@ export default function Parametres() {
 
   const tabs = [
     { id: 'profil' as TabType, label: 'Profil', icon: User },
-    // Masquer l'onglet "Entreprise" pour les clients (seulement pour super admin plateforme)
-    ...(isSuperAdmin && !isClient ? [{ id: 'entreprise' as TabType, label: 'Entreprise', icon: Building }] : []),
+    // Onglet "Entreprise" visible uniquement pour super admin plateforme (pour vérifier le workflow de création)
+    ...(isSuperAdmin ? [{ id: 'entreprise' as TabType, label: 'Entreprises Plateforme', icon: Building }] : []),
     { id: 'facturation' as TabType, label: 'Facturation', icon: FileText },
+    { id: 'documents' as TabType, label: 'En-têtes Documents', icon: FileText },
     { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },
     { id: 'securite' as TabType, label: 'Sécurité', icon: Lock },
     { id: 'abonnement' as TabType, label: 'Abonnement', icon: CreditCard },
     { id: 'donnees' as TabType, label: 'Données', icon: Database },
-    ...(isSuperAdmin && !isClient ? [{ id: 'clients' as TabType, label: 'Gestion Clients', icon: Users }] : []),
+    ...(isSuperAdmin ? [{ id: 'clients' as TabType, label: 'Gestion Clients', icon: Users }] : []),
   ];
 
   const renderTabContent = () => {
+    console.log('🔄 [Parametres] Rendu contenu onglet:', activeTab);
     switch (activeTab) {
-      case 'profil':
-        // Vue Profil pour les clients avec informations entreprise
-        if (isClient && clientEntreprise) {
-          return (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-white mb-4">Profil Utilisateur</h2>
-              
-              {/* Informations de l'entreprise */}
-              <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
-                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+        case 'profil':
+          // Vue Profil pour les clients avec informations entreprise
+          if (isClient && clientEntreprise) {
+            return (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-white mb-4">Profil Utilisateur</h2>
+                
+                {/* Informations de l'entreprise */}
+                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                  <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                   <Building2 className="w-5 h-5" />
                   Informations de l'entreprise
                 </h3>
@@ -1317,12 +1641,497 @@ export default function Parametres() {
           </div>
         );
 
-      case 'notifications':
+      case 'documents':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Notifications</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <FileText className="w-6 h-6" />
+                Configuration des En-têtes de Documents
+              </h2>
+              {documentParams && (
+                <button
+                  onClick={saveDocumentParams}
+                  disabled={savingDocumentParams || loadingDocumentParams}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {savingDocumentParams ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              )}
+            </div>
+
+            {loadingDocumentParams ? (
+              <div className="text-center text-gray-400 py-8">Chargement des paramètres...</div>
+            ) : !documentParams ? (
+              <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
+                <p className="text-gray-400">Aucune entreprise trouvée. Veuillez créer une entreprise d'abord.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Sélection entreprise (pour plateforme) */}
+                {!isClient && entrepriseConfigs.length > 1 && (
+                  <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Entreprise
+                    </label>
+                    <select
+                      value={selectedEntrepriseForDocs || ''}
+                      onChange={(e) => {
+                        setSelectedEntrepriseForDocs(e.target.value);
+                        // ✅ Utiliser requestAnimationFrame au lieu de setTimeout pour éviter les problèmes de nettoyage
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(() => {
+                            loadDocumentParams();
+                          });
+                        });
+                      }}
+                      className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {entrepriseConfigs.map((ent) => (
+                        <option key={ent.id} value={ent.id}>
+                          {ent.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Logo */}
+                <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Image className="w-5 h-5" />
+                    Logo
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">URL du logo</label>
+                      <input
+                        type="url"
+                        value={documentParams.logo_url || ''}
+                        onChange={(e) => setDocumentParams({ ...documentParams, logo_url: e.target.value })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="https://example.com/logo.png"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Position du logo</label>
+                      <select
+                        value={documentParams.logo_position || 'left'}
+                        onChange={(e) => setDocumentParams({ ...documentParams, logo_position: e.target.value as 'left' | 'right' | 'center' | 'none' })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="left">Gauche</option>
+                        <option value="right">Droite</option>
+                        <option value="center">Centre</option>
+                        <option value="none">Aucun</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Taille du logo (px)</label>
+                      <input
+                        type="number"
+                        min="20"
+                        max="200"
+                        value={documentParams.logo_size || 40}
+                        onChange={(e) => setDocumentParams({ ...documentParams, logo_size: parseInt(e.target.value) || 40 })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Informations à afficher */}
+                <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Layout className="w-5 h-5" />
+                    Informations à afficher
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={documentParams.show_entreprise_nom !== false}
+                        onChange={(e) => setDocumentParams({ ...documentParams, show_entreprise_nom: e.target.checked })}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Nom entreprise</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={documentParams.show_entreprise_adresse !== false}
+                        onChange={(e) => setDocumentParams({ ...documentParams, show_entreprise_adresse: e.target.checked })}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Adresse</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={documentParams.show_entreprise_contact !== false}
+                        onChange={(e) => setDocumentParams({ ...documentParams, show_entreprise_contact: e.target.checked })}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Contact</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={documentParams.show_entreprise_siret !== false}
+                        onChange={(e) => setDocumentParams({ ...documentParams, show_entreprise_siret: e.target.checked })}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">SIRET</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Couleurs */}
+                <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Palette className="w-5 h-5" />
+                    Couleurs
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Couleur principale</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="color"
+                          value={documentParams.primary_color || '#3b82f6'}
+                          onChange={(e) => setDocumentParams({ ...documentParams, primary_color: e.target.value })}
+                          className="w-16 h-10 rounded border border-white/10 cursor-pointer"
+                        />
+                        <input
+                          type="text"
+                          value={documentParams.primary_color || '#3b82f6'}
+                          onChange={(e) => setDocumentParams({ ...documentParams, primary_color: e.target.value })}
+                          className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="#3B82F6"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Couleur secondaire</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="color"
+                          value={documentParams.secondary_color || '#6b7280'}
+                          onChange={(e) => setDocumentParams({ ...documentParams, secondary_color: e.target.value })}
+                          className="w-16 h-10 rounded border border-white/10 cursor-pointer"
+                        />
+                        <input
+                          type="text"
+                          value={documentParams.secondary_color || '#6b7280'}
+                          onChange={(e) => setDocumentParams({ ...documentParams, secondary_color: e.target.value })}
+                          className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="#1F2937"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Couleur texte</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="color"
+                          value={documentParams.text_color || '#1f2937'}
+                          onChange={(e) => setDocumentParams({ ...documentParams, text_color: e.target.value })}
+                          className="w-16 h-10 rounded border border-white/10 cursor-pointer"
+                        />
+                        <input
+                          type="text"
+                          value={documentParams.text_color || '#1f2937'}
+                          onChange={(e) => setDocumentParams({ ...documentParams, text_color: e.target.value })}
+                          className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="#FFFFFF"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Typographie */}
+                <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Type className="w-5 h-5" />
+                    Typographie
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Police titre</label>
+                      <select
+                        value={documentParams.header_font || 'helvetica'}
+                        onChange={(e) => setDocumentParams({ ...documentParams, header_font: e.target.value as 'helvetica' | 'times' | 'courier' })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="helvetica">Helvetica</option>
+                        <option value="times">Times</option>
+                        <option value="courier">Courier</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Taille titre (px)</label>
+                      <input
+                        type="number"
+                        min="12"
+                        max="48"
+                        value={documentParams.header_font_size || 24}
+                        onChange={(e) => setDocumentParams({ ...documentParams, header_font_size: parseInt(e.target.value) || 24 })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Police texte</label>
+                      <select
+                        value={documentParams.body_font || 'helvetica'}
+                        onChange={(e) => setDocumentParams({ ...documentParams, body_font: e.target.value as 'helvetica' | 'times' | 'courier' })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="helvetica">Helvetica</option>
+                        <option value="times">Times</option>
+                        <option value="courier">Courier</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Taille texte (px)</label>
+                      <input
+                        type="number"
+                        min="8"
+                        max="20"
+                        value={documentParams.body_font_size || 10}
+                        onChange={(e) => setDocumentParams({ ...documentParams, body_font_size: parseInt(e.target.value) || 10 })}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mentions légales */}
+                <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white">Mentions légales</h3>
+                    <button
+                      onClick={generateLegalMentions}
+                      disabled={generatingMentions || !documentParams}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {generatingMentions ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Génération...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          <span>Générer avec IA</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Mentions légales (texte libre)</label>
+                      <textarea
+                        value={documentParams.footer_text || ''}
+                        onChange={(e) => setDocumentParams({ ...documentParams, footer_text: e.target.value })}
+                        rows={4}
+                        className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ex: Capital social, RCS, TVA intracommunautaire..."
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">Capital social</label>
+                        <input
+                          type="text"
+                          value={documentParams.capital_social || ''}
+                          onChange={(e) => setDocumentParams({ ...documentParams, capital_social: e.target.value })}
+                          className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Ex: 10 000 €"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">RCS</label>
+                        <input
+                          type="text"
+                          value={documentParams.rcs || ''}
+                          onChange={(e) => setDocumentParams({ ...documentParams, rcs: e.target.value })}
+                          className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Ex: RCS Paris B 123 456 789"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">TVA Intracommunautaire</label>
+                        <input
+                          type="text"
+                          value={documentParams.tva_intracommunautaire || ''}
+                          onChange={(e) => setDocumentParams({ ...documentParams, tva_intracommunautaire: e.target.value })}
+                          className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Ex: FR12 345678901"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bouton sauvegarder en bas */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={saveDocumentParams}
+                    disabled={savingDocumentParams || loadingDocumentParams}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50"
+                  >
+                    <Save className="w-5 h-5" />
+                    {savingDocumentParams ? 'Enregistrement...' : 'Enregistrer les paramètres'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'notifications':
+        console.log('✅ [Parametres] Rendu onglet notifications');
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <Bell className="w-6 h-6" />
+                Configuration des Notifications
+              </h2>
+              <button
+                onClick={() => {
+                  window.location.hash = 'notifications';
+                }}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+              >
+                Voir toutes les notifications
+              </button>
+            </div>
+
             <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
-              <p className="text-gray-400">Configuration des notifications (à implémenter)</p>
+              <h3 className="text-lg font-bold text-white mb-4">Préférences de notifications</h3>
+              <p className="text-gray-400 mb-6">
+                Configurez vos préférences pour recevoir des notifications sur différents événements.
+              </p>
+
+              <div className="space-y-4">
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <h4 className="text-md font-semibold text-white mb-3">Notifications Email</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Nouvelles factures créées</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Paiements reçus</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Factures en retard</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Rappels d'échéances (7 jours avant)</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Nouveaux clients ajoutés</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <h4 className="text-md font-semibold text-white mb-3">Notifications In-App</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Activer les notifications push</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Son de notification</span>
+                    </label>
+                    <div className="mt-4">
+                      <label className="block text-sm text-gray-300 mb-2">Fréquence des notifications</label>
+                      <select className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="immediate">Immédiat</option>
+                        <option value="daily">Quotidien (résumé)</option>
+                        <option value="weekly">Hebdomadaire (résumé)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <h4 className="text-md font-semibold text-white mb-3">Mode Ne Pas Déranger</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300">Activer le mode ne pas déranger</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">Heure de début</label>
+                        <input
+                          type="time"
+                          defaultValue="22:00"
+                          className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">Heure de fin</label>
+                        <input
+                          type="time"
+                          defaultValue="08:00"
+                          className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+                  >
+                    Enregistrer les préférences
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -1664,7 +2473,10 @@ export default function Parametres() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  console.log('🔄 [Parametres] Changement d\'onglet:', tab.id);
+                  setActiveTab(tab.id);
+                }}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'border-b-2 border-purple-400 text-purple-400'

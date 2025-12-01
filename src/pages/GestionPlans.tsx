@@ -76,8 +76,12 @@ export default function GestionPlans() {
   });
 
   useEffect(() => {
-    checkSuperAdmin();
-    loadData();
+    if (user) {
+      checkSuperAdmin();
+      loadData();
+    } else {
+      setLoading(false);
+    }
   }, [user]);
 
   const checkSuperAdmin = async () => {
@@ -87,22 +91,102 @@ export default function GestionPlans() {
     }
 
     try {
+      // ✅ NOUVEAU : Utiliser is_platform_super_admin pour distinguer super_admin plateforme vs client
+      const { data: isPlatformAdmin, error: platformAdminError } = await supabase.rpc('is_platform_super_admin');
+
+      // Si la fonction n'existe pas (404) ou erreur, ignorer et continuer avec les autres méthodes
+      if (platformAdminError) {
+        if (platformAdminError.code === 'PGRST204' || platformAdminError.message?.includes('404') || platformAdminError.code === '42883') {
+          console.log('⚠️ Fonction is_platform_super_admin non disponible, utilisation méthode fallback');
+        } else {
+          console.warn('⚠️ Erreur is_platform_super_admin:', platformAdminError);
+        }
+      } else if (isPlatformAdmin === true) {
+        console.log('✅ Super admin plateforme détecté (accès complet)');
+        setIsSuperAdmin(true);
+        return;
+      }
+
+      // Méthode de fallback : Utiliser la fonction RPC qui contourne RLS
       const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
+      
+      // Si get_current_user_role indique is_platform_super_admin, utiliser cette info
+      if (!rpcError && roleData && roleData.is_platform_super_admin === true) {
+        console.log('✅ Super admin plateforme détecté via get_current_user_role');
+        setIsSuperAdmin(true);
+        return;
+      }
+      
       if (!rpcError && roleData) {
+        // Vérifier si c'est un client (ne doit pas avoir accès aux modules)
+        const { data: isClient } = await supabase
+          .from('espaces_membres_clients')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (isClient) {
+          // C'est un client, même si super_admin, il n'est pas super_admin plateforme
+          console.log('✅ Utilisateur est un client (pas super_admin plateforme)');
+          setIsSuperAdmin(false);
+          return;
+        }
+
         const isAdmin = roleData.is_super_admin === true || roleData.is_admin === true;
+        console.log('✅ Rôle vérifié via RPC:', roleData.role, '-> isSuperAdmin:', isAdmin);
         setIsSuperAdmin(isAdmin);
         return;
       }
+
+      // Méthode 2 : Essayer de lire directement depuis la table utilisateurs
       const { data: utilisateur, error: tableError } = await supabase
         .from('utilisateurs')
         .select('role')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!tableError && utilisateur) {
+        // Vérifier si c'est un client
+        const { data: isClient } = await supabase
+          .from('espaces_membres_clients')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (isClient) {
+          // C'est un client, même si super_admin, il n'est pas super_admin plateforme
+          console.log('✅ Utilisateur est un client (pas super_admin plateforme)');
+          setIsSuperAdmin(false);
+          return;
+        }
+
         const isAdmin = utilisateur.role === 'super_admin' || utilisateur.role === 'admin';
+        console.log('✅ Rôle vérifié dans utilisateurs:', utilisateur.role, '-> isSuperAdmin:', isAdmin);
         setIsSuperAdmin(isAdmin);
+        return;
       }
+
+      // Méthode 3 : Fallback sur user_metadata
+      console.warn('⚠️ Impossible de lire utilisateurs, fallback sur user_metadata');
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const role = authUser?.user_metadata?.role || authUser?.app_metadata?.role;
+      
+      // Vérifier si c'est un client
+      const { data: isClient } = await supabase
+        .from('espaces_membres_clients')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (isClient) {
+        console.log('✅ Utilisateur est un client (pas super_admin plateforme)');
+        setIsSuperAdmin(false);
+        return;
+      }
+
+      const isAdmin = role === 'super_admin' || role === 'admin';
+      console.log('✅ Rôle vérifié via user_metadata:', role, '-> isSuperAdmin:', isAdmin);
+      setIsSuperAdmin(isAdmin);
     } catch (error) {
       console.error('Erreur vérification super admin:', error);
       setIsSuperAdmin(false);
@@ -112,13 +196,21 @@ export default function GestionPlans() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Charger les plans
+      console.log('📋 [GestionPlans] Début chargement données...');
+      
+      // Charger les plans - SANS FILTRE pour voir TOUS les plans
       const { data: plansData, error: plansError } = await supabase
         .from('plans_abonnement')
         .select('*')
         .order('ordre', { ascending: true });
 
-      if (plansError) throw plansError;
+      if (plansError) {
+        console.error('❌ [GestionPlans] Erreur chargement plans:', plansError);
+        setPlans([]);
+      } else {
+        console.log(`✅ [GestionPlans] ${plansData?.length || 0} plan(s) chargé(s)`);
+        // Ne pas définir setPlans ici, on le fera après avoir chargé les modules
+      }
 
       // Charger les modules créés
       const { data: modulesData, error: modulesError } = await supabase
@@ -127,77 +219,73 @@ export default function GestionPlans() {
         .eq('est_cree', true)
         .order('module_nom');
 
-      if (modulesError) throw modulesError;
-      setModules(modulesData || []);
+      if (modulesError) {
+        console.error('❌ [GestionPlans] Erreur chargement modules:', modulesError);
+        setModules([]);
+      } else {
+        console.log(`✅ [GestionPlans] ${modulesData?.length || 0} module(s) créé(s) chargé(s)`);
+        setModules(modulesData || []);
+      }
 
-      // Pour chaque plan, charger ses modules
-      const plansWithModules = await Promise.all(
-        (plansData || []).map(async (plan) => {
-          try {
-            const { data: planModulesData, error: modulesError } = await supabase.rpc('get_plan_modules', {
-              p_plan_id: plan.id
-            });
-            
-            if (modulesError) {
-              console.error(`Erreur chargement modules pour plan ${plan.id}:`, modulesError);
+      // Charger les modules pour chaque plan
+      if (plansData && plansData.length > 0) {
+        console.log('📦 [GestionPlans] Chargement modules pour chaque plan...');
+        const plansWithModules = await Promise.all(
+          plansData.map(async (plan) => {
+            try {
+              const { data: planModulesData, error: rpcError } = await supabase.rpc('get_plan_modules', {
+                p_plan_id: plan.id
+              });
+              
+              if (rpcError) {
+                console.warn(`⚠️ [GestionPlans] Erreur get_plan_modules pour plan ${plan.nom}:`, rpcError);
+                return {
+                  ...plan,
+                  modules: [],
+                };
+              }
+              
+              const normalizedModules = (planModulesData || []).map((mod: any) => ({
+                module_code: mod.module_code || '',
+                module_nom: mod.module_nom || '',
+                module_description: mod.module_description || '',
+                categorie: mod.categorie || 'core',
+                inclus: mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true',
+                prix_mensuel: parseFloat(String(mod.prix_mensuel || 0)),
+                prix_annuel: parseFloat(String(mod.prix_annuel || 0)),
+                est_cree: mod.est_cree === true || mod.est_cree === 'true' || String(mod.est_cree).toLowerCase() === 'true',
+                actif: mod.actif === true || mod.actif === 'true' || String(mod.actif).toLowerCase() === 'true',
+              }));
+              
+              console.log(`✅ [GestionPlans] Plan "${plan.nom}": ${normalizedModules.filter(m => m.inclus).length} module(s) inclus`);
+              
+              return {
+                ...plan,
+                modules: normalizedModules,
+              };
+            } catch (error) {
+              console.error(`❌ [GestionPlans] Exception pour plan ${plan.nom}:`, error);
               return {
                 ...plan,
                 modules: [],
               };
             }
-            
-            // Normaliser les valeurs boolean
-            interface ModuleData {
-              module_code?: string;
-              module_nom?: string;
-              module_description?: string;
-              categorie?: string;
-              inclus?: boolean | string;
-              prix_mensuel?: number | string;
-              prix_annuel?: number | string;
-              est_cree?: boolean | string;
-              actif?: boolean | string;
-            }
-            
-            const normalizedModules = (planModulesData || []).map((mod: ModuleData) => ({
-              module_code: mod.module_code || '',
-              module_nom: mod.module_nom || '',
-              module_description: mod.module_description || '',
-              categorie: mod.categorie || 'core',
-              inclus: mod.inclus === true || mod.inclus === 'true' || String(mod.inclus).toLowerCase() === 'true',
-              prix_mensuel: parseFloat(String(mod.prix_mensuel || 0)),
-              prix_annuel: parseFloat(String(mod.prix_annuel || 0)),
-              est_cree: mod.est_cree === true || mod.est_cree === 'true' || String(mod.est_cree).toLowerCase() === 'true',
-              actif: mod.actif === true || mod.actif === 'true' || String(mod.actif).toLowerCase() === 'true',
-            }));
-            
-            console.log(`📦 Plan "${plan.nom}": ${normalizedModules.filter((m: PlanModule) => m.inclus).length} modules inclus sur ${normalizedModules.length} modules chargés`);
-            
-            return {
-              ...plan,
-              modules: normalizedModules,
-            };
-          } catch (error) {
-            console.error(`Erreur chargement modules pour plan ${plan.id}:`, error);
-            return {
-              ...plan,
-              modules: [],
-            };
-          }
-        })
-      );
-
-      console.log('📊 Plans chargés avec modules:', plansWithModules.map((p: Plan) => ({
-        nom: p.nom,
-        modulesCount: p.modules?.length || 0,
-        modulesInclus: p.modules?.filter((m: PlanModule) => m.inclus).length || 0,
-      })));
-
-      setPlans(plansWithModules);
+          })
+        );
+        
+        console.log('✅ [GestionPlans] Tous les plans chargés avec leurs modules');
+        setPlans(plansWithModules);
+      } else {
+        // Si pas de plans, initialiser avec tableau vide
+        setPlans([]);
+      }
     } catch (error) {
-      console.error('Erreur chargement données:', error);
+      console.error('❌ [GestionPlans] Erreur chargement données:', error);
+      setPlans([]);
+      setModules([]);
     } finally {
       setLoading(false);
+      console.log('✅ [GestionPlans] Chargement terminé');
     }
   };
 
@@ -389,26 +477,54 @@ export default function GestionPlans() {
     plan.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Afficher la page TOUJOURS, même en cas d'erreur
+  if (!user) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-white mb-2">Non connecté</h2>
+          <p className="text-gray-300">Veuillez vous connecter pour accéder à cette page.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si chargement, afficher un loader mais permettre l'affichage de la structure
   if (loading) {
     return (
       <div className="p-8">
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+            <CreditCard className="w-8 h-8" />
+            Gestion des Plans d'Abonnements
+          </h1>
+        </div>
+        <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-white mx-auto mb-4"></div>
-            <p className="text-white text-lg">Chargement...</p>
+            <p className="text-white text-lg">Chargement des plans...</p>
           </div>
         </div>
       </div>
     );
   }
 
+  // Afficher un message si pas super admin, mais permettre de voir la page
   if (!isSuperAdmin) {
     return (
       <div className="p-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+            <CreditCard className="w-8 h-8" />
+            Gestion des Plans d'Abonnements
+          </h1>
+        </div>
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 text-center">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">Accès refusé</h2>
-          <p className="text-gray-300">Seul le super administrateur peut gérer les plans d'abonnements.</p>
+          <p className="text-gray-300 mb-4">Seul le super administrateur de la plateforme peut gérer les plans d'abonnements.</p>
+          <p className="text-gray-400 text-sm">Email connecté: {user.email}</p>
         </div>
       </div>
     );
@@ -530,10 +646,28 @@ export default function GestionPlans() {
         ))}
       </div>
 
-      {filteredPlans.length === 0 && (
+      {filteredPlans.length === 0 && !loading && (
         <div className="text-center py-12 bg-white/5 backdrop-blur-lg rounded-xl border border-white/20">
           <Package className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-          <p className="text-gray-400 text-lg">Aucun plan trouvé</p>
+          <p className="text-gray-400 text-lg mb-2">
+            {searchTerm ? 'Aucun plan ne correspond à votre recherche' : 'Aucun plan trouvé'}
+          </p>
+          {!searchTerm && (
+            <>
+              <p className="text-gray-500 text-sm mb-4">Créez votre premier plan d'abonnement pour commencer</p>
+              <button
+                onClick={() => {
+                  resetForm();
+                  setEditingPlan(null);
+                  setShowForm(true);
+                }}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all flex items-center gap-2 mx-auto"
+              >
+                <Plus className="w-5 h-5" />
+                Créer le premier plan
+              </button>
+            </>
+          )}
         </div>
       )}
 
