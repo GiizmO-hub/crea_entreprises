@@ -149,36 +149,62 @@ export default function GestionCRM() {
     tags: [] as string[],
   });
 
-  const [activiteFormData, setActiviteFormData] = useState({
-    type_activite: 'appel' as const,
+  const [activiteFormData, setActiviteFormData] = useState<{
+    type_activite: 'appel' | 'email' | 'reunion' | 'tache' | 'note' | 'autre';
+    sujet: string;
+    description: string;
+    client_id: string;
+    opportunite_id: string;
+    date_activite: string;
+    duree_minutes: number;
+    statut: 'planifiee' | 'en_cours' | 'terminee' | 'annulee';
+    priorite: 'basse' | 'normale' | 'haute' | 'urgente';
+    resultat: string;
+  }>({
+    type_activite: 'appel',
     sujet: '',
     description: '',
     client_id: '',
     opportunite_id: '',
     date_activite: new Date().toISOString().slice(0, 16),
     duree_minutes: 30,
-    statut: 'planifiee' as const,
-    priorite: 'normale' as const,
+    statut: 'planifiee',
+    priorite: 'normale',
     resultat: '',
   });
 
-  const [campagneFormData, setCampagneFormData] = useState({
+  const [campagneFormData, setCampagneFormData] = useState<{
+    nom: string;
+    description: string;
+    objet_email: string;
+    contenu_email: string;
+    type_contenu: 'html' | 'texte';
+    date_envoi_prevue: string;
+  }>({
     nom: '',
     description: '',
     objet_email: '',
     contenu_email: '',
-    type_contenu: 'html' as const,
+    type_contenu: 'html',
     date_envoi_prevue: '',
   });
 
-  const [etapeFormData, setEtapeFormData] = useState({
+  const [etapeFormData, setEtapeFormData] = useState<{
+    nom: string;
+    description: string;
+    couleur: string;
+    ordre: number;
+    probabilite: number;
+    est_etape_finale: boolean;
+    type_etape: 'en_cours' | 'gagne' | 'perdu';
+  }>({
     nom: '',
     description: '',
     couleur: '#3B82F6',
     ordre: 0,
     probabilite: 0,
     est_etape_finale: false,
-    type_etape: 'en_cours' as const,
+    type_etape: 'en_cours',
   });
 
   useEffect(() => {
@@ -356,6 +382,7 @@ export default function GestionCRM() {
         .select('id, nom, prenom, entreprise_nom')
         .eq('entreprise_id', selectedEntreprise)
         .eq('statut', 'actif')
+        .eq('crm_actif', true) // Filtrer uniquement les clients avec CRM activé
         .order('nom');
 
       if (error) throw error;
@@ -580,6 +607,25 @@ export default function GestionCRM() {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       console.error('Erreur suppression campagne:', error);
+      alert('Erreur: ' + errorMessage);
+    }
+  };
+
+  const handleDeleteEtape = async (id: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette étape ? Les opportunités associées seront déplacées.')) return;
+
+    try {
+      const { error } = await supabase
+        .from('crm_pipeline_etapes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      await loadEtapes();
+      await loadOpportunites();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      console.error('Erreur suppression étape:', error);
       alert('Erreur: ' + errorMessage);
     }
   };
@@ -993,12 +1039,25 @@ export default function GestionCRM() {
                         {opps.length}
                       </span>
                     </div>
-                    <button
-                      onClick={() => openEditEtape(etape)}
-                      className="text-gray-400 hover:text-white"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEditEtape(etape)}
+                        className="text-gray-400 hover:text-white"
+                        title="Modifier l'étape"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteEtape(etape.id);
+                        }}
+                        className="text-red-400 hover:text-red-300"
+                        title="Supprimer l'étape"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2 max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                     {opps.map(opp => (
@@ -1050,6 +1109,16 @@ export default function GestionCRM() {
                           >
                             <Lightbulb className="w-3 h-3" />
                             Actions
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteOpportunite(opp.id);
+                            }}
+                            className="bg-red-600/20 hover:bg-red-600/30 text-red-300 text-xs px-2 py-1 rounded flex items-center justify-center gap-1"
+                            title="Supprimer l'opportunité"
+                          >
+                            <Trash2 className="w-3 h-3" />
                           </button>
                         </div>
                       </div>

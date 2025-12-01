@@ -47,6 +47,10 @@ export default function Factures() {
   });
   const [showVoiceInput, setShowVoiceInput] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
+  // Enregistrement audio pour Whisper (STT serveur)
+  const [isRecordingWhisper, setIsRecordingWhisper] = useState(false);
+  const whisperRecorderRef = useRef<MediaRecorder | null>(null);
+  const whisperChunksRef = useRef<Blob[]>([]);
   const [isInteracting, setIsInteracting] = useState(false); // Flag pour empêcher la fermeture pendant les interactions
   const [parsedVoiceData, setParsedVoiceData] = useState<any>(null); // Stocker les données parsées
   const [searchTerm, setSearchTerm] = useState('');
@@ -2784,6 +2788,7 @@ export default function Factures() {
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 min-h-[100px]"
                 />
                 <div className="flex gap-2 mt-2">
+                  {/* Bouton d'analyse IA texte (existant) */}
                   <button
                     type="button"
                     onClick={async () => {
@@ -2827,6 +2832,83 @@ export default function Factures() {
                     className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-all"
                   >
                     🤖 Analyser avec IA (Gratuit)
+                  </button>
+                  {/* Nouveau bouton : Enregistrer avec Whisper (STT serveur) */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        if (!isRecordingWhisper) {
+                          console.log('🎤 Démarrage enregistrement Whisper...');
+                          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                          const recorder = new MediaRecorder(stream);
+                          whisperChunksRef.current = [];
+                          recorder.ondataavailable = (event) => {
+                            if (event.data.size > 0) {
+                              whisperChunksRef.current.push(event.data);
+                            }
+                          };
+                          recorder.onstop = async () => {
+                            console.log('🎤 Enregistrement terminé, envoi à Whisper...');
+                            const blob = new Blob(whisperChunksRef.current, { type: 'audio/webm' });
+                            try {
+                              const { data: sessionData } = await supabase.auth.getSession();
+                              const session = sessionData?.session;
+                              const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                              const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+                              const response = await fetch(`${supabaseUrl}/functions/v1/transcribe-audio`, {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': blob.type || 'audio/webm',
+                                  'apikey': supabaseAnonKey,
+                                  ...(session ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+                                },
+                                body: blob,
+                              });
+                              if (!response.ok) {
+                                const errorText = await response.text();
+                                console.error('❌ Erreur Whisper:', errorText);
+                                alert('Erreur transcription audio');
+                              } else {
+                                const result = await response.json();
+                                console.log('✅ Transcription Whisper:', result);
+                                if (result.text) {
+                                  setVoiceTranscript((prev) => {
+                                    const newText = prev ? `${prev}\n${result.text}` : result.text;
+                                    return newText;
+                                  });
+                                  alert('✅ Transcription terminée ! Cliquez ensuite sur "Analyser avec IA" ou "Analyser (Local)".');
+                                }
+                              }
+                            } catch (err) {
+                              console.error('❌ Erreur envoi Whisper:', err);
+                              alert('Erreur lors de la transcription audio');
+                            } finally {
+                              setIsRecordingWhisper(false);
+                            }
+                          };
+                          whisperRecorderRef.current = recorder;
+                          recorder.start();
+                          setIsRecordingWhisper(true);
+                        } else {
+                          console.log('⏹️ Arrêt enregistrement Whisper...');
+                          whisperRecorderRef.current?.stop();
+                          whisperRecorderRef.current = null;
+                          setIsRecordingWhisper(false);
+                        }
+                      } catch (err) {
+                        console.error('❌ Erreur accès micro pour Whisper:', err);
+                        alert('Impossible d\'accéder au micro pour l\'enregistrement.');
+                        setIsRecordingWhisper(false);
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      isRecordingWhisper
+                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                        : 'bg-purple-500 hover:bg-purple-600 text-white'
+                    }`}
+                  >
+                    {isRecordingWhisper ? '⏹️ Stop Whisper' : '🎧 Transcrire (Whisper)'}
                   </button>
                   <button
                     type="button"
@@ -3015,7 +3097,7 @@ export default function Factures() {
                           console.log('📝 Ajout de', lignesToAdd.length, 'nouvelles lignes (total:', prevLignes.length + lignesToAdd.length, ')');
                           return [...prevLignes, ...lignesToAdd];
                         });
-                      } else if (data.parsed.description) {
+                      } else if (data.parsed.description && data.parsed.montant) {
                         setLignes(prevLignes => {
                           // Vérifier si cette description existe déjà
                           const exists = prevLignes.some(l => 
@@ -3027,7 +3109,7 @@ export default function Factures() {
                             return prevLignes;
                           }
                           
-                          console.log('📝 Ajout d\'une nouvelle ligne avec description');
+                          console.log('📝 Ajout d\'une nouvelle ligne avec description et montant');
                           return [...prevLignes, {
                             description: data.parsed.description,
                             quantite: '1',
@@ -3082,22 +3164,25 @@ export default function Factures() {
                           console.log('📝 Ajout de', lignesToAdd.length, 'nouvelles lignes (local, total:', prevLignes.length + lignesToAdd.length, ')');
                           return [...prevLignes, ...lignesToAdd];
                         });
-                      } else if (parsed.description) {
+                      } else if (parsed.description && parsed.montant) {
                         setLignes(prevLignes => {
                           const exists = prevLignes.some(l => 
                             l.description.toLowerCase().trim() === parsed.description.toLowerCase().trim()
                           );
                           if (exists) return prevLignes;
-                          return [...prevLignes, {
-                            description: parsed.description,
-                            quantite: '1',
-                            prix_unitaire_ht: parsed.montant ? String(parsed.montant) : '',
-                            taux_tva: String(parsed.taux_tva || 20),
-                            montant_ht: 0,
-                            montant_tva: 0,
-                            montant_ttc: 0,
-                            ordre: prevLignes.length,
-                          }];
+                          return [
+                            ...prevLignes,
+                            {
+                              description: parsed.description,
+                              quantite: '1',
+                              prix_unitaire_ht: String(parsed.montant),
+                              taux_tva: String(parsed.taux_tva || 20),
+                              montant_ht: 0,
+                              montant_tva: 0,
+                              montant_ttc: 0,
+                              ordre: prevLignes.length,
+                            },
+                          ];
                         });
                       }
                     }
@@ -3139,22 +3224,25 @@ export default function Factures() {
                           console.log('📝 Ajout de', lignesToAdd.length, 'nouvelles lignes (local, total:', prevLignes.length + lignesToAdd.length, ')');
                           return [...prevLignes, ...lignesToAdd];
                         });
-                      } else if (parsed.description) {
+                      } else if (parsed.description && parsed.montant) {
                         setLignes(prevLignes => {
                           const exists = prevLignes.some(l => 
                             l.description.toLowerCase().trim() === parsed.description.toLowerCase().trim()
                           );
                           if (exists) return prevLignes;
-                          return [...prevLignes, {
-                            description: parsed.description,
-                            quantite: '1',
-                            prix_unitaire_ht: parsed.montant ? String(parsed.montant) : '',
-                            taux_tva: String(parsed.taux_tva || 20),
-                            montant_ht: 0,
-                            montant_tva: 0,
-                            montant_ttc: 0,
-                            ordre: prevLignes.length,
-                          }];
+                          return [
+                            ...prevLignes,
+                            {
+                              description: parsed.description,
+                              quantite: '1',
+                              prix_unitaire_ht: String(parsed.montant),
+                              taux_tva: String(parsed.taux_tva || 20),
+                              montant_ht: 0,
+                              montant_tva: 0,
+                              montant_ttc: 0,
+                              ordre: prevLignes.length,
+                            },
+                          ];
                         });
                       }
                     }

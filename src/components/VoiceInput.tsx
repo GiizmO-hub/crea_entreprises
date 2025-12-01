@@ -159,8 +159,9 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
       setTranscript(fullTranscript);
       
       // Mettre à jour la confiance
+      const confPercent = Math.round(maxConf * 100);
       if (maxConf > 0) {
-        setConfidence(Math.round(maxConf * 100));
+        setConfidence(confPercent);
       }
       
       lastTranscriptTimeRef.current = Date.now();
@@ -170,15 +171,21 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
       console.log('📝 Résultats finaux accumulés (total):', allFinalResultsRef.current.map(r => r.text));
       console.log('📝 Texte final accumulé:', allFinalText);
       console.log('📝 Intermédiaire actuel:', interimText);
-      console.log('📝 Transcript complet affiché:', fullTranscript);
+      console.log('📝 Transcript complet affiché (proposé):', fullTranscript);
       console.log('📝 Longueur totale:', fullTranscript.length);
-      console.log('📝 Confiance maximale:', `${Math.round(maxConf * 100)}%`);
+      console.log('📝 Confiance maximale:', `${confPercent}%`);
       console.log('📝 Nombre de résultats dans event:', event.results.length);
       console.log('📝 ============================');
       
-      // Appeler onTranscript IMMÉDIATEMENT avec TOUT le texte
-      if (fullTranscript.trim().length > 0) {
+      // ✅ NE METTRE À JOUR le texte que si la confiance est suffisante
+      // Cela évite que des bribes très mal reconnues écrasent une bonne phrase
+      const MIN_CONFIDENCE = 30; // en pourcentage
+      
+      if (fullTranscript.trim().length > 0 && confPercent >= MIN_CONFIDENCE) {
+        console.log(`✅ Transcript accepté (confiance ${confPercent}% >= ${MIN_CONFIDENCE}%)`);
         onTranscriptRef.current(fullTranscript.trim());
+      } else {
+        console.log(`⚠️ Transcript ignoré (confiance trop faible: ${confPercent}% < ${MIN_CONFIDENCE}%)`);
       }
     };
 

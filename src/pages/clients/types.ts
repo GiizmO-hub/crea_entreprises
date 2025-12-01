@@ -14,6 +14,8 @@ export interface Client {
   code_postal?: string;
   ville?: string;
   siret?: string;
+  // Activation du module CRM / workflow pour ce client
+  crm_actif?: boolean;
   statut: string;
   created_at: string;
 }
@@ -68,6 +70,8 @@ export interface ClientFormData {
   code_postal: string;
   ville: string;
   siret: string;
+  // Checkbox pour activer/désactiver le module CRM (comme pour l'espace client)
+  crm_actif: boolean;
 }
 
 export interface EspaceMembreData {

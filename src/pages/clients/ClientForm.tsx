@@ -177,6 +177,23 @@ export function ClientForm({
             />
           </div>
 
+          {/* Activation du module CRM / workflow pour ce client */}
+          <div className="mt-4 flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg">
+            <input
+              id="crm_actif"
+              type="checkbox"
+              checked={formData.crm_actif}
+              onChange={(e) => onChange({ crm_actif: e.target.checked })}
+              className="h-4 w-4 text-blue-500 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="crm_actif" className="text-sm text-gray-200 cursor-pointer">
+              Activer le module CRM / workflow automatique pour ce client
+              <span className="block text-xs text-gray-400">
+                (comme pour l&apos;espace client, cochez pour suivre ce client dans le CRM avancé)
+              </span>
+            </label>
+          </div>
+
           <div className="flex gap-4 pt-4">
             <button
               type="submit"

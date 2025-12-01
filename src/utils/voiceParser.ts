@@ -282,17 +282,17 @@ function extractArticleLines(
     let description = match[1]?.trim() || '';
     const prix = parseNumber(match[2] || '');
 
-    // Nettoyer la description (enlever les mots-clés)
+    // Nettoyer la description (enlever les mots-clés, notamment "créer facture")
     description = description
-      .replace(/^(?:facture|pour|client|à|article|produit|service|prestation|item|ligne|puis|ensuite|et|plus|montant|total|prix|coût|somme|de)\s+/i, '')
-      .replace(/\s+(?:facture|pour|client|à|article|produit|service|prestation|item|ligne|puis|ensuite|et|plus|montant|total|prix|coût|somme|de)\s+/gi, ' ')
+      .replace(/^(?:creer|créer|cree|crée|créé|facture|facturation|pour|client|à|article|produit|service|prestation|item|ligne|puis|ensuite|et|plus|montant|total|prix|coût|somme|de)\s+/i, '')
+      .replace(/\s+(?:creer|créer|cree|crée|créé|facture|facturation|pour|client|à|article|produit|service|prestation|item|ligne|puis|ensuite|et|plus|montant|total|prix|coût|somme|de)\s+/gi, ' ')
       .trim();
 
     // Ignorer si la description est trop courte ou contient des nombres (seuil réduit à 2 caractères)
     if (description.length < 2 || /^\d+$/.test(description) || description.length > 60) continue;
 
     // Ignorer si c'est un nom de client ou un mot-clé
-    const ignoreWords = ['facture', 'pour', 'client', 'montant', 'total', 'prix', 'tva', 'euros', 'euro', '€'];
+    const ignoreWords = ['facture', 'facturation', 'creer', 'créer', 'cree', 'crée', 'créé', 'pour', 'client', 'montant', 'total', 'prix', 'tva', 'euros', 'euro', '€'];
     if (ignoreWords.some(w => description.toLowerCase().includes(w))) continue;
 
     if (prix && prix > 0) {

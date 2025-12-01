@@ -53,6 +53,7 @@ export default function Clients() {
     code_postal: '',
     ville: '',
     siret: '',
+    crm_actif: true,
   });
 
   // États modal détails client
@@ -458,6 +459,7 @@ export default function Clients() {
           code_postal: '',
           ville: '',
           siret: '',
+          crm_actif: true,
         });
         setEditingId(null);
         setShowForm(false);
@@ -496,6 +498,7 @@ export default function Clients() {
         code_postal: formData.code_postal?.trim() || null,
         ville: formData.ville?.trim() || null,
         siret: formData.siret?.trim() || null,
+        crm_actif: formData.crm_actif ?? true,
         updated_at: new Date().toISOString(),
       };
 
@@ -593,6 +596,7 @@ export default function Clients() {
       code_postal: '',
       ville: client.ville || '',
       siret: '',
+      crm_actif: client.crm_actif ?? true,
     });
     setShowForm(true);
   };
