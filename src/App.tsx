@@ -164,8 +164,8 @@ function AppContent() {
       const hash = window.location.hash.replace('#', '');
       const path = window.location.pathname;
       
-      // Si on est sur /payment-success, afficher cette page
-      if (path === '/payment-success' || hash === 'payment-success') {
+      // Si on est sur /payment-success, ne pas changer la page
+      if (path === '/payment-success' || path.startsWith('/payment-success') || hash === 'payment-success') {
         return; // PaymentSuccess gère son propre affichage
       }
       
@@ -179,17 +179,19 @@ function AppContent() {
     // Appeler une première fois
     handleHashChange();
 
-    // Écouter les changements de hash
+    // Écouter les changements de hash et de pathname
     window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
     
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
     };
   }, [currentPage]);
 
-  // ✅ Si on est sur /payment-success, afficher directement PaymentSuccess
+  // ✅ Si on est sur /payment-success, afficher directement PaymentSuccess (même sans auth)
   const path = window.location.pathname;
-  if (path === '/payment-success') {
+  if (path === '/payment-success' || path.startsWith('/payment-success')) {
     return <PaymentSuccess />;
   }
 
