@@ -1979,7 +1979,6 @@ export default function Factures() {
                               </div>
                             )}
                           </div>
-                        <div className="grid grid-cols-12 gap-2 items-start">
                           <div className="col-span-6 sm:col-span-4 md:col-span-2">
                             <input
                               type="number"

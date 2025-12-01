@@ -23,6 +23,7 @@ const GestionCRM = lazy(() => import('./pages/GestionCRM'));
 const GestionPlans = lazy(() => import('./pages/GestionPlans'));
 const Parametres = lazy(() => import('./pages/Parametres'));
 const Notifications = lazy(() => import('./pages/Notifications'));
+const Finance = lazy(() => import('./pages/Finance'));
 
 // Composant de chargement pour les pages lazy-loaded
 const PageLoader = () => (
@@ -242,7 +243,11 @@ function AppContent() {
       case 'comptabilite':
         return <div className="p-8 text-white">Module Comptabilité - À venir</div>;
       case 'finance':
-        return <div className="p-8 text-white">Module Finance - À venir</div>;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Finance />
+          </Suspense>
+        );
       case 'modules':
         return (
           <Suspense fallback={<PageLoader />}>

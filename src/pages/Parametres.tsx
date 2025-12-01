@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { Settings, Building2, Mail, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users, ShieldOff, Crown, Eye, MapPin, Phone, EyeOff, Image, Palette, Type, Layout, Save, Sparkles } from 'lucide-react';
+import { Settings, Building2, Mail, Trash2, Play, Pause, Plus, Search, AlertCircle, Send, User, Building, FileText, Bell, Lock, CreditCard, Database, Users, ShieldOff, Crown, Eye, MapPin, Phone, EyeOff, Image, Palette, Type, Layout, Save, Sparkles, TrendingUp, DollarSign, Calendar, PieChart, BarChart3 } from 'lucide-react';
 import CredentialsModal from '../components/CredentialsModal';
 import { sendClientCredentialsEmail } from '../services/emailService';
 import type { ClientCredentialsEmailData } from '../services/emailService';
@@ -24,7 +24,7 @@ interface ClientInfo {
   created_at: string;
 }
 
-type TabType = 'profil' | 'entreprise' | 'facturation' | 'documents' | 'notifications' | 'securite' | 'abonnement' | 'donnees' | 'clients';
+type TabType = 'profil' | 'entreprise' | 'facturation' | 'documents' | 'notifications' | 'securite' | 'abonnement' | 'donnees' | 'clients' | 'finances';
 
 export default function Parametres() {
   const { user } = useAuth();
@@ -91,6 +91,21 @@ export default function Parametres() {
   const [savingDocumentParams, setSavingDocumentParams] = useState(false);
   const [generatingMentions, setGeneratingMentions] = useState(false);
   const [selectedEntrepriseForDocs, setSelectedEntrepriseForDocs] = useState<string | null>(null);
+  
+  // États pour les finances
+  const [financialDetails, setFinancialDetails] = useState<any>(null);
+  const [loadingFinancialDetails, setLoadingFinancialDetails] = useState(false);
+  const [selectedFinancialPeriod, setSelectedFinancialPeriod] = useState<'mois' | 'trimestre' | 'annee' | 'toutes'>('toutes');
+
+  // Formater une date en AAAA-MM-JJ en heure locale (sans décalage UTC)
+  const formatDateLocal = (d: Date | null) => {
+    if (!d) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
   const [confirmedRolesCache, setConfirmedRolesCache] = useState<Record<string, string>>(() => {
     try {
       const saved = localStorage.getItem('confirmedRolesCache');
@@ -177,6 +192,9 @@ export default function Parametres() {
         }
       }
     }
+    if (user && activeTab === 'finances') {
+      loadFinancialDetails();
+    }
     
     // Écouter les événements de mise à jour d'abonnement pour recharger la config
     const handleAbonnementUpdate = () => {
@@ -211,6 +229,13 @@ export default function Parametres() {
           if (isMounted) loadDocumentParams();
         }, 1500);
         timeouts.push(timeout3);
+      }
+      // Recharger les détails financiers si on est sur cet onglet
+      if (activeTab === 'finances') {
+        const timeout4 = setTimeout(() => {
+          if (isMounted) loadFinancialDetails();
+        }, 500);
+        timeouts.push(timeout4);
       }
     };
     
@@ -512,6 +537,239 @@ export default function Parametres() {
       alert('❌ Erreur lors de la sauvegarde: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     } finally {
       setSavingDocumentParams(false);
+    }
+  };
+
+  // Charger les détails financiers
+  const loadFinancialDetails = async () => {
+    if (!user) return;
+    
+    setLoadingFinancialDetails(true);
+    try {
+      let entrepriseIds: string[] = [];
+      let userClientId: string | null = null;
+
+      if (isClient) {
+        const { data: espaceClient } = await supabase
+          .from('espaces_membres_clients')
+          .select('entreprise_id, client_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (espaceClient?.entreprise_id) {
+          entrepriseIds = [espaceClient.entreprise_id];
+          userClientId = espaceClient.client_id;
+        }
+      } else {
+        const { data: entreprises } = await supabase
+          .from('entreprises')
+          .select('id');
+        entrepriseIds = entreprises?.map((e) => e.id) || [];
+      }
+
+      if (entrepriseIds.length === 0) {
+        setLoadingFinancialDetails(false);
+        return;
+      }
+
+      // Calculer la période en utilisant des dates locales (pour éviter le décalage UTC)
+      const now = new Date();
+      let startDate: Date | null = null;
+      let endDate: Date | null = null;
+      
+      if (selectedFinancialPeriod === 'mois') {
+        // 1er jour du mois courant
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        // Dernier jour du même mois
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      } else if (selectedFinancialPeriod === 'trimestre') {
+        const quarter = Math.floor(now.getMonth() / 3);
+        startDate = new Date(now.getFullYear(), quarter * 3, 1);
+        endDate = new Date(now.getFullYear(), (quarter + 1) * 3, 0);
+      } else if (selectedFinancialPeriod === 'annee') {
+        startDate = new Date(now.getFullYear(), 0, 1);
+        endDate = new Date(now.getFullYear(), 11, 31);
+      }
+      // Si 'toutes', startDate et endDate restent null et on charge toutes les factures
+
+      // Charger toutes les factures
+      // ✅ Utiliser left join pour ne pas exclure les factures sans client
+      let facturesQuery = supabase
+        .from('factures')
+        .select('*, clients(nom, prenom, entreprise_nom)')
+        .in('entreprise_id', entrepriseIds);
+
+      // ❌ Ne pas filtrer par date côté base pour éviter les incohérences
+      // On appliquera le filtre de période côté client sur la même logique que l'affichage (date_facturation || date_emission || created_at)
+
+      if (isClient && userClientId) {
+        facturesQuery = facturesQuery.eq('client_id', userClientId);
+      } else {
+        facturesQuery = facturesQuery.or('source.is.null,source.neq.client');
+      }
+
+      const { data: factures, error } = await facturesQuery;
+      if (error) {
+        console.error('❌ [Parametres/Finances] Erreur chargement factures:', error);
+        throw error;
+      }
+
+      let facturesList = factures || [];
+      
+      // ✅ Filtrer côté client pour les périodes spécifiques
+      if (startDate && endDate && selectedFinancialPeriod !== 'toutes') {
+        const startDateObj = new Date(startDate.getTime());
+        const endDateObj = new Date(endDate.getTime());
+        endDateObj.setHours(23, 59, 59, 999); // Fin de journée
+        
+        facturesList = facturesList.filter(f => {
+          const rawDate = (f as any).date_facturation || (f as any).date_emission || f.created_at;
+          if (!rawDate) return false;
+          const factureDate = new Date(rawDate);
+          return factureDate >= startDateObj && factureDate <= endDateObj;
+        });
+        
+        console.log(`🔍 [Parametres/Finances] Filtrage côté client (période ${selectedFinancialPeriod}): ${facturesList.length} factures après filtrage (sur ${factures?.length || 0} chargées)`);
+      }
+      
+      console.log(`📊 [Parametres/Finances] Factures chargées: ${facturesList.length} (période: ${selectedFinancialPeriod}, date début: ${formatDateLocal(startDate) || 'toutes'}, date fin: ${formatDateLocal(endDate) || 'toutes'})`);
+      console.log(`📊 [Parametres/Finances] Détails factures:`, facturesList.map(f => ({
+        id: f.id,
+        numero: f.numero,
+        statut: f.statut,
+        date_facturation: (f as any).date_facturation || (f as any).date_emission || f.created_at,
+        montant_ttc: f.montant_ttc,
+        source: f.source
+      })));
+
+      // Calculer les statistiques détaillées
+      const facturesPayees = facturesList.filter(f => f.statut === 'payee');
+      const facturesEnAttente = facturesList.filter(f => f.statut === 'en_attente');
+      const facturesEnRetard = facturesList.filter(f => {
+        if (f.statut !== 'payee' && f.date_echeance) {
+          return new Date(f.date_echeance) < now;
+        }
+        return false;
+      });
+
+      const caHT = facturesPayees.reduce((sum, f) => sum + Number(f.montant_ht || 0), 0);
+      const caTTC = facturesPayees.reduce((sum, f) => sum + Number(f.montant_ttc || 0), 0);
+      const tvaTotal = caTTC - caHT;
+      const montantEnAttente = facturesEnAttente.reduce((sum, f) => sum + Number(f.montant_ttc || 0), 0);
+      const montantEnRetard = facturesEnRetard.reduce((sum, f) => sum + Number(f.montant_ttc || 0), 0);
+
+      // Évolution mensuelle détaillée
+      const evolutionMap = new Map<string, { ca: number; factures: number; ht: number; tva: number }>();
+      facturesPayees.forEach(f => {
+        const date = new Date(f.date_emission || f.created_at);
+        const moisKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (!evolutionMap.has(moisKey)) {
+          evolutionMap.set(moisKey, { ca: 0, factures: 0, ht: 0, tva: 0 });
+        }
+        const current = evolutionMap.get(moisKey)!;
+        current.ca += Number(f.montant_ttc || 0);
+        current.ht += Number(f.montant_ht || 0);
+        current.tva += Number(f.montant_ttc || 0) - Number(f.montant_ht || 0);
+        current.factures += 1;
+        evolutionMap.set(moisKey, current);
+      });
+
+      const evolutionMensuelle = Array.from(evolutionMap.entries())
+        .map(([key, data]) => ({
+          mois: new Date(key + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+          ca: data.ca,
+          ht: data.ht,
+          tva: data.tva,
+          factures: data.factures,
+        }))
+        .sort((a, b) => a.mois.localeCompare(b.mois));
+
+      // Répartition par client détaillée
+      const clientsMap = new Map<string, { nom: string; montant: number; factures: number; ht: number; tva: number }>();
+      facturesPayees.forEach(f => {
+        const clientId = f.client_id;
+        const clientNom = (f.clients as any)?.entreprise_nom || 
+                         `${(f.clients as any)?.prenom || ''} ${(f.clients as any)?.nom || ''}`.trim() || 
+                         'Client inconnu';
+        
+        if (!clientsMap.has(clientId)) {
+          clientsMap.set(clientId, { nom: clientNom, montant: 0, factures: 0, ht: 0, tva: 0 });
+        }
+        const current = clientsMap.get(clientId)!;
+        current.montant += Number(f.montant_ttc || 0);
+        current.ht += Number(f.montant_ht || 0);
+        current.tva += Number(f.montant_ttc || 0) - Number(f.montant_ht || 0);
+        current.factures += 1;
+        clientsMap.set(clientId, current);
+      });
+
+      const repartitionClients = Array.from(clientsMap.entries())
+        .map(([client_id, data]) => ({
+          client_id,
+          client_nom: data.nom,
+          montant: data.montant,
+          ht: data.ht,
+          tva: data.tva,
+          factures: data.factures,
+        }))
+        .sort((a, b) => b.montant - a.montant);
+
+      // Répartition par statut
+      const repartitionStatuts = {
+        payees: facturesPayees.length,
+        en_attente: facturesEnAttente.length,
+        en_retard: facturesEnRetard.length,
+        brouillons: facturesList.filter(f => f.statut === 'brouillon').length,
+        envoyees: facturesList.filter(f => f.statut === 'envoyee').length,
+        annulees: facturesList.filter(f => f.statut === 'annulee').length,
+      };
+
+      // Top 10 factures
+      const topFactures = [...facturesPayees]
+        .sort((a, b) => Number(b.montant_ttc || 0) - Number(a.montant_ttc || 0))
+        .slice(0, 10)
+        .map(f => ({
+          id: f.id,
+          numero: f.numero,
+          client_nom: (f.clients as any)?.entreprise_nom || `${(f.clients as any)?.prenom || ''} ${(f.clients as any)?.nom || ''}`.trim() || 'Client inconnu',
+          montant_ttc: Number(f.montant_ttc || 0),
+          date_facturation: f.date_facturation || f.created_at,
+        }));
+
+      setFinancialDetails({
+        caTotal: caTTC,
+        caHT,
+        caTTC,
+        tvaTotal,
+        facturesPayees: facturesPayees.length,
+        facturesEnAttente: facturesEnAttente.length,
+        facturesEnRetard: facturesEnRetard.length,
+        montantEnAttente,
+        montantEnRetard,
+        facturesTotal: facturesList.length,
+        evolutionMensuelle,
+        repartitionClients,
+        repartitionStatuts,
+        topFactures,
+      });
+      
+      console.log(`✅ [Parametres/Finances] Détails financiers mis à jour:`, {
+        caTotal: caTTC,
+        facturesTotal: facturesList.length,
+        facturesPayees: facturesPayees.length,
+        facturesEnAttente: facturesEnAttente.length,
+        facturesEnRetard: facturesEnRetard.length
+      });
+    } catch (error) {
+      console.error('❌ Erreur chargement détails financiers:', error);
+      // Afficher les détails de l'erreur pour déboguer
+      if (error instanceof Error) {
+        console.error('❌ Message:', error.message);
+        console.error('❌ Stack:', error.stack);
+      }
+    } finally {
+      setLoadingFinancialDetails(false);
     }
   };
 
@@ -1331,6 +1589,7 @@ export default function Parametres() {
     ...(isSuperAdmin ? [{ id: 'entreprise' as TabType, label: 'Entreprises Plateforme', icon: Building }] : []),
     { id: 'facturation' as TabType, label: 'Facturation', icon: FileText },
     { id: 'documents' as TabType, label: 'En-têtes Documents', icon: FileText },
+    { id: 'finances' as TabType, label: 'Finances', icon: DollarSign },
     { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },
     { id: 'securite' as TabType, label: 'Sécurité', icon: Lock },
     { id: 'abonnement' as TabType, label: 'Abonnement', icon: CreditCard },
@@ -1986,6 +2245,332 @@ export default function Parametres() {
                     {savingDocumentParams ? 'Enregistrement...' : 'Enregistrer les paramètres'}
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'finances':
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <DollarSign className="w-6 h-6" />
+                Détails Financiers Complets
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedFinancialPeriod('toutes');
+                    loadFinancialDetails();
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    selectedFinancialPeriod === 'toutes'
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                      : 'bg-white/10 text-gray-300 hover:bg-white/15'
+                  }`}
+                >
+                  Toutes
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedFinancialPeriod('mois');
+                    loadFinancialDetails();
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    selectedFinancialPeriod === 'mois'
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                      : 'bg-white/10 text-gray-300 hover:bg-white/15'
+                  }`}
+                >
+                  Mois
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedFinancialPeriod('trimestre');
+                    loadFinancialDetails();
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    selectedFinancialPeriod === 'trimestre'
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                      : 'bg-white/10 text-gray-300 hover:bg-white/15'
+                  }`}
+                >
+                  Trimestre
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedFinancialPeriod('annee');
+                    loadFinancialDetails();
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    selectedFinancialPeriod === 'annee'
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                      : 'bg-white/10 text-gray-300 hover:bg-white/15'
+                  }`}
+                >
+                  Année
+                </button>
+              </div>
+            </div>
+
+            {loadingFinancialDetails ? (
+              <div className="text-center text-gray-400 py-8">Chargement des données financières...</div>
+            ) : !financialDetails ? (
+              <div className="bg-white/5 backdrop-blur-lg rounded-lg p-6 border border-white/10">
+                <p className="text-gray-400">Aucune donnée financière disponible</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Vue d'ensemble */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-lg rounded-xl p-6 border border-green-500/30">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="p-3 bg-green-500/20 rounded-lg">
+                        <DollarSign className="w-6 h-6 text-green-400" />
+                      </div>
+                      <TrendingUp className="w-5 h-5 text-green-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white mb-1">
+                      {financialDetails.caTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                    </div>
+                    <div className="text-sm text-gray-300">Chiffre d'affaires TTC</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      HT: {financialDetails.caHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 backdrop-blur-lg rounded-xl p-6 border border-blue-500/30">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="p-3 bg-blue-500/20 rounded-lg">
+                        <FileText className="w-6 h-6 text-blue-400" />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-white mb-1">{financialDetails.facturesPayees}</div>
+                    <div className="text-sm text-gray-300">Factures payées</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      Sur {financialDetails.facturesTotal} factures
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 backdrop-blur-lg rounded-xl p-6 border border-yellow-500/30">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="p-3 bg-yellow-500/20 rounded-lg">
+                        <Calendar className="w-6 h-6 text-yellow-400" />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-white mb-1">{financialDetails.facturesEnAttente}</div>
+                    <div className="text-sm text-gray-300">En attente</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {financialDetails.montantEnAttente.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-red-500/20 to-pink-500/20 backdrop-blur-lg rounded-xl p-6 border border-red-500/30">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="p-3 bg-red-500/20 rounded-lg">
+                        <AlertCircle className="w-6 h-6 text-red-400" />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-white mb-1">{financialDetails.facturesEnRetard}</div>
+                    <div className="text-sm text-gray-300">En retard</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {financialDetails.montantEnRetard.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                    </div>
+                  </div>
+                </div>
+
+                {/* Évolution mensuelle détaillée */}
+                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                  <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />
+                    Évolution Mensuelle Détaillée
+                  </h3>
+                  {financialDetails.evolutionMensuelle && financialDetails.evolutionMensuelle.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Mois</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">HT</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">TVA</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">TTC</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">Factures</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {financialDetails.evolutionMensuelle.map((item, index) => (
+                            <tr key={index} className="border-b border-white/5 hover:bg-white/5">
+                              <td className="py-3 px-4 text-white font-medium">{item.mois}</td>
+                              <td className="py-3 px-4 text-right text-gray-300">
+                                {item.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                              </td>
+                              <td className="py-3 px-4 text-right text-gray-300">
+                                {item.tva.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                              </td>
+                              <td className="py-3 px-4 text-right text-white font-semibold">
+                                {item.ca.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                              </td>
+                              <td className="py-3 px-4 text-right text-gray-400">{item.factures}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-white/5 font-bold">
+                            <td className="py-3 px-4 text-white">Total</td>
+                            <td className="py-3 px-4 text-right text-white">
+                              {financialDetails.caHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                            </td>
+                            <td className="py-3 px-4 text-right text-white">
+                              {financialDetails.tvaTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                            </td>
+                            <td className="py-3 px-4 text-right text-white">
+                              {financialDetails.caTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                            </td>
+                            <td className="py-3 px-4 text-right text-white">{financialDetails.facturesPayees}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Aucune donnée disponible</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Répartition par client détaillée */}
+                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                  <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Répartition par Client (Détaillée)
+                  </h3>
+                  {financialDetails.repartitionClients && financialDetails.repartitionClients.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Client</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">HT</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">TVA</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">TTC</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">Factures</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">% du CA</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {financialDetails.repartitionClients.map((client, index) => (
+                            <tr key={client.client_id} className="border-b border-white/5 hover:bg-white/5">
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                    {index + 1}
+                                  </div>
+                                  <span className="text-white font-medium">{client.client_nom}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-right text-gray-300">
+                                {client.ht.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                              </td>
+                              <td className="py-3 px-4 text-right text-gray-300">
+                                {client.tva.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                              </td>
+                              <td className="py-3 px-4 text-right text-white font-semibold">
+                                {client.montant.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                              </td>
+                              <td className="py-3 px-4 text-right text-gray-400">{client.factures}</td>
+                              <td className="py-3 px-4 text-right text-gray-400">
+                                {financialDetails.caTTC > 0 
+                                  ? ((client.montant / financialDetails.caTTC) * 100).toFixed(1)
+                                  : '0.0'}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Aucun client trouvé</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Répartition par statut */}
+                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                  <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                    <PieChart className="w-5 h-5" />
+                    Répartition par Statut
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <div className="bg-green-500/10 rounded-lg p-4 border border-green-500/30">
+                      <div className="text-sm text-gray-300 mb-1">Payées</div>
+                      <div className="text-2xl font-bold text-green-400">{financialDetails.repartitionStatuts?.payees || 0}</div>
+                    </div>
+                    <div className="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/30">
+                      <div className="text-sm text-gray-300 mb-1">En attente</div>
+                      <div className="text-2xl font-bold text-yellow-400">{financialDetails.repartitionStatuts?.en_attente || 0}</div>
+                    </div>
+                    <div className="bg-red-500/10 rounded-lg p-4 border border-red-500/30">
+                      <div className="text-sm text-gray-300 mb-1">En retard</div>
+                      <div className="text-2xl font-bold text-red-400">{financialDetails.repartitionStatuts?.en_retard || 0}</div>
+                    </div>
+                    <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/30">
+                      <div className="text-sm text-gray-300 mb-1">Envoyées</div>
+                      <div className="text-2xl font-bold text-blue-400">{financialDetails.repartitionStatuts?.envoyees || 0}</div>
+                    </div>
+                    <div className="bg-gray-500/10 rounded-lg p-4 border border-gray-500/30">
+                      <div className="text-sm text-gray-300 mb-1">Brouillons</div>
+                      <div className="text-2xl font-bold text-gray-400">{financialDetails.repartitionStatuts?.brouillons || 0}</div>
+                    </div>
+                    <div className="bg-orange-500/10 rounded-lg p-4 border border-orange-500/30">
+                      <div className="text-sm text-gray-300 mb-1">Annulées</div>
+                      <div className="text-2xl font-bold text-orange-400">{financialDetails.repartitionStatuts?.annulees || 0}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top 10 factures */}
+                {financialDetails.topFactures && financialDetails.topFactures.length > 0 && (
+                  <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                    <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5" />
+                      Top 10 Factures
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">#</th>
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Numéro</th>
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Client</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">Montant TTC</th>
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {financialDetails.topFactures.map((facture, index) => (
+                            <tr key={facture.id} className="border-b border-white/5 hover:bg-white/5">
+                              <td className="py-3 px-4">
+                                <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                  {index + 1}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-white font-medium">{facture.numero}</td>
+                              <td className="py-3 px-4 text-gray-300">{facture.client_nom}</td>
+                              <td className="py-3 px-4 text-right text-white font-semibold">
+                                {facture.montant_ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                              </td>
+                              <td className="py-3 px-4 text-gray-400">
+                                {new Date(facture.date_facturation).toLocaleDateString('fr-FR')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
