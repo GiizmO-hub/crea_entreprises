@@ -1395,19 +1395,19 @@ export default function Factures() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Facturation</h1>
-          <p className="text-gray-300">Gérez vos factures et devis</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Facturation</h1>
+          <p className="text-sm sm:text-base text-gray-300">Gérez vos factures et devis</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             onClick={() => setShowArticlesForm(true)}
-            className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-all border border-white/20"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm sm:text-base font-medium transition-all border border-white/20"
           >
             <FileText className="w-4 h-4" />
-            Articles
+            <span className="hidden sm:inline">Articles</span>
           </button>
           <button
             type="button"
@@ -1421,11 +1421,11 @@ export default function Factures() {
               setShowVoiceInput(true);
               console.log('🔵 showVoiceInput mis à true');
             }}
-            className="flex items-center gap-2 px-4 py-3 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg font-medium transition-all border border-green-500/30"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-sm sm:text-base font-medium transition-all border border-green-500/30"
             title="Créer une facture vocalement"
           >
             <Mic className="w-4 h-4" />
-            Facture vocale
+            <span className="hidden sm:inline">Facture vocale</span>
           </button>
           <button
             onClick={async () => {
@@ -1434,10 +1434,11 @@ export default function Factures() {
               setFormData((prev) => ({ ...prev, numero, type: 'facture' }));
               setShowForm(true);
             }}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+            className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg text-sm sm:text-base font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
           >
-            <Plus className="w-5 h-5" />
-            Nouvelle facture
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Nouvelle facture</span>
+            <span className="sm:hidden">Nouvelle</span>
           </button>
         </div>
       </div>
@@ -1463,7 +1464,7 @@ export default function Factures() {
       <div className="flex gap-2 mb-6 flex-wrap">
         <button
           onClick={() => setFilterType('all')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+          className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${
             filterType === 'all'
               ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
               : 'bg-white/10 text-gray-300 hover:bg-white/15'
@@ -1473,17 +1474,18 @@ export default function Factures() {
         </button>
         <button
           onClick={() => setFilterType('recues')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+          className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${
             filterType === 'recues'
               ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
               : 'bg-white/10 text-gray-300 hover:bg-white/15'
           }`}
         >
-          Factures reçues
+          <span className="hidden sm:inline">Factures reçues</span>
+          <span className="sm:hidden">Reçues</span>
         </button>
         <button
           onClick={() => setFilterType('facture')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+          className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${
             filterType === 'facture'
               ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
               : 'bg-white/10 text-gray-300 hover:bg-white/15'
@@ -1493,7 +1495,7 @@ export default function Factures() {
         </button>
         <button
           onClick={() => setFilterType('proforma')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+          className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${
             filterType === 'proforma'
               ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
               : 'bg-white/10 text-gray-300 hover:bg-white/15'
@@ -1503,7 +1505,7 @@ export default function Factures() {
         </button>
         <button
           onClick={() => setFilterType('avoir')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+          className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${
             filterType === 'avoir'
               ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
               : 'bg-white/10 text-gray-300 hover:bg-white/15'
@@ -1557,22 +1559,22 @@ export default function Factures() {
           return (
             <div
               key={doc.id}
-              className={`bg-white/10 backdrop-blur-lg rounded-xl p-6 border ${
+              className={`bg-white/10 backdrop-blur-lg rounded-xl p-4 sm:p-6 border ${
                 isAvoir ? 'border-orange-500/30' : isProforma ? 'border-yellow-500/30' : 'border-white/20'
               } hover:bg-white/15 transition-all`}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className={`p-3 ${bgColor} rounded-lg`}>
-                    <Icon className={`w-6 h-6 ${iconColor}`} />
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                  <div className={`p-2 sm:p-3 ${bgColor} rounded-lg flex-shrink-0`}>
+                    <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColor}`} />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-4 mb-2">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold text-white">{doc.numero}</h3>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="text-base sm:text-lg font-bold text-white truncate">{doc.numero}</h3>
                         {/* ✅ Bulle de notification pour les factures non lues (côté client) */}
                         {isClient && (doc as any).isUnread && (
-                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Nouvelle facture non lue"></span>
+                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" title="Nouvelle facture non lue"></span>
                         )}
                       </div>
                       <span
@@ -1625,8 +1627,8 @@ export default function Factures() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-300 mb-1">Client: {doc.client_nom}</p>
-                    <div className="flex items-center gap-4 text-sm text-gray-400">
+                    <p className="text-xs sm:text-sm text-gray-300 mb-1 truncate">Client: {doc.client_nom}</p>
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-400">
                       <span>Date: {new Date(doc.date_facturation || (doc as any).date_emission || doc.created_at).toLocaleDateString('fr-FR')}</span>
                       {doc.date_echeance && (
                         <span>Échéance: {new Date(doc.date_echeance).toLocaleDateString('fr-FR')}</span>
@@ -1636,17 +1638,17 @@ export default function Factures() {
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`text-2xl font-bold mb-1 ${isAvoir ? 'text-orange-400' : 'text-white'}`}>
+                  <div className="text-left sm:text-right flex-shrink-0">
+                    <div className={`text-xl sm:text-2xl font-bold mb-1 ${isAvoir ? 'text-orange-400' : 'text-white'}`}>
                       {isAvoir ? '-' : ''}{doc.montant_ttc.toFixed(2)}€
                     </div>
-                    <div className="text-sm text-gray-400 space-y-1">
+                    <div className="text-xs sm:text-sm text-gray-400 space-y-1">
                       <div>TTC</div>
                       <div className="text-xs">HT: {doc.montant_ht.toFixed(2)}€</div>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 ml-4 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap justify-end sm:justify-start">
                   {/* Boutons changement de statut (uniquement pour factures/proforma) */}
                   {!isAvoir && (
                     <div className="flex items-center gap-1">
@@ -1692,7 +1694,7 @@ export default function Factures() {
                   {!isAvoir && (
                     <button
                       onClick={() => handleCreateAvoir(doc as Facture)}
-                      className="px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg transition-all"
+                      className="px-3 sm:px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg transition-all"
                       title="Créer un avoir"
                     >
                       <ArrowLeftRight className="w-4 h-4" />
@@ -1701,7 +1703,7 @@ export default function Factures() {
                   {!isAvoir && (
                     <button
                       onClick={() => handleEdit(doc as Facture)}
-                      className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all"
+                      className="px-3 sm:px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all"
                       title="Modifier"
                     >
                       <Edit className="w-4 h-4" />
@@ -1709,14 +1711,14 @@ export default function Factures() {
                   )}
                   <button
                     onClick={() => handleGeneratePDF(doc)}
-                    className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all"
+                    className="px-3 sm:px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all"
                     title="Télécharger PDF"
                   >
                     <Download className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(doc.id, isAvoir)}
-                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"
+                    className="px-3 sm:px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"
                     title="Supprimer"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1752,10 +1754,10 @@ export default function Factures() {
 
       {/* Formulaire Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/20">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto border border-white/20">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-white">
                 {editingId ? 'Modifier la facture' : 'Nouvelle facture'}
               </h2>
               <button
@@ -1763,14 +1765,14 @@ export default function Factures() {
                   setShowForm(false);
                   resetForm();
                 }}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Type *
@@ -1865,7 +1867,7 @@ export default function Factures() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Date de facturation *
@@ -1875,7 +1877,7 @@ export default function Factures() {
                     value={formData.date_facturation}
                     onChange={(e) => setFormData({ ...formData, date_facturation: e.target.value })}
                     required
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white/5 border border-white/10 rounded-lg text-white text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -1887,7 +1889,7 @@ export default function Factures() {
                     type="date"
                     value={formData.date_echeance}
                     onChange={(e) => setFormData({ ...formData, date_echeance: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white/5 border border-white/10 rounded-lg text-white text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -1917,7 +1919,7 @@ export default function Factures() {
                     {lignes.map((ligne, index) => (
                       <div key={`ligne-${index}-${String(ligne.quantite)}-${String(ligne.prix_unitaire_ht)}-${String(ligne.taux_tva)}`} className="bg-white/5 rounded-lg p-3 border border-white/10">
                         <div className="grid grid-cols-12 gap-2 items-start">
-                          <div className="col-span-12 md:col-span-5 relative">
+                          <div className="col-span-12 sm:col-span-6 md:col-span-5 relative">
                             <input
                               type="text"
                               value={ligne.description}
@@ -1977,7 +1979,8 @@ export default function Factures() {
                               </div>
                             )}
                           </div>
-                          <div className="col-span-4 md:col-span-2">
+                        <div className="grid grid-cols-12 gap-2 items-start">
+                          <div className="col-span-6 sm:col-span-4 md:col-span-2">
                             <input
                               type="number"
                               step="0.01"
@@ -1998,11 +2001,11 @@ export default function Factures() {
                               }}
                               placeholder="Qté"
                               min="0"
-                              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full px-2 sm:px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               tabIndex={index + 1}
                             />
                           </div>
-                          <div className="col-span-4 md:col-span-2">
+                          <div className="col-span-6 sm:col-span-4 md:col-span-2">
                             <input
                               type="number"
                               step="0.01"
@@ -2019,10 +2022,10 @@ export default function Factures() {
                               }}
                               placeholder="P.U. HT"
                               min="0"
-                              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full px-2 sm:px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
-                          <div className="col-span-3 md:col-span-2">
+                          <div className="col-span-4 sm:col-span-3 md:col-span-2">
                             <input
                               type="number"
                               step="0.1"
@@ -2040,21 +2043,21 @@ export default function Factures() {
                               placeholder="TVA %"
                               min="0"
                               max="100"
-                              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full px-2 sm:px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
-                          <div className="col-span-1">
+                          <div className="col-span-2 sm:col-span-1">
                             <button
                               type="button"
                               onClick={() => removeLigne(index)}
                               className="w-full px-2 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"
                               title="Supprimer"
                             >
-                              <Minus className="w-4 h-4" />
+                              <Minus className="w-3 h-3 sm:w-4 sm:h-4" />
                             </button>
                           </div>
                         </div>
-                        <div className="mt-2 text-right text-xs text-gray-400 space-x-3">
+                        <div className="mt-2 text-left sm:text-right text-xs text-gray-400 space-x-2 sm:space-x-3 flex flex-wrap">
                           {(() => {
                             // Calcul direct dans le JSX pour garantir le re-render
                             const quantite = typeof ligne.quantite === 'number' ? ligne.quantite : (ligne.quantite === '' ? 0 : parseFloat(String(ligne.quantite)) || 0);
@@ -2183,10 +2186,10 @@ export default function Factures() {
                 />
               </div>
 
-              <div className="flex gap-4 pt-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
+                  className="flex-1 py-2 sm:py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg text-sm sm:text-base font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
                 >
                   {editingId ? 'Modifier' : 'Créer'}
                 </button>
@@ -2196,7 +2199,7 @@ export default function Factures() {
                     setShowForm(false);
                     resetForm();
                   }}
-                  className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
+                  className="px-4 sm:px-6 py-2 sm:py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm sm:text-base transition-all"
                 >
                   Annuler
                 </button>
@@ -2208,8 +2211,8 @@ export default function Factures() {
 
       {/* Formulaire Modal Avoir */}
       {showAvoirForm && facturePourAvoir && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/20">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto border border-white/20">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-white">
                 Créer un avoir sur {facturePourAvoir.numero}
@@ -2346,8 +2349,8 @@ export default function Factures() {
 
       {/* Formulaire Modal MRA */}
       {showMRAForm && facturePourMRA && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/20">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto border border-white/20">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-white">
                 Créer une relance MRA pour {facturePourMRA.numero}
@@ -2454,8 +2457,8 @@ export default function Factures() {
 
       {/* Modal Gestion Articles */}
       {showArticlesForm && selectedEntreprise && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-white/20">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto border border-white/20">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-white">Gestion des articles</h2>
               <button
@@ -2479,10 +2482,10 @@ export default function Factures() {
 
             {/* Formulaire article */}
             <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
-              <h3 className="text-lg font-semibold text-white mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-4">
                 {editingArticleId ? 'Modifier l\'article' : 'Nouvel article'}
               </h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Code *</label>
                   <input
@@ -2691,7 +2694,7 @@ export default function Factures() {
       {/* Modal Saisie Vocale */}
       {showVoiceInput && (
         <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4"
           // NE PAS fermer le modal en cliquant sur le backdrop
           // Le modal ne se ferme QUE via le bouton X explicite
           style={{ pointerEvents: 'auto' }}
@@ -2703,7 +2706,7 @@ export default function Factures() {
           }}
         >
           <div 
-            className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-2xl w-full border border-white/20"
+            className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto border border-white/20"
             // Empêcher tous les événements de remonter au backdrop
             onClick={(e) => {
               e.stopPropagation();

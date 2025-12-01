@@ -204,16 +204,16 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Tableau de bord</h1>
-        <p className="text-gray-300">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Tableau de bord</h1>
+        <p className="text-sm sm:text-base text-gray-300">
           {isClient ? 'Vue d\'ensemble de votre espace client' : 'Vue d\'ensemble de votre activité'}
         </p>
       </div>
 
       {/* Stats Cards */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${isClient ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-6 mb-8`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isClient ? 'lg:grid-cols-3' : 'lg:grid-cols-2 xl:grid-cols-4'} gap-4 sm:gap-6 mb-6 sm:mb-8`}>
         {/* Carte Entreprise - Masquée pour les clients */}
         {!isClient && (
           <div
@@ -271,9 +271,9 @@ export default function Dashboard() {
       </div>
 
       {/* Actions Rapides */}
-      <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
-        <h2 className="text-xl font-bold text-white mb-4">Actions rapides</h2>
-        <div className={`grid grid-cols-1 ${isClient ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-4`}>
+      <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 sm:p-6 border border-white/20">
+        <h2 className="text-lg sm:text-xl font-bold text-white mb-4">Actions rapides</h2>
+        <div className={`grid grid-cols-1 ${isClient ? 'sm:grid-cols-2' : 'sm:grid-cols-2 md:grid-cols-3'} gap-3 sm:gap-4`}>
           {/* Bouton "Créer une entreprise" - Masqué pour les clients */}
           {!isClient && (
             <button

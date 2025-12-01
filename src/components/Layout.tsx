@@ -30,10 +30,28 @@ interface LayoutProps {
 
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
   const { user, signOut } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // ✅ Fermé par défaut sur mobile
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isClientSuperAdmin, setIsClientSuperAdmin] = useState(false);
   const [isClient, setIsClient] = useState(false);
+
+  // ✅ Gérer l'ouverture automatique de la sidebar sur desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(true); // Ouvrir automatiquement sur desktop (lg)
+      } else {
+        setSidebarOpen(false); // Fermer sur mobile/tablet
+      }
+    };
+
+    // Vérifier au chargement
+    handleResize();
+
+    // Écouter les changements de taille
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Définir menuItems (constante, pas de dépendances)
   const menuItems = [
@@ -259,9 +277,19 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900">
+      {/* ✅ Overlay pour mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
         className={`${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        } ${
           sidebarOpen ? 'w-64' : 'w-20'
         } fixed left-0 top-0 h-screen bg-white/10 backdrop-blur-lg border-r border-white/10 transition-all duration-300 z-50`}
       >
@@ -269,11 +297,12 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           {/* Header Sidebar */}
           <div className="p-4 border-b border-white/10 flex items-center justify-between">
             {sidebarOpen && (
-              <h1 className="text-xl font-bold text-white">Crea+Entreprises</h1>
+              <h1 className="text-xl font-bold text-white truncate">Crea+Entreprises</h1>
             )}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all"
+              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all flex-shrink-0"
+              aria-label="Toggle sidebar"
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -410,10 +439,21 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         </div>
       </aside>
 
+      {/* ✅ Bouton menu mobile (hors sidebar) */}
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed top-4 left-4 z-50 lg:hidden p-2 bg-white/10 backdrop-blur-lg rounded-lg text-white hover:bg-white/20 transition-all"
+          aria-label="Ouvrir le menu"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+      )}
+
       {/* Main Content */}
       <main
         className={`${
-          sidebarOpen ? 'ml-64' : 'ml-20'
+          sidebarOpen ? 'lg:ml-64' : 'lg:ml-20'
         } transition-all duration-300 min-h-screen`}
       >
         {children}
