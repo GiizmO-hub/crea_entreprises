@@ -52,16 +52,17 @@ export function ClientsList({
   return (
     <div className="space-y-6">
       {/* Sélection Entreprise */}
-      {entreprises.length > 1 && (
+      {entreprises.length > 0 && (
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Filtrer par entreprise
+            {entreprises.length > 1 ? 'Filtrer par entreprise' : 'Entreprise'}
           </label>
           <select
-            value={selectedEntreprise}
+            value={selectedEntreprise || ''}
             onChange={(e) => onEntrepriseChange(e.target.value)}
             className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
+            <option value="">Toutes les entreprises</option>
             {entreprises.map((ent) => (
               <option key={ent.id} value={ent.id}>
                 {ent.nom}

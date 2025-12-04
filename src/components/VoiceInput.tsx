@@ -42,12 +42,12 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
     console.log('✅ Speech Recognition supporté, initialisation...');
     setIsSupported(true);
     
-    // Configuration optimale pour capturer TOUT
+    // Configuration optimale pour capturer TOUT avec meilleure précision
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = language;
-    recognition.maxAlternatives = 5;
+    recognition.maxAlternatives = 10; // ✅ Augmenter à 10 pour avoir plus d'alternatives
     
     // Configuration audio optimale pour meilleure capture
     // Note: Ces paramètres peuvent ne pas être supportés par tous les navigateurs
@@ -55,6 +55,18 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
       if ('webkitSpeechRecognition' in window) {
         // Chrome/Edge spécifique
         (recognition as any).grammars = null; // Pas de grammaire restrictive
+        
+        // ✅ Améliorer la qualité de reconnaissance
+        // Essayer d'activer des paramètres avancés si disponibles
+        try {
+          // Service URI pour améliorer la précision (si disponible)
+          if ((recognition as any).serviceURI) {
+            // Utiliser le service de reconnaissance le plus précis
+            console.log('✅ Service URI disponible:', (recognition as any).serviceURI);
+          }
+        } catch (e) {
+          // Ignorer si non disponible
+        }
       }
     } catch (e) {
       console.log('⚠️ Configuration audio avancée non disponible');
@@ -90,26 +102,60 @@ export function VoiceInput({ onTranscript, onComplete, onStart, language = 'fr-F
         
         console.log(`📝 Traitement résultat [${i}]: isFinal=${result.isFinal}, alternatives=${result.length}`);
         
-        // Prendre la meilleure alternative
+        // ✅ AMÉLIORATION : Prendre la meilleure alternative avec post-traitement
         let bestText = '';
         let bestConf = 0;
         
+        // Fonction pour corriger les erreurs de transcription courantes
+        const correctTranscription = (text: string): string => {
+          return text
+            // Corrections de noms communs
+            .replace(/\bcyrille\b/gi, 'cyril')
+            .replace(/\bmari\b/gi, 'marie')
+            // Corrections de nombres en lettres
+            .replace(/\bvingt\s+cinq\b/gi, '25')
+            .replace(/\bvingt\s+six\b/gi, '26')
+            .replace(/\bvingt\s+sept\b/gi, '27')
+            .replace(/\btrente\b/gi, '30')
+            .replace(/\bquarante\b/gi, '40')
+            .replace(/\bcinquante\b/gi, '50')
+            .replace(/\bsoixante\b/gi, '60')
+            .replace(/\bsoixante\s+dix\b/gi, '70')
+            .replace(/\bquatre\s+vingt\b/gi, '80')
+            .replace(/\bquatre\s+vingt\s+dix\b/gi, '90')
+            .replace(/\bcent\b/gi, '100')
+            .replace(/\bmille\b/gi, '1000')
+            // Corrections de mots commerciaux
+            .replace(/\bfacturation\b/gi, 'facture')
+            .replace(/\bdevis\s+devis\b/gi, 'devis') // Doublons
+            .replace(/\bfacture\s+facture\b/gi, 'facture') // Doublons
+            // Nettoyer les espaces multiples
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
+        
         for (let alt = 0; alt < result.length; alt++) {
-          const altText = result[alt]?.transcript?.trim() || '';
+          let altText = result[alt]?.transcript?.trim() || '';
           const altConf = result[alt]?.confidence || 0;
+          
+          // ✅ Appliquer les corrections de transcription
+          altText = correctTranscription(altText);
           
           console.log(`  📝 Alternative [${i}][${alt}]: "${altText}" (confiance: ${Math.round(altConf * 100)}%)`);
           
-          if (altText.length > 0 && altConf > bestConf) {
-            bestText = altText;
-            bestConf = altConf;
+          // ✅ Préférer les alternatives plus longues si la confiance est similaire (dans 10%)
+          if (altText.length > 0) {
+            if (altConf > bestConf || (altConf >= bestConf * 0.9 && altText.length > bestText.length)) {
+              bestText = altText;
+              bestConf = altConf;
+            }
           }
         }
         
         if (bestText.length === 0 && result[0]?.transcript) {
-          bestText = result[0].transcript.trim();
+          bestText = correctTranscription(result[0].transcript.trim());
           bestConf = result[0].confidence || 0;
-          console.log(`  📝 Utilisation alternative 0 par défaut: "${bestText}"`);
+          console.log(`  📝 Utilisation alternative 0 par défaut (corrigée): "${bestText}"`);
         }
         
         if (bestText.length === 0) {

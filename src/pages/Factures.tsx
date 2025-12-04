@@ -55,17 +55,18 @@ export default function Factures() {
   const [parsedVoiceData, setParsedVoiceData] = useState<any>(null); // Stocker les données parsées
   const [searchTerm, setSearchTerm] = useState('');
   const aiTimeoutRef = useRef<any>(null); // Pour debouncer les appels IA
-  const [filterType, setFilterType] = useState<string>('all'); // 'all', 'facture', 'proforma', 'avoir', 'recues'
+  const [filterType, setFilterType] = useState<string>('all'); // 'all', 'facture', 'proforma', 'devis', 'avoir', 'recues'
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
   const [isClient, setIsClient] = useState<boolean>(false);
   const [userClientId, setUserClientId] = useState<string | null>(null); // ID du client si l'utilisateur est un client
   const [formData, setFormData] = useState<{
     numero: string;
-    type: 'facture' | 'proforma';
+    type: 'facture' | 'proforma' | 'devis';
     client_id: string;
     entreprise_id: string;
     date_facturation: string;
     date_echeance: string;
+    date_validite?: string; // Pour les devis
     montant_ht: number;
     taux_tva: number;
     statut: string;
@@ -74,7 +75,7 @@ export default function Factures() {
     source?: 'plateforme' | 'externe' | 'client';
   }>({
     numero: '',
-    type: 'facture',
+      type: 'facture' as 'facture' | 'proforma' | 'devis',
     client_id: '',
     entreprise_id: '',
     date_facturation: new Date().toISOString().split('T')[0],
@@ -116,6 +117,51 @@ export default function Factures() {
 
     checkIfClient();
   }, [user]);
+
+  // Récupérer les données de devis depuis une opportunité CRM
+  useEffect(() => {
+    const devisDataStr = sessionStorage.getItem('devis_from_opportunite');
+    if (devisDataStr) {
+      try {
+        const devisData = JSON.parse(devisDataStr);
+        console.log('📋 [Factures] Données devis depuis opportunité:', devisData);
+        
+        // Pré-remplir le formulaire avec les données de l'opportunité
+        setFormData(prev => ({
+          ...prev,
+          type: 'devis',
+          client_id: devisData.client_id || prev.client_id,
+          entreprise_id: devisData.entreprise_id || prev.entreprise_id,
+          montant_ht: devisData.montant_ht || prev.montant_ht,
+          notes: devisData.notes || prev.notes,
+          statut: 'brouillon',
+        }));
+
+        // Si description, créer une ligne
+        if (devisData.description) {
+          setLignes([{
+            id: crypto.randomUUID(),
+            description: devisData.description,
+            quantite: 1,
+            prix_unitaire_ht: devisData.montant_ht || 0,
+            taux_tva: 20,
+            montant_ht: devisData.montant_ht || 0,
+            tva: (devisData.montant_ht || 0) * 0.20,
+            montant_ttc: (devisData.montant_ht || 0) * 1.20,
+            ordre: 1,
+          }]);
+        }
+
+        // Ouvrir le formulaire
+        setShowForm(true);
+        
+        // Nettoyer sessionStorage
+        sessionStorage.removeItem('devis_from_opportunite');
+      } catch (error) {
+        console.error('Erreur parsing devis depuis opportunité:', error);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -224,7 +270,7 @@ export default function Factures() {
         .from('factures')
         .select('*')
         .eq('entreprise_id', selectedEntreprise)
-        .in('type', ['facture', 'proforma']);
+        .in('type', ['facture', 'proforma', 'devis']);
 
       // Si l'utilisateur est un client, filtrer uniquement ses factures
       if (isClient && userClientId) {
@@ -570,10 +616,15 @@ export default function Factures() {
     };
   };
 
-  const generateNumero = async (type: 'facture' | 'proforma' | 'avoir' = 'facture', maxRetries: number = 10): Promise<string> => {
-    if (!selectedEntreprise) return type === 'proforma' ? 'PROFORMA-001' : type === 'avoir' ? 'AVOIR-001' : 'FAC-001';
+  const generateNumero = async (type: 'facture' | 'proforma' | 'devis' | 'avoir' = 'facture', maxRetries: number = 10): Promise<string> => {
+    if (!selectedEntreprise) {
+      if (type === 'proforma') return 'PROFORMA-001';
+      if (type === 'avoir') return 'AVOIR-001';
+      if (type === 'devis') return 'DEVIS-001';
+      return 'FAC-001';
+    }
 
-    const prefix = type === 'proforma' ? 'PROFORMA' : type === 'avoir' ? 'AVOIR' : 'FAC';
+    const prefix = type === 'proforma' ? 'PROFORMA' : type === 'avoir' ? 'AVOIR' : type === 'devis' ? 'DEVIS' : 'FAC';
     const table = type === 'avoir' ? 'avoirs' : 'factures';
 
     try {
@@ -711,7 +762,7 @@ export default function Factures() {
         }
       }
 
-      const dataToSave = {
+      const dataToSave: any = {
         numero: numeroFinal,
         type: formData.type,
         client_id: formData.client_id,
@@ -726,6 +777,11 @@ export default function Factures() {
         source: factureSource, // Les factures créées/éditées par les clients ont source='client', celles de la plateforme ont source='plateforme'
         updated_at: new Date().toISOString(),
       };
+      
+      // Ajouter date_validite pour les devis
+      if (formData.type === 'devis' && formData.date_validite) {
+        dataToSave.date_validite = formData.date_validite;
+      }
       
       console.log('💾 [Factures] Sauvegarde facture:', {
         editingId,
@@ -917,16 +973,18 @@ export default function Factures() {
     setEditingId(facture.id);
     setFormData({
       numero: facture.numero,
-      type: (facture.type || 'facture') as 'facture' | 'proforma',
+      type: (facture.type || 'facture') as 'facture' | 'proforma' | 'devis',
       client_id: facture.client_id,
       entreprise_id: facture.entreprise_id,
       date_facturation: (facture.date_facturation || facture.date_emission || facture.created_at).split('T')[0],
       date_echeance: facture.date_echeance?.split('T')[0] || '',
+      date_validite: (facture as any).date_validite?.split('T')[0] || '',
       montant_ht: facture.montant_ht,
       taux_tva: facture.taux_tva || (facture.montant_tva ? (facture.montant_tva / facture.montant_ht) * 100 : 20),
       statut: facture.statut,
       motif: '',
       notes: (facture as any).notes || '',
+      source: facture.source || 'plateforme',
     });
     
     // Charger les lignes de la facture
@@ -1047,6 +1105,94 @@ export default function Factures() {
     }
   };
 
+  const handleTransformDevisEnFacture = async (devis: Facture) => {
+    console.log('🔄 [Factures] Transformation devis en facture:', devis);
+    
+    if (!confirm(`Transformer le devis ${devis.numero} en facture ?\n\nLe devis sera modifié et deviendra une facture.`)) return;
+    
+    if (!selectedEntreprise) {
+      alert('❌ Veuillez sélectionner une entreprise');
+      return;
+    }
+    
+    try {
+      // Générer un nouveau numéro de facture basé sur le numéro du devis
+      // Exemple: DEVIS-001 -> FAC-001
+      let numeroFacture = devis.numero.replace(/DEVIS/i, 'FAC');
+      // Si le numéro ne commence pas par DEVIS, générer un nouveau numéro
+      if (numeroFacture === devis.numero) {
+        numeroFacture = await generateNumero('facture');
+      }
+      
+      console.log('📝 [Factures] Numéro facture:', numeroFacture);
+      
+      // Vérifier l'unicité du numéro
+      const { data: existingFacture } = await supabase
+        .from('factures')
+        .select('id')
+        .eq('entreprise_id', selectedEntreprise)
+        .eq('numero', numeroFacture)
+        .neq('id', devis.id) // Exclure le devis actuel
+        .maybeSingle();
+      
+      if (existingFacture) {
+        // Numéro existe déjà, générer un nouveau
+        numeroFacture = await generateNumero('facture');
+        console.log('📝 [Factures] Numéro déjà utilisé, nouveau numéro généré:', numeroFacture);
+      }
+      
+      // Transformer le devis en facture en modifiant ses propriétés
+      const updateData: any = {
+        type: 'facture',
+        numero: numeroFacture,
+        statut: 'brouillon', // Réinitialiser le statut pour une nouvelle facture (statut valide pour factures)
+        date_validite: null, // Supprimer la date de validité (spécifique aux devis)
+        updated_at: new Date().toISOString(),
+      };
+      
+      console.log('🔄 [Factures] Transformation devis -> facture:', {
+        ancienNumero: devis.numero,
+        nouveauNumero: numeroFacture,
+        ancienType: devis.type,
+        ancienStatut: devis.statut,
+        nouveauStatut: 'brouillon',
+      });
+      
+      // Si date_echeance n'existe pas, l'ajouter (30 jours par défaut)
+      if (!devis.date_echeance) {
+        const dateEmission = devis.date_emission || devis.date_facturation || new Date().toISOString().split('T')[0];
+        const dateEcheance = new Date(dateEmission);
+        dateEcheance.setDate(dateEcheance.getDate() + 30);
+        updateData.date_echeance = dateEcheance.toISOString().split('T')[0];
+      }
+      
+      console.log('💾 [Factures] Données de mise à jour:', updateData);
+      
+      const { data: factureTransformee, error: updateError } = await supabase
+        .from('factures')
+        .update(updateData)
+        .eq('id', devis.id)
+        .select()
+        .single();
+      
+      if (updateError) {
+        console.error('❌ [Factures] Erreur transformation devis:', updateError);
+        throw updateError;
+      }
+      
+      console.log('✅ [Factures] Devis transformé en facture:', factureTransformee?.id);
+      
+      // Recharger les factures pour mettre à jour le state React
+      await loadFactures();
+      await loadAvoirs(); // Recharger aussi les avoirs au cas où
+      
+      alert(`✅ Devis ${devis.numero} transformé en facture ${numeroFacture} avec succès !`);
+    } catch (error: any) {
+      console.error('❌ [Factures] Erreur transformation devis en facture:', error);
+      alert('❌ Erreur: ' + (error.message || 'Erreur inconnue'));
+    }
+  };
+
   const handleDelete = async (id: string, isAvoir: boolean = false) => {
     const type = isAvoir ? 'avoir' : 'facture';
     if (!confirm(`Supprimer ce ${type} ?`)) return;
@@ -1068,16 +1214,63 @@ export default function Factures() {
 
   const handleChangeStatut = async (doc: Facture & { docType?: string }, nouveauStatut: string) => {
     try {
+      console.log('🔄 [Factures] Changement statut:', {
+        docId: doc.id,
+        numero: doc.numero,
+        type: doc.type,
+        ancienStatut: doc.statut,
+        nouveauStatut,
+      });
+      
       const isAvoir = doc.docType === 'avoir';
       const table = isAvoir ? 'avoirs' : 'factures';
-      const updateData = isAvoir ? { statut: nouveauStatut } : { statut: nouveauStatut };
+      
+      // Pour les factures (pas les avoirs), s'assurer que le type est bien 'facture' ou 'proforma'
+      // Si c'était un devis transformé, vérifier que le type a bien été changé
+      const updateData: any = { statut: nouveauStatut };
+      
+      // Si c'est une facture qui était un devis, s'assurer que le type est bien 'facture'
+      if (!isAvoir && doc.type === 'devis') {
+        console.warn('⚠️ [Factures] Tentative de changer le statut d\'un devis non transformé, transformation automatique...');
+        updateData.type = 'facture'; // Forcer le type à 'facture' si ce n'est pas déjà fait
+        updateData.date_validite = null; // Supprimer la date de validité
+      }
+      
+      // Validation : s'assurer que le nouveau statut est compatible avec le type
+      if (!isAvoir) {
+        const statutsFacture = ['brouillon', 'envoyee', 'en_attente', 'payee', 'annulee', 'valide'];
+        const statutsDevis = ['envoye', 'accepte', 'refuse', 'expire'];
+        
+        // Si le type est 'facture' ou 'proforma', utiliser uniquement les statuts de facture
+        if ((doc.type === 'facture' || doc.type === 'proforma') && !statutsFacture.includes(nouveauStatut)) {
+          console.error('❌ [Factures] Statut incompatible avec le type:', { type: doc.type, statut: nouveauStatut });
+          throw new Error(`Le statut "${nouveauStatut}" n'est pas valide pour une ${doc.type}. Statuts valides: ${statutsFacture.join(', ')}`);
+        }
+        
+        // Si le type est 'devis', utiliser uniquement les statuts de devis
+        if (doc.type === 'devis' && !statutsDevis.includes(nouveauStatut)) {
+          console.error('❌ [Factures] Statut incompatible avec le type devis:', { statut: nouveauStatut });
+          throw new Error(`Le statut "${nouveauStatut}" n'est pas valide pour un devis. Statuts valides: ${statutsDevis.join(', ')}`);
+        }
+      }
 
       const { error } = await supabase
         .from(table)
         .update(updateData)
         .eq('id', doc.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [Factures] Erreur UPDATE statut:', error);
+        console.error('❌ [Factures] Détails erreur:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+        throw error;
+      }
+      
+      console.log('✅ [Factures] Statut mis à jour avec succès');
 
       // ✅ NOUVEAU : Si la facture est envoyée par la plateforme (source = 'plateforme') et passe à 'envoyee', notifier le client
       if (!isAvoir && nouveauStatut === 'envoyee' && doc.source === 'plateforme' && doc.client_id && !isClient) {
@@ -1189,10 +1382,11 @@ export default function Factures() {
 
       // Générer le PDF
       await generatePDF({
-        type: (doc.type || (isAvoir ? 'avoir' : 'facture')) as 'facture' | 'proforma' | 'avoir',
+        type: (doc.type || (isAvoir ? 'avoir' : 'facture')) as 'facture' | 'proforma' | 'devis' | 'avoir',
         numero: doc.numero,
         date_emission: doc.date_facturation || (doc as any).date_emission || doc.created_at,
         date_echeance: doc.date_echeance,
+        date_validite: (documentData as any).date_validite || undefined,
         client: {
           nom: clientData?.nom,
           prenom: clientData?.prenom,
@@ -1231,11 +1425,12 @@ export default function Factures() {
   const resetForm = () => {
     setFormData({
       numero: '',
-      type: 'facture' as 'facture' | 'proforma',
+      type: 'facture' as 'facture' | 'proforma' | 'devis',
       client_id: '',
       entreprise_id: selectedEntreprise,
       date_facturation: new Date().toISOString().split('T')[0],
       date_echeance: '',
+      date_validite: '',
       montant_ht: 0,
       taux_tva: 20,
       statut: 'brouillon',
@@ -1338,6 +1533,8 @@ export default function Factures() {
       matchesType = doc.docType === 'facture' && doc.type === 'facture';
     } else if (filterType === 'proforma') {
       matchesType = doc.docType === 'facture' && doc.type === 'proforma';
+    } else if (filterType === 'devis') {
+      matchesType = doc.docType === 'facture' && doc.type === 'devis';
     } else if (filterType === 'avoir') {
       matchesType = doc.docType === 'avoir';
     } else if (filterType === 'all') {
@@ -1432,6 +1629,36 @@ export default function Factures() {
             <span className="hidden sm:inline">Facture vocale</span>
           </button>
           <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('🔵 Bouton Devis vocal cliqué');
+              resetForm();
+              setFormData(prev => ({ ...prev, type: 'devis', statut: 'brouillon' }));
+              setVoiceTranscript('');
+              setParsedVoiceData(null);
+              setShowVoiceInput(true);
+            }}
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm sm:text-base font-medium transition-all border border-blue-500/30"
+            title="Créer un devis vocalement"
+          >
+            <Mic className="w-4 h-4" />
+            <span className="hidden sm:inline">Devis vocal</span>
+          </button>
+          <button
+            onClick={async () => {
+              resetForm();
+              const numero = await generateNumero('devis');
+              setFormData((prev) => ({ ...prev, numero, type: 'devis', statut: 'brouillon' }));
+              setShowForm(true);
+            }}
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-sm sm:text-base font-medium transition-all border border-green-500/30"
+          >
+            <FileText className="w-4 h-4" />
+            <span className="hidden sm:inline">Nouveau devis</span>
+            <span className="sm:hidden">Devis</span>
+          </button>
+          <button
             onClick={async () => {
               resetForm();
               const numero = await generateNumero('facture');
@@ -1508,6 +1735,16 @@ export default function Factures() {
           Proforma
         </button>
         <button
+          onClick={() => setFilterType('devis')}
+          className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${
+            filterType === 'devis'
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+              : 'bg-white/10 text-gray-300 hover:bg-white/15'
+          }`}
+        >
+          Devis
+        </button>
+        <button
           onClick={() => setFilterType('avoir')}
           className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${
             filterType === 'avoir'
@@ -1556,15 +1793,16 @@ export default function Factures() {
         {filteredDocuments.map((doc) => {
           const isAvoir = doc.docType === 'avoir';
           const isProforma = doc.type === 'proforma';
-          const Icon = isAvoir ? CreditCard : isProforma ? Receipt : FileText;
-          const iconColor = isAvoir ? 'text-orange-400' : isProforma ? 'text-yellow-400' : 'text-purple-400';
-          const bgColor = isAvoir ? 'bg-orange-500/20' : isProforma ? 'bg-yellow-500/20' : 'bg-purple-500/20';
+          const isDevis = doc.type === 'devis';
+          const Icon = isAvoir ? CreditCard : isProforma ? Receipt : isDevis ? FileText : FileText;
+          const iconColor = isAvoir ? 'text-orange-400' : isProforma ? 'text-yellow-400' : isDevis ? 'text-blue-400' : 'text-purple-400';
+          const bgColor = isAvoir ? 'bg-orange-500/20' : isProforma ? 'bg-yellow-500/20' : isDevis ? 'bg-blue-500/20' : 'bg-purple-500/20';
 
           return (
             <div
               key={doc.id}
               className={`bg-white/10 backdrop-blur-lg rounded-xl p-4 sm:p-6 border ${
-                isAvoir ? 'border-orange-500/30' : isProforma ? 'border-yellow-500/30' : 'border-white/20'
+                isAvoir ? 'border-orange-500/30' : isProforma ? 'border-yellow-500/30' : isDevis ? 'border-blue-500/30' : 'border-white/20'
               } hover:bg-white/15 transition-all`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1587,6 +1825,14 @@ export default function Factures() {
                             ? 'bg-orange-500/20 text-orange-400'
                             : isProforma
                             ? 'bg-yellow-500/20 text-yellow-400'
+                            : isDevis
+                            ? doc.statut === 'accepte'
+                              ? 'bg-green-500/20 text-green-400'
+                              : doc.statut === 'refuse' || doc.statut === 'expire'
+                              ? 'bg-red-500/20 text-red-400'
+                              : doc.statut === 'envoye'
+                              ? 'bg-blue-500/20 text-blue-400'
+                              : 'bg-gray-500/20 text-gray-400'
                             : (doc as any).displayStatut === 'payee' || doc.statut === 'payee'
                             ? 'bg-green-500/20 text-green-400'
                             : (doc as any).displayStatut === 'valide' || doc.statut === 'envoyee' || doc.statut === 'valide'
@@ -1594,7 +1840,7 @@ export default function Factures() {
                             : 'bg-gray-500/20 text-gray-400'
                         }`}
                       >
-                        {isAvoir ? 'Avoir' : isProforma ? 'Proforma' : ((doc as any).displayStatut || doc.statut)}
+                        {isAvoir ? 'Avoir' : isProforma ? 'Proforma' : isDevis ? (doc.statut === 'accepte' ? 'Devis accepté' : doc.statut === 'refuse' ? 'Devis refusé' : doc.statut === 'expire' ? 'Devis expiré' : doc.statut === 'envoye' ? 'Devis envoyé' : 'Devis brouillon') : ((doc as any).displayStatut || doc.statut)}
                       </span>
                       {/* ✅ Badges pour les types de factures (uniquement côté client pour les factures reçues de la plateforme) */}
                       {!isAvoir && !isProforma && isClient && doc.source === 'plateforme' && (
@@ -1653,47 +1899,100 @@ export default function Factures() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-end sm:justify-start">
-                  {/* Boutons changement de statut (uniquement pour factures/proforma) */}
+                  {/* Boutons changement de statut */}
                   {!isAvoir && (
                     <div className="flex items-center gap-1">
-                      {doc.statut === 'brouillon' && (
-                        <button
-                          onClick={() => handleChangeStatut(doc, 'envoyee')}
-                          className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all text-xs font-medium"
-                          title="Marquer comme envoyé"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                        </button>
+                      {/* Boutons pour devis */}
+                      {isDevis && (
+                        <>
+                          {doc.statut === 'brouillon' && (
+                            <button
+                              onClick={() => handleChangeStatut(doc, 'envoye')}
+                              className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all text-xs font-medium"
+                              title="Marquer comme envoyé"
+                            >
+                              <Send className="w-4 h-4" />
+                            </button>
+                          )}
+                          {doc.statut === 'envoye' && (
+                            <>
+                              <button
+                                onClick={() => handleChangeStatut(doc, 'accepte')}
+                                className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all text-xs font-medium"
+                                title="Marquer comme accepté"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleChangeStatut(doc, 'refuse')}
+                                className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all text-xs font-medium"
+                                title="Marquer comme refusé"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </>
                       )}
-                      {doc.statut === 'envoyee' && (
-                        <button
-                          onClick={() => handleChangeStatut(doc, 'en_attente')}
-                          className="px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg transition-all text-xs font-medium"
-                          title="Marquer comme en attente"
-                        >
-                          <Clock className="w-4 h-4" />
-                        </button>
-                      )}
-                      {doc.statut === 'en_attente' && (
-                        <button
-                          onClick={() => handleChangeStatut(doc, 'payee')}
-                          className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all text-xs font-medium"
-                          title="Marquer comme payé"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                        </button>
-                      )}
-                      {/* Bouton MRA pour factures en retard */}
-                      {!isAvoir && isFactureEnRetard(doc as Facture) && (
-                        <button
-                          onClick={() => handleCreateMRA(doc as Facture)}
-                          className="px-3 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg transition-all text-xs font-medium"
-                          title="Créer une relance MRA"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
+                      {/* Boutons pour factures/proforma */}
+                      {!isDevis && (
+                        <>
+                          {doc.statut === 'brouillon' && (
+                            <button
+                              onClick={() => handleChangeStatut(doc, 'envoyee')}
+                              className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all text-xs font-medium"
+                              title="Marquer comme envoyé"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {doc.statut === 'envoyee' && (
+                            <button
+                              onClick={() => handleChangeStatut(doc, 'en_attente')}
+                              className="px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg transition-all text-xs font-medium"
+                              title="Marquer comme en attente"
+                            >
+                              <Clock className="w-4 h-4" />
+                            </button>
+                          )}
+                          {doc.statut === 'en_attente' && (
+                            <button
+                              onClick={() => handleChangeStatut(doc, 'payee')}
+                              className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all text-xs font-medium"
+                              title="Marquer comme payé"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {/* Bouton MRA pour factures en retard */}
+                          {isFactureEnRetard(doc as Facture) && (
+                            <button
+                              onClick={() => handleCreateMRA(doc as Facture)}
+                              className="px-3 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg transition-all text-xs font-medium"
+                              title="Créer une relance MRA"
+                            >
+                              <Send className="w-4 h-4" />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
+                  )}
+                  {/* Bouton Transformer en facture (uniquement pour devis acceptés) */}
+                  {!isAvoir && isDevis && doc.statut === 'accepte' && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('🔄 [Factures] Bouton transformer cliqué pour devis:', doc.id, doc.numero, 'statut:', doc.statut);
+                        handleTransformDevisEnFacture(doc as Facture);
+                      }}
+                      className="px-3 sm:px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-all flex items-center gap-2"
+                      title="Transformer en facture"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="hidden sm:inline text-sm">Transformer</span>
+                    </button>
                   )}
                   {!isAvoir && (
                     <button
@@ -1762,7 +2061,9 @@ export default function Factures() {
           <div className="bg-white/10 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto border border-white/20">
             <div className="flex items-center justify-between mb-4 sm:mb-6">
               <h2 className="text-xl sm:text-2xl font-bold text-white">
-                {editingId ? 'Modifier la facture' : 'Nouvelle facture'}
+                {editingId 
+                  ? formData.type === 'devis' ? 'Modifier le devis' : formData.type === 'proforma' ? 'Modifier la proforma' : 'Modifier la facture'
+                  : formData.type === 'devis' ? 'Nouveau devis' : formData.type === 'proforma' ? 'Nouvelle proforma' : 'Nouvelle facture'}
               </h2>
               <button
                 onClick={() => {
@@ -1783,15 +2084,17 @@ export default function Factures() {
                   </label>
                   <select
                     value={formData.type}
-                    onChange={(e) => {
-                      const newType = e.target.value as 'facture' | 'proforma';
-                      setFormData({ ...formData, type: newType, numero: '' });
+                    onChange={async (e) => {
+                      const newType = e.target.value as 'facture' | 'proforma' | 'devis';
+                      const numero = await generateNumero(newType);
+                      setFormData({ ...formData, type: newType, numero, statut: newType === 'devis' ? 'brouillon' : formData.statut });
                     }}
                     required
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="facture">Facture</option>
                     <option value="proforma">Proforma</option>
+                    <option value="devis">Devis</option>
                   </select>
                 </div>
 
@@ -1805,7 +2108,7 @@ export default function Factures() {
                     onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
                     required
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder={formData.type === 'proforma' ? 'PROFORMA-001' : 'FAC-001'}
+                    placeholder={formData.type === 'proforma' ? 'PROFORMA-001' : formData.type === 'devis' ? 'DEVIS-001' : 'FAC-001'}
                   />
                 </div>
               </div>
@@ -1821,11 +2124,23 @@ export default function Factures() {
                     required
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="brouillon">Brouillon</option>
-                    <option value="envoyee">Envoyée</option>
-                    <option value="en_attente">En attente</option>
-                    <option value="payee">Payée</option>
-                    <option value="annulee">Annulée</option>
+                    {formData.type === 'devis' ? (
+                      <>
+                        <option value="brouillon">Brouillon</option>
+                        <option value="envoye">Envoyé</option>
+                        <option value="accepte">Accepté</option>
+                        <option value="refuse">Refusé</option>
+                        <option value="expire">Expiré</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="brouillon">Brouillon</option>
+                        <option value="envoyee">Envoyée</option>
+                        <option value="en_attente">En attente</option>
+                        <option value="payee">Payée</option>
+                        <option value="annulee">Annulée</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 {/* ✅ NOUVEAU : Champ pour marquer les factures reçues de l'extérieur (uniquement côté plateforme) */}
@@ -1985,13 +2300,25 @@ export default function Factures() {
                           </div>
                           <div className="col-span-6 sm:col-span-4 md:col-span-2">
                             <input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={ligne.quantite !== undefined && ligne.quantite !== null ? String(ligne.quantite) : ''}
                               onChange={(e) => {
-                                // Garder la valeur comme string pendant la saisie pour éviter que le curseur bouge
+                                // ✅ Sauvegarder la position du curseur avant le update
+                                const input = e.target;
+                                const cursorPosition = input.selectionStart || 0;
                                 const value = e.target.value;
+                                
+                                // Mettre à jour la ligne
                                 updateLigne(index, { quantite: value === '' ? '' : value });
+                                
+                                // ✅ Restaurer la position du curseur après le re-render
+                                setTimeout(() => {
+                                  if (input && input.setSelectionRange) {
+                                    const newPosition = Math.min(cursorPosition, value.length);
+                                    input.setSelectionRange(newPosition, newPosition);
+                                  }
+                                }, 0);
                               }}
                               onBlur={(e) => {
                                 // Convertir en nombre seulement au blur
@@ -1999,32 +2326,52 @@ export default function Factures() {
                                 updateLigne(index, { quantite: value });
                               }}
                               onFocus={(e) => {
-                                // ✅ Sélectionner le texte au focus pour faciliter la saisie
-                                e.target.select();
+                                // ✅ Ne pas sélectionner automatiquement, laisser l'utilisateur éditer
+                                // Seulement si le champ est vide ou contient 0
+                                if (!e.target.value || e.target.value === '0') {
+                                  e.target.select();
+                                }
                               }}
                               placeholder="Qté"
-                              min="0"
                               className="w-full px-2 sm:px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               tabIndex={index + 1}
                             />
                           </div>
                           <div className="col-span-6 sm:col-span-4 md:col-span-2">
                             <input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={ligne.prix_unitaire_ht !== undefined && ligne.prix_unitaire_ht !== null ? String(ligne.prix_unitaire_ht) : ''}
                               onChange={(e) => {
-                                // Garder la valeur comme string pendant la saisie pour éviter que le curseur bouge
+                                // ✅ Sauvegarder la position du curseur avant le update
+                                const input = e.target;
+                                const cursorPosition = input.selectionStart || 0;
                                 const value = e.target.value;
+                                
+                                // Mettre à jour la ligne
                                 updateLigne(index, { prix_unitaire_ht: value === '' ? '' : value });
+                                
+                                // ✅ Restaurer la position du curseur après le re-render
+                                setTimeout(() => {
+                                  if (input && input.setSelectionRange) {
+                                    const newPosition = Math.min(cursorPosition, value.length);
+                                    input.setSelectionRange(newPosition, newPosition);
+                                  }
+                                }, 0);
                               }}
                               onBlur={(e) => {
                                 // Convertir en nombre seulement au blur
                                 const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
                                 updateLigne(index, { prix_unitaire_ht: value });
                               }}
+                              onFocus={(e) => {
+                                // ✅ Ne pas sélectionner automatiquement, laisser l'utilisateur éditer
+                                // Seulement si le champ est vide ou contient 0
+                                if (!e.target.value || e.target.value === '0') {
+                                  e.target.select();
+                                }
+                              }}
                               placeholder="P.U. HT"
-                              min="0"
                               className="w-full px-2 sm:px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
@@ -2731,7 +3078,9 @@ export default function Factures() {
             }}
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white">Créer une facture vocalement</h2>
+              <h2 className="text-2xl font-bold text-white">
+                {formData.type === 'devis' ? 'Créer un devis vocalement' : 'Créer une facture vocalement'}
+              </h2>
               <button
                 type="button"
                 onClick={(e) => {
@@ -2764,6 +3113,18 @@ export default function Factures() {
               <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg mb-4">
                 <p className="text-sm text-blue-300 mb-2">
                   💡 <strong>Exemples de commandes :</strong>
+                  <br />
+                  <span className="text-xs text-gray-400 mt-2 block">
+                    <strong>Pour plusieurs lignes, utilisez :</strong>
+                    <br />
+                    • Des virgules : "portail 1899€, moteur 1799€"
+                    <br />
+                    • Des mots de liaison : "portail 1899€ puis moteur 1799€"
+                    <br />
+                    • Des pauses : "portail 1899€. Moteur 1799€"
+                    <br />
+                    • Des quantités : "2 moteurs 1799€" ou "deux portails 1899€"
+                  </span>
                 </p>
                 <ul className="text-xs text-blue-200 space-y-1 list-disc list-inside">
                   <li>"Facture pour [nom client] montant 750 euros TVA 20%"</li>
@@ -3311,9 +3672,10 @@ export default function Factures() {
                     console.log('📝 Description:', parsed.description || 'AUCUNE');
                     console.log('📝 Montant:', parsed.montant || 'AUCUN');
                     
-                    // Générer le numéro de facture
+                    // Générer le numéro (facture ou devis selon le type)
                     console.log('📝 Génération numéro...');
-                    const numero = await generateNumero('facture');
+                    const docType = formData.type === 'devis' ? 'devis' : 'facture';
+                    const numero = await generateNumero(docType);
                     console.log('📝 Numéro:', numero);
                     
                     // Appliquer les données
@@ -3327,6 +3689,7 @@ export default function Factures() {
                         taux_tva: parsed.taux_tva || prev.taux_tva || 20,
                         date_facturation: parsed.date || parsed.date_facturation || prev.date_facturation || new Date().toISOString().split('T')[0],
                         date_echeance: parsed.date_echeance || prev.date_echeance,
+                        date_validite: prev.type === 'devis' ? (parsed.date_validite || parsed.date_echeance || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]) : prev.date_validite,
                         notes: parsed.notes || prev.notes,
                         montant_ht: parsed.montant && (!parsed.lignes || parsed.lignes.length === 0) ? parsed.montant : prev.montant_ht,
                       };

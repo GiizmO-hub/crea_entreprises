@@ -38,6 +38,7 @@ export default function Clients() {
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isClient, setIsClient] = useState(false); // Vérifier si c'est un client de l'espace client
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false); // Vérifier si c'est un super admin de la plateforme
 
   // États formulaires
   const [showForm, setShowForm] = useState(false);
@@ -77,14 +78,40 @@ export default function Clients() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [options, setOptions] = useState<Option[]>([]);
 
-  // Vérifier si l'utilisateur est un client de l'espace client
+  // Vérifier si l'utilisateur est un client de l'espace client ou un super admin
   const checkIfClient = async () => {
     if (!user) {
       setIsClient(false);
+      setIsSuperAdmin(false);
       return;
     }
 
     try {
+      // D'abord vérifier si c'est un super admin de la plateforme
+      const { data: isPlatformAdmin } = await supabase.rpc('is_platform_super_admin');
+      
+      if (isPlatformAdmin === true) {
+        setIsSuperAdmin(true);
+        setIsClient(false);
+        console.log('👑 [Clients] Super Admin plateforme détecté');
+        return;
+      }
+
+      // Vérifier dans la table utilisateurs
+      const { data: utilisateur } = await supabase
+        .from('utilisateurs')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (utilisateur && (utilisateur.role === 'super_admin' || utilisateur.role === 'admin')) {
+        setIsSuperAdmin(true);
+        setIsClient(false);
+        console.log('👑 [Clients] Super Admin plateforme détecté (via utilisateurs)');
+        return;
+      }
+
+      // Si pas super admin, vérifier si c'est un client
       const { data: espaceClient } = await supabase
         .from('espaces_membres_clients')
         .select('id')
@@ -93,10 +120,12 @@ export default function Clients() {
         .maybeSingle();
 
       setIsClient(!!espaceClient);
-      console.log('👤 [Clients] isClient:', !!espaceClient);
+      setIsSuperAdmin(false);
+      console.log('👤 [Clients] isClient:', !!espaceClient, 'isSuperAdmin: false');
     } catch (error) {
-      console.error('❌ [Clients] Erreur vérification client:', error);
+      console.error('❌ [Clients] Erreur vérification rôle:', error);
       setIsClient(false);
+      setIsSuperAdmin(false);
     }
   };
 
@@ -143,6 +172,13 @@ export default function Clients() {
       return;
     }
     
+    // Si c'est un super admin, charger tous les clients (pas besoin d'entreprise sélectionnée)
+    if (isSuperAdmin) {
+      console.log('🔄 [Clients] Chargement clients (mode super admin - tous les clients)');
+      loadClients();
+      return;
+    }
+    
     // Si c'est un propriétaire, attendre qu'une entreprise soit sélectionnée
     if (selectedEntreprise) {
       console.log('🔄 [Clients] Chargement clients pour entreprise:', selectedEntreprise);
@@ -153,7 +189,7 @@ export default function Clients() {
       setClients([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedEntreprise, isClient, user]);
+  }, [selectedEntreprise, isClient, isSuperAdmin, user]);
 
   // Chargement des données
   const loadEntreprises = async () => {
@@ -343,22 +379,40 @@ export default function Clients() {
         }
       } else {
         // ✅ Si c'est un propriétaire ou super_admin, charger les CLIENTS DE LA PLATEFORME (clients)
-        if (!selectedEntreprise) {
-          console.warn('⚠️ [Clients] Aucune entreprise sélectionnée pour charger les clients');
-          setClients([]);
-          setLoading(false);
-          return;
+        console.log('👑 [Clients] Propriétaire/Super Admin - Chargement clients de la plateforme');
+        console.log('   isSuperAdmin:', isSuperAdmin, 'selectedEntreprise:', selectedEntreprise);
+        
+        // ✅ CORRECTION : Si super admin, charger TOUS les clients de TOUTES les entreprises
+        // Sinon, filtrer par entreprise sélectionnée
+        let query;
+
+        if (isSuperAdmin) {
+          // Super admin : voir tous les clients de toutes les entreprises avec le nom de l'entreprise
+          console.log('👑 [Clients] Super Admin - Chargement de TOUS les clients');
+          query = supabase
+            .from('clients')
+            .select(`
+              *,
+              entreprise:entreprises(id, nom)
+            `)
+            .order('created_at', { ascending: false });
+        } else {
+          // Propriétaire : filtrer par entreprise sélectionnée
+          if (!selectedEntreprise) {
+            console.warn('⚠️ [Clients] Aucune entreprise sélectionnée pour charger les clients');
+            setClients([]);
+            setLoading(false);
+            return;
+          }
+          console.log('   Entreprise sélectionnée:', selectedEntreprise);
+          query = supabase
+            .from('clients')
+            .select('*')
+            .eq('entreprise_id', selectedEntreprise)
+            .order('created_at', { ascending: false });
         }
 
-        console.log('👑 [Clients] Propriétaire/Super Admin - Chargement clients de la plateforme');
-        console.log('   Entreprise sélectionnée:', selectedEntreprise);
-        
-        // ✅ CORRECTION : Ne PAS filtrer par statut pour voir TOUS les clients (y compris en_attente)
-        const { data, error } = await supabase
-          .from('clients')
-          .select('*')
-          .eq('entreprise_id', selectedEntreprise)
-          .order('created_at', { ascending: false });
+        const { data, error } = await query;
 
         if (error) {
           console.error('❌ [Clients] Erreur chargement clients:', error);
@@ -368,17 +422,38 @@ export default function Clients() {
           throw error;
         }
         
-        console.log(`✅ [Clients] ${data?.length || 0} clients de la plateforme chargés pour l'entreprise`);
-        if (data && data.length > 0) {
-          console.log('   Détails des clients:', data.map(c => ({ 
-            id: c.id, 
-            nom: c.nom, 
-            prenom: c.prenom, 
-            email: c.email,
-            statut: c.statut 
-          })));
+        // ✅ Pour les super admins, enrichir les données avec le nom de l'entreprise
+        if (isSuperAdmin && data) {
+          const enrichedData = data.map((client: any) => ({
+            ...client,
+            entreprise_nom: client.entreprise?.nom || client.entreprise_nom || 'N/A',
+          }));
+          console.log(`✅ [Clients] ${enrichedData.length} clients chargés (tous les clients de toutes les entreprises)`);
+          if (enrichedData.length > 0) {
+            console.log('   Détails des clients:', enrichedData.map((c: any) => ({ 
+              id: c.id, 
+              nom: c.nom, 
+              prenom: c.prenom, 
+              email: c.email,
+              statut: c.statut,
+              entreprise: c.entreprise_nom
+            })));
+          }
+          setClients(enrichedData);
+        } else {
+          console.log(`✅ [Clients] ${data?.length || 0} clients de la plateforme chargés pour l'entreprise`);
+          if (data && data.length > 0) {
+            console.log('   Détails des clients:', data.map((c: any) => ({ 
+              id: c.id, 
+              nom: c.nom, 
+              prenom: c.prenom, 
+              email: c.email,
+              statut: c.statut,
+              entreprise_id: c.entreprise_id
+            })));
+          }
+          setClients(data || []);
         }
-        setClients(data || []);
       }
     } catch (error) {
       console.error('❌ [Clients] Erreur chargement clients:', error);
@@ -791,7 +866,10 @@ export default function Clients() {
 
       {/* Liste des clients */}
       <ClientsList
-          clients={clients}
+          clients={isSuperAdmin && selectedEntreprise 
+            ? clients.filter(c => c.entreprise_id === selectedEntreprise)
+            : clients
+          }
           entreprises={isClient ? [] : entreprises} // Masquer le sélecteur d'entreprise pour les clients
           selectedEntreprise={isClient ? '' : selectedEntreprise} // Pas d'entreprise sélectionnée pour les clients
           searchTerm={searchTerm}

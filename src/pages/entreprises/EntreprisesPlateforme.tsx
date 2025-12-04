@@ -3,23 +3,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { Plus, Building2, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
 import { PaymentChoiceModal } from '../../components/PaymentChoiceModal';
-
-interface Entreprise {
-  id: string;
-  nom: string;
-  forme_juridique: string;
-  siret?: string;
-  email?: string;
-  telephone?: string;
-  adresse?: string;
-  code_postal?: string;
-  ville?: string;
-  capital?: number;
-  rcs?: string;
-  site_web?: string;
-  statut: string;
-  created_at: string;
-}
+// ✅ IMPORT TYPE-ONLY DEPUIS LE FICHIER TAMPON (shared.ts) pour éviter les conflits de runtime
+import type { Entreprise } from '../../types/shared';
 
 export default function EntreprisesPlateforme() {
   const { user } = useAuth();
@@ -40,6 +25,9 @@ export default function EntreprisesPlateforme() {
     capital: 0,
     rcs: '',
     site_web: '',
+    code_ape: '',
+    code_naf: '',
+    convention_collective: '',
     creer_client: false,
     email_client: '',
     nom_client: '',
@@ -61,6 +49,12 @@ export default function EntreprisesPlateforme() {
   const [currentPaiementId, setCurrentPaiementId] = useState<string | null>(null);
   const [currentPaiementMontant, setCurrentPaiementMontant] = useState<number>(0);
   const [currentEntrepriseNom, setCurrentEntrepriseNom] = useState<string>('');
+  const [conventionsCollectives, setConventionsCollectives] = useState<Array<{ code_idcc: string; libelle: string }>>([]);
+  const [filteredConventions, setFilteredConventions] = useState<Array<{ code_idcc: string; libelle: string }>>([]);
+  const [showConventionsList, setShowConventionsList] = useState(false);
+  const [codesAPENAF, setCodesAPENAF] = useState<Array<{ code: string; libelle: string }>>([]);
+  const [filteredCodesAPE, setFilteredCodesAPE] = useState<Array<{ code: string; libelle: string }>>([]);
+  const [showAPEList, setShowAPEList] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -72,7 +66,42 @@ export default function EntreprisesPlateforme() {
 
     checkSuperAdmin();
     loadPlans();
+    loadConventionsCollectives();
+    loadCodesAPENAF();
   }, [user]);
+
+  const loadCodesAPENAF = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('codes_ape_naf')
+        .select('code, libelle')
+        .eq('est_actif', true)
+        .order('code');
+
+      if (error) throw error;
+      setCodesAPENAF(data || []);
+      setFilteredCodesAPE(data || []);
+    } catch (error) {
+      console.error('❌ Erreur chargement codes APE/NAF:', error);
+    }
+  };
+
+  const loadConventionsCollectives = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('conventions_collectives')
+        .select('code_idcc, libelle')
+        .eq('est_actif', true)
+        .eq('annee', new Date().getFullYear())
+        .order('libelle');
+
+      if (error) throw error;
+      setConventionsCollectives(data || []);
+      setFilteredConventions(data || []);
+    } catch (error) {
+      console.error('❌ Erreur chargement conventions collectives:', error);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -220,6 +249,9 @@ export default function EntreprisesPlateforme() {
             capital: formData.capital || 0,
             rcs: formData.rcs || null,
             site_web: formData.site_web || null,
+            code_ape: formData.code_ape || null,
+            code_naf: formData.code_naf || null,
+            convention_collective: formData.convention_collective || null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingId);
@@ -245,6 +277,9 @@ export default function EntreprisesPlateforme() {
             p_capital: formData.capital || 0,
             p_rcs: formData.rcs?.trim() || null,
             p_site_web: formData.site_web?.trim() || null,
+            p_code_ape: formData.code_ape?.trim() || null,
+            p_code_naf: formData.code_naf?.trim() || null,
+            p_convention_collective: formData.convention_collective?.trim() || null,
             p_email_client: formData.creer_client && formData.email_client?.trim() 
               ? formData.email_client.trim() 
               : null,
@@ -424,6 +459,9 @@ export default function EntreprisesPlateforme() {
       capital: 0,
       rcs: '',
       site_web: '',
+      code_ape: '',
+      code_naf: '',
+      convention_collective: '',
       creer_client: false,
       email_client: '',
       nom_client: '',
@@ -665,6 +703,98 @@ export default function EntreprisesPlateforme() {
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Paris"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Code APE/NAF</label>
+                  <input
+                    type="text"
+                    value={formData.code_ape}
+                    onChange={(e) => {
+                      const value = e.target.value.toUpperCase();
+                      setFormData({ ...formData, code_ape: value });
+                      // Filtrer les codes selon la saisie
+                      if (value.length > 0) {
+                        const filtered = codesAPENAF.filter(code => 
+                          code.code.toLowerCase().includes(value.toLowerCase()) ||
+                          code.libelle.toLowerCase().includes(value.toLowerCase())
+                        ).slice(0, 10); // Limiter à 10 résultats
+                        setFilteredCodesAPE(filtered);
+                        setShowAPEList(true);
+                      } else {
+                        setFilteredCodesAPE(codesAPENAF.slice(0, 10));
+                        setShowAPEList(true);
+                      }
+                    }}
+                    onFocus={() => setShowAPEList(true)}
+                    onBlur={() => setTimeout(() => setShowAPEList(false), 200)}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Rechercher un code (ex: 6201Z)"
+                  />
+                  {showAPEList && filteredCodesAPE.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-white/20 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {filteredCodesAPE.map((code) => (
+                        <div
+                          key={code.code}
+                          onClick={() => {
+                            setFormData({ ...formData, code_ape: code.code });
+                            setShowAPEList(false);
+                          }}
+                          className="px-4 py-2 hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-b-0"
+                        >
+                          <div className="font-semibold text-white">{code.code}</div>
+                          <div className="text-xs text-gray-400 truncate">{code.libelle}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Convention Collective</label>
+                  <input
+                    type="text"
+                    value={formData.convention_collective}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData({ ...formData, convention_collective: value });
+                      // Filtrer les conventions selon la saisie
+                      if (value.length > 0) {
+                        const filtered = conventionsCollectives.filter(cc => 
+                          cc.code_idcc.toLowerCase().includes(value.toLowerCase()) ||
+                          cc.libelle.toLowerCase().includes(value.toLowerCase())
+                        ).slice(0, 10); // Limiter à 10 résultats
+                        setFilteredConventions(filtered);
+                        setShowConventionsList(true);
+                      } else {
+                        setFilteredConventions(conventionsCollectives.slice(0, 10));
+                        setShowConventionsList(true);
+                      }
+                    }}
+                    onFocus={() => setShowConventionsList(true)}
+                    onBlur={() => setTimeout(() => setShowConventionsList(false), 200)}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Rechercher une convention (ex: IDCC1486 ou Syntec)"
+                  />
+                  {showConventionsList && filteredConventions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-white/20 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {filteredConventions.map((cc) => (
+                        <div
+                          key={cc.code_idcc}
+                          onClick={() => {
+                            setFormData({ ...formData, convention_collective: cc.code_idcc });
+                            setShowConventionsList(false);
+                          }}
+                          className="px-4 py-2 hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-b-0"
+                        >
+                          <div className="font-semibold text-white">{cc.code_idcc}</div>
+                          <div className="text-xs text-gray-400 truncate">{cc.libelle}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

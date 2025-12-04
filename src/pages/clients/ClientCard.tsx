@@ -59,8 +59,15 @@ export function ClientCard({
       )}
 
       {client.ville && (
-        <p className="text-sm text-gray-400 mb-4">
+        <p className="text-sm text-gray-400 mb-2">
           📍 {client.ville}
+        </p>
+      )}
+      
+      {/* Afficher l'entreprise si disponible (pour super admin) */}
+      {client.entreprise_nom && client.entreprise_nom !== 'N/A' && (
+        <p className="text-xs text-blue-400 mb-4 font-medium">
+          🏢 {client.entreprise_nom}
         </p>
       )}
 

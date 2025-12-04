@@ -1,6 +1,13 @@
 /**
  * Types partagés pour les composants Clients
+ * 
+ * ⚠️ IMPORTANT : Les types partagés (Entreprise, Client, etc.) sont définis dans
+ * src/types/shared.ts pour éviter les conflits entre modules.
+ * Ce fichier ne contient que les types spécifiques au module Clients.
  */
+
+// Ré-exporter les types partagés depuis le fichier tampon
+export type { Entreprise, Client as SharedClient, ClientContact as SharedClientContact } from '../../types/shared';
 
 export interface Client {
   id: string;
@@ -40,11 +47,6 @@ export interface ClientContact {
   created_at: string;
   updated_at: string;
   created_by?: string;
-}
-
-export interface Entreprise {
-  id: string;
-  nom: string;
 }
 
 export interface Plan {

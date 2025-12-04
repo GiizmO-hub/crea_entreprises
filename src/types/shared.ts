@@ -1,11 +1,23 @@
 /**
- * CONVENTIONS DE DONNÉES PARTAGÉES
+ * ═══════════════════════════════════════════════════════════════════════════
+ * FICHIER TAMPON - VARIABLES PARTAGÉES ENTRE MODULES
+ * ═══════════════════════════════════════════════════════════════════════════
  * 
- * Ce fichier centralise toutes les interfaces et types partagés
- * pour garantir la cohérence des données dans toute l'application.
+ * ⚠️ CRITIQUE : Ce fichier sert de TAMPON entre tous les modules pour éviter
+ * les conflits de variables et garantir la cohérence des données.
  * 
- * ⚠️ IMPORTANT : Tous les fichiers doivent utiliser ces types
- * au lieu de définir leurs propres interfaces.
+ * RÈGLES D'UTILISATION :
+ * 1. ✅ TOUS les modules DOIVENT utiliser les types/interfaces définis ici
+ * 2. ✅ Si un module a besoin d'un nouveau champ partagé, l'ajouter ICI
+ * 3. ✅ Ne JAMAIS créer de types dupliqués dans d'autres fichiers
+ * 4. ✅ Si un module modifie un type, mettre à jour ICI et vérifier l'impact
+ * 
+ * EXEMPLE :
+ * - Module Comptabilité ajoute code_ape, code_naf → Ajouter dans Entreprise
+ * - Module Facturation ajoute source → Ajouter dans Facture
+ * - Module CRM ajoute tags → Ajouter dans Client
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
  */
 
 // ============================================================================
@@ -15,7 +27,7 @@
 export interface Facture {
   id: string;
   numero: string;
-  type?: 'facture' | 'proforma';
+  type?: 'facture' | 'proforma' | 'devis';
   client_id: string;
   entreprise_id: string;
   date_facturation?: string;
@@ -26,7 +38,7 @@ export interface Facture {
   tva?: number; // Alias pour montant_tva (compatibilité)
   taux_tva?: number;
   montant_ttc: number;
-  statut: 'brouillon' | 'envoyee' | 'en_attente' | 'payee' | 'annulee' | 'valide';
+  statut: 'brouillon' | 'envoyee' | 'en_attente' | 'payee' | 'annulee' | 'valide' | 'envoye' | 'accepte' | 'refuse' | 'expire';
   notes?: string | null;
   created_at: string;
   updated_at?: string;
@@ -129,6 +141,11 @@ export interface Entreprise {
   code_postal?: string | null;
   ville?: string | null;
   site_web?: string | null;
+  // ✅ CHAMPS PARTAGÉS AVEC MODULE COMPTABILITÉ (via fichier tampon)
+  code_ape?: string | null;
+  code_naf?: string | null;
+  convention_collective?: string | null;
+  statut_paiement?: 'en_attente' | 'paye' | 'non_requis' | null;
   created_at: string;
   updated_at?: string;
 }
@@ -197,9 +214,10 @@ export interface ParametresDocuments {
 // ============================================================================
 
 export const FACTURE_STATUTS = ['brouillon', 'envoyee', 'en_attente', 'payee', 'annulee'] as const;
+export const DEVIS_STATUTS = ['brouillon', 'envoye', 'accepte', 'refuse', 'expire'] as const;
 export const AVOIR_STATUTS = ['valide', 'annule'] as const;
 export const FACTURE_SOURCES = ['plateforme', 'client', 'externe'] as const;
-export const FACTURE_TYPES = ['facture', 'proforma'] as const;
+export const FACTURE_TYPES = ['facture', 'proforma', 'devis'] as const;
 export const NOTIFICATION_TYPES = ['info', 'success', 'warning', 'error', 'invoice', 'client', 'payment', 'subscription', 'system'] as const;
 
 // ============================================================================
@@ -268,4 +286,5 @@ export function normalizeFacture(facture: any): Facture {
     facture_id: facture.facture_id,
   };
 }
+
 

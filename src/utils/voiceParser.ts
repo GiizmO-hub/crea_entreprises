@@ -273,26 +273,98 @@ function extractArticleLines(
     }
   }
 
+  // ✅ NOUVEAU : Détecter les séparateurs explicites entre articles (virgule, point, "puis", "ensuite", "et", "plus", "également")
+  // D'abord, diviser le texte en segments potentiels d'articles
+  const articleSeparators = /(?:[,;]|\.\s+|puis|ensuite|et|plus|également|aussi|avec|sans|plus\s+un|plus\s+une|plus\s+deux|plus\s+trois)/gi;
+  const segments = text.split(articleSeparators).map(s => s.trim()).filter(s => s.length > 0);
+  
+  // Si on trouve des segments séparés, traiter chaque segment comme un article potentiel
+  if (segments.length > 1) {
+    console.log(`📋 Détection de ${segments.length} segments séparés pour articles multiples`);
+    for (const segment of segments) {
+      // Chercher "description prix" dans chaque segment
+      const segmentPattern = /([A-Za-zÀ-ÿ\s]{2,60}?)\s+(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2})?)\s*(?:euros?|€)?/i;
+      const segmentMatch = segment.match(segmentPattern);
+      
+      if (segmentMatch) {
+        let description = segmentMatch[1]?.trim() || '';
+        const prix = parseNumber(segmentMatch[2] || '');
+        
+        // Nettoyer la description
+        description = description
+          .replace(/^(?:creer|créer|cree|crée|créé|facture|facturation|devis|pour|client|à|article|produit|service|prestation|item|ligne|montant|total|prix|coût|somme|de)\s+/i, '')
+          .replace(/\s+(?:creer|créer|cree|crée|créé|facture|facturation|devis|pour|client|à|article|produit|service|prestation|item|ligne|montant|total|prix|coût|somme|de)\s+/gi, ' ')
+          .trim();
+        
+        // Détecter quantité dans le segment (ex: "2 moteurs", "trois portails")
+        let quantite = 1;
+        const quantitePattern = /(?:^|\s)(\d+|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\s+(?:fois|×|x|\*)?/i;
+        const quantiteMatch = segment.match(quantitePattern);
+        if (quantiteMatch) {
+          const qtyText = quantiteMatch[1].toLowerCase();
+          const qtyMap: Record<string, number> = {
+            'un': 1, 'une': 1, 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
+            'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10
+          };
+          quantite = qtyMap[qtyText] || parseNumber(qtyText) || 1;
+        }
+        
+        if (description.length > 2 && prix && prix > 0) {
+          const key = `${description.toLowerCase()}-${quantite}-${prix}`;
+          if (!processed.has(key)) {
+            // Chercher si c'est un article connu
+            let codeArticle: string | undefined;
+            let tvaArticle: number | undefined;
+            
+            if (articles && articles.length > 0) {
+              const article = articles.find(a =>
+                a.libelle.toLowerCase().includes(description.toLowerCase()) ||
+                description.toLowerCase().includes(a.libelle.toLowerCase())
+              );
+              if (article) {
+                codeArticle = article.code;
+                tvaArticle = article.taux_tva;
+                description = article.libelle;
+              }
+            }
+            
+            lignes.push({
+              description: description.substring(0, 200),
+              quantite,
+              prix: Math.round(prix * 100) / 100,
+              tva: tvaArticle || defaultTva,
+              code: codeArticle,
+            });
+            processed.add(key);
+            console.log(`✅ Ligne détectée depuis segment: "${description}" x${quantite} = ${prix}€`);
+          }
+        }
+      }
+    }
+  }
+
   // 3. Chercher les patterns simples "description prix" (AMÉLIORÉ pour fonctionner avec peu de mots)
   // On cherche des séquences de mots suivies d'un nombre (seuil réduit à 2 caractères)
-  const simplePattern = /([A-Za-zÀ-ÿ\s]{2,60}?)\s+(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2})?)\s*(?:euros?|€)?/gi;
-  const simpleMatches = Array.from(text.matchAll(simplePattern));
+  // ✅ AMÉLIORATION : Ne traiter que si on n'a pas déjà trouvé de segments séparés
+  if (segments.length <= 1) {
+    const simplePattern = /([A-Za-zÀ-ÿ\s]{2,60}?)\s+(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2})?)\s*(?:euros?|€)?/gi;
+    const simpleMatches = Array.from(text.matchAll(simplePattern));
 
-  for (const match of simpleMatches) {
+    for (const match of simpleMatches) {
     let description = match[1]?.trim() || '';
     const prix = parseNumber(match[2] || '');
 
-    // Nettoyer la description (enlever les mots-clés, notamment "créer facture")
+    // Nettoyer la description (enlever les mots-clés, notamment "créer facture" ou "créer devis")
     description = description
-      .replace(/^(?:creer|créer|cree|crée|créé|facture|facturation|pour|client|à|article|produit|service|prestation|item|ligne|puis|ensuite|et|plus|montant|total|prix|coût|somme|de)\s+/i, '')
-      .replace(/\s+(?:creer|créer|cree|crée|créé|facture|facturation|pour|client|à|article|produit|service|prestation|item|ligne|puis|ensuite|et|plus|montant|total|prix|coût|somme|de)\s+/gi, ' ')
+      .replace(/^(?:creer|créer|cree|crée|créé|facture|facturation|devis|devis|pour|client|à|article|produit|service|prestation|item|ligne|puis|ensuite|et|plus|montant|total|prix|coût|somme|de)\s+/i, '')
+      .replace(/\s+(?:creer|créer|cree|crée|créé|facture|facturation|devis|devis|pour|client|à|article|produit|service|prestation|item|ligne|puis|ensuite|et|plus|montant|total|prix|coût|somme|de)\s+/gi, ' ')
       .trim();
 
     // Ignorer si la description est trop courte ou contient des nombres (seuil réduit à 2 caractères)
     if (description.length < 2 || /^\d+$/.test(description) || description.length > 60) continue;
 
     // Ignorer si c'est un nom de client ou un mot-clé
-    const ignoreWords = ['facture', 'facturation', 'creer', 'créer', 'cree', 'crée', 'créé', 'pour', 'client', 'montant', 'total', 'prix', 'tva', 'euros', 'euro', '€'];
+    const ignoreWords = ['facture', 'facturation', 'devis', 'creer', 'créer', 'cree', 'crée', 'créé', 'pour', 'client', 'montant', 'total', 'prix', 'tva', 'euros', 'euro', '€'];
     if (ignoreWords.some(w => description.toLowerCase().includes(w))) continue;
 
     if (prix && prix > 0) {
@@ -325,27 +397,71 @@ function extractArticleLines(
       }
     }
   }
+  } // Fermeture du if (segments.length <= 1)
 
-  // 4. Détecter plusieurs articles séparés par "puis", "ensuite", "et", "plus"
-  const multiPattern = /([A-Za-zÀ-ÿ\s]{3,60})\s+(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2})?)\s*(?:euros?|€)?(?:\s+(?:puis|ensuite|et|plus)\s+([A-Za-zÀ-ÿ\s]{3,60})\s+(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2})?)\s*(?:euros?|€)?)+/gi;
+  // 4. ✅ AMÉLIORATION : Détecter plusieurs articles séparés par "puis", "ensuite", "et", "plus", "également", "aussi", virgule
+  // Pattern amélioré pour capturer plusieurs articles dans une phrase
+  const multiPattern = /([A-Za-zÀ-ÿ\s]{3,60})\s+(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2})?)\s*(?:euros?|€)?(?:\s*[,;]?\s*(?:puis|ensuite|et|plus|également|aussi|avec)\s+([A-Za-zÀ-ÿ\s]{3,60})\s+(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2})?)\s*(?:euros?|€)?)+/gi;
   const multiMatches = Array.from(text.matchAll(multiPattern));
+  
+  // ✅ NOUVEAU : Pattern alternatif pour détecter "article1 X€, article2 Y€, article3 Z€"
+  const commaSeparatedPattern = /([A-Za-zÀ-ÿ\s]{3,60})\s+(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2})?)\s*(?:euros?|€)?(?:\s*[,;]\s*([A-Za-zÀ-ÿ\s]{3,60})\s+(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2})?)\s*(?:euros?|€)?)+/gi;
+  const commaMatches = Array.from(text.matchAll(commaSeparatedPattern));
+  
+  // Combiner les deux types de matches
+  const allMultiMatches = [...multiMatches, ...commaMatches];
 
-  for (const match of multiMatches) {
+  for (const match of allMultiMatches) {
     // Traiter le premier article
     if (match[1] && match[2]) {
-      const desc1 = match[1].trim();
+      let desc1 = match[1].trim();
       const prix1 = parseNumber(match[2] || '');
+      
+      // Nettoyer la description
+      desc1 = desc1.replace(/^(?:creer|créer|cree|crée|créé|facture|facturation|devis|pour|client|à)\s+/i, '').trim();
+      
+      // Détecter quantité dans la description
+      let quantite1 = 1;
+      const qtyMatch1 = desc1.match(/(?:^|\s)(\d+|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\s+(?:fois|×|x|\*)?/i);
+      if (qtyMatch1) {
+        const qtyText = qtyMatch1[1].toLowerCase();
+        const qtyMap: Record<string, number> = {
+          'un': 1, 'une': 1, 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
+          'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10
+        };
+        quantite1 = qtyMap[qtyText] || parseNumber(qtyText) || 1;
+        // Retirer la quantité de la description
+        desc1 = desc1.replace(/(?:^|\s)(\d+|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\s+(?:fois|×|x|\*)?/i, '').trim();
+      }
 
       if (desc1.length > 2 && prix1 && prix1 > 0) {
-        const key = `${desc1.toLowerCase()}-${prix1}`;
+        const key = `${desc1.toLowerCase()}-${quantite1}-${prix1}`;
         if (!processed.has(key)) {
+          // Chercher si c'est un article connu
+          let codeArticle: string | undefined;
+          let tvaArticle: number | undefined;
+          
+          if (articles && articles.length > 0) {
+            const article = articles.find(a =>
+              a.libelle.toLowerCase().includes(desc1.toLowerCase()) ||
+              desc1.toLowerCase().includes(a.libelle.toLowerCase())
+            );
+            if (article) {
+              codeArticle = article.code;
+              tvaArticle = article.taux_tva;
+              desc1 = article.libelle;
+            }
+          }
+          
           lignes.push({
             description: desc1.substring(0, 200),
-            quantite: 1,
+            quantite: quantite1,
             prix: Math.round(prix1 * 100) / 100,
-            tva: defaultTva,
+            tva: tvaArticle || defaultTva,
+            code: codeArticle,
           });
           processed.add(key);
+          console.log(`✅ Ligne multi-article 1: "${desc1}" x${quantite1} = ${prix1}€`);
         }
       }
     }
@@ -353,19 +469,54 @@ function extractArticleLines(
     // Traiter les articles suivants (paires match[3], match[4], etc.)
     for (let i = 3; i < match.length - 1; i += 2) {
       if (match[i] && match[i + 1]) {
-        const desc = match[i].trim();
+        let desc = match[i].trim();
         const prix = parseNumber(match[i + 1] || '');
+        
+        // Nettoyer la description
+        desc = desc.replace(/^(?:puis|ensuite|et|plus|également|aussi|avec)\s+/i, '').trim();
+        
+        // Détecter quantité dans la description
+        let quantite = 1;
+        const qtyMatch = desc.match(/(?:^|\s)(\d+|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\s+(?:fois|×|x|\*)?/i);
+        if (qtyMatch) {
+          const qtyText = qtyMatch[1].toLowerCase();
+          const qtyMap: Record<string, number> = {
+            'un': 1, 'une': 1, 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
+            'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10
+          };
+          quantite = qtyMap[qtyText] || parseNumber(qtyText) || 1;
+          // Retirer la quantité de la description
+          desc = desc.replace(/(?:^|\s)(\d+|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\s+(?:fois|×|x|\*)?/i, '').trim();
+        }
 
         if (desc.length > 2 && prix && prix > 0) {
-          const key = `${desc.toLowerCase()}-${prix}`;
+          const key = `${desc.toLowerCase()}-${quantite}-${prix}`;
           if (!processed.has(key)) {
+            // Chercher si c'est un article connu
+            let codeArticle: string | undefined;
+            let tvaArticle: number | undefined;
+            
+            if (articles && articles.length > 0) {
+              const article = articles.find(a =>
+                a.libelle.toLowerCase().includes(desc.toLowerCase()) ||
+                desc.toLowerCase().includes(a.libelle.toLowerCase())
+              );
+              if (article) {
+                codeArticle = article.code;
+                tvaArticle = article.taux_tva;
+                desc = article.libelle;
+              }
+            }
+            
             lignes.push({
               description: desc.substring(0, 200),
-              quantite: 1,
+              quantite,
               prix: Math.round(prix * 100) / 100,
-              tva: defaultTva,
+              tva: tvaArticle || defaultTva,
+              code: codeArticle,
             });
             processed.add(key);
+            console.log(`✅ Ligne multi-article ${(i-1)/2 + 1}: "${desc}" x${quantite} = ${prix}€`);
           }
         }
       }
@@ -393,15 +544,19 @@ export function parseVoiceInput(
     result.client = clientMatch.id;
     console.log('✅ Client trouvé:', clientMatch.name);
   } else {
-    // Si pas trouvé, essayer de chercher après "creer facture" ou "facture"
+    // Si pas trouvé, essayer de chercher après "creer facture", "creer devis" ou "facture"/"devis"
     const factureIndex = lowerText.indexOf('facture');
-    if (factureIndex !== -1) {
-      const afterFacture = text.substring(factureIndex + 'facture'.length).trim();
-      if (afterFacture.length > 0) {
-        const clientMatchAfter = findClient(afterFacture, clients);
+    const devisIndex = lowerText.indexOf('devis');
+    const index = factureIndex !== -1 ? factureIndex : (devisIndex !== -1 ? devisIndex : -1);
+    
+    if (index !== -1) {
+      const keyword = factureIndex !== -1 ? 'facture' : 'devis';
+      const afterKeyword = text.substring(index + keyword.length).trim();
+      if (afterKeyword.length > 0) {
+        const clientMatchAfter = findClient(afterKeyword, clients);
         if (clientMatchAfter) {
           result.client = clientMatchAfter.id;
-          console.log('✅ Client trouvé après "facture":', clientMatchAfter.name);
+          console.log(`✅ Client trouvé après "${keyword}":`, clientMatchAfter.name);
         }
       }
     }

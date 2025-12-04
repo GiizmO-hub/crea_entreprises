@@ -630,6 +630,41 @@ export default function GestionCRM() {
     }
   };
 
+  // Générer un devis depuis une opportunité
+  const handleGenererDevisDepuisOpportunite = async (opp: Opportunite) => {
+    if (!opp.client_id) {
+      alert('❌ Cette opportunité n\'a pas de client associé. Veuillez d\'abord ajouter un client.');
+      return;
+    }
+
+    if (!selectedEntreprise) {
+      alert('❌ Veuillez sélectionner une entreprise.');
+      return;
+    }
+
+    try {
+      // Stocker les données de l'opportunité dans sessionStorage pour les récupérer dans Factures.tsx
+      const devisData = {
+        type: 'devis',
+        client_id: opp.client_id,
+        entreprise_id: selectedEntreprise,
+        montant_ht: opp.montant_estime || 0,
+        description: opp.description || opp.nom,
+        notes: `Devis généré depuis l'opportunité "${opp.nom}"`,
+        opportunite_id: opp.id,
+      };
+
+      sessionStorage.setItem('devis_from_opportunite', JSON.stringify(devisData));
+      
+      // Rediriger vers la page Factures avec le filtre devis
+      window.location.hash = '#factures?type=devis&from_opportunite=true';
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      console.error('Erreur génération devis:', error);
+      alert('Erreur: ' + errorMessage);
+    }
+  };
+
   const handleUpdateOpportuniteEtape = async (opportuniteId: string, nouvelleEtapeId: string) => {
     try {
       const nouvelleEtape = etapes.find(e => e.id === nouvelleEtapeId);
@@ -1088,6 +1123,17 @@ export default function GestionCRM() {
                           )}
                         </div>
                         <div className="flex gap-1 mt-2 pt-2 border-t border-white/10">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleGenererDevisDepuisOpportunite(opp);
+                            }}
+                            className="flex-1 bg-green-600/20 hover:bg-green-600/30 text-green-300 text-xs px-2 py-1 rounded flex items-center justify-center gap-1"
+                            title="Générer un devis depuis cette opportunité"
+                          >
+                            <FileText className="w-3 h-3" />
+                            Devis
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

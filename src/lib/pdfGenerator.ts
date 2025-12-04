@@ -2,10 +2,11 @@ import jsPDF from 'jspdf';
 import { supabase } from './supabase';
 
 interface PDFData {
-  type: 'facture' | 'proforma' | 'avoir';
+  type: 'facture' | 'proforma' | 'devis' | 'avoir';
   numero: string;
   date_emission: string;
   date_echeance?: string;
+  date_validite?: string; // Pour les devis
   client: {
     nom?: string;
     prenom?: string;
@@ -215,7 +216,7 @@ export async function generatePDF(data: PDFData): Promise<void> {
   doc.setTextColor(textColor[0], textColor[1], textColor[2]);
   doc.setFontSize(16);
   doc.setFont(policeTitre, 'bold');
-  const typeTextValue = data.type === 'avoir' ? 'AVOIR' : data.type === 'proforma' ? 'FACTURE PROFORMA' : 'FACTURE';
+  const typeTextValue = data.type === 'avoir' ? 'AVOIR' : data.type === 'proforma' ? 'FACTURE PROFORMA' : data.type === 'devis' ? 'DEVIS' : 'FACTURE';
   const typeTextWidth = doc.getTextWidth(typeTextValue);
   doc.text(typeTextValue, pageWidth - typeTextWidth - margeDroite, margeHaut + 10);
   
@@ -261,7 +262,12 @@ export async function generatePDF(data: PDFData): Promise<void> {
   doc.setFont(policeTexte, 'normal');
   doc.text(new Date(data.date_emission).toLocaleDateString('fr-FR'), docInfoX + 15, docInfoY + 7);
   
-  if (data.date_echeance) {
+  if (data.type === 'devis' && data.date_validite) {
+    doc.setFont(policeTexte, 'bold');
+    doc.text('Validité:', docInfoX, docInfoY + 14);
+    doc.setFont(policeTexte, 'normal');
+    doc.text(new Date(data.date_validite).toLocaleDateString('fr-FR'), docInfoX + 15, docInfoY + 14);
+  } else if (data.date_echeance) {
     doc.setFont(policeTexte, 'bold');
     doc.text('Échéance:', docInfoX, docInfoY + 14);
     doc.setFont(policeTexte, 'normal');
