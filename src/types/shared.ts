@@ -287,4 +287,76 @@ export function normalizeFacture(facture: any): Facture {
   };
 }
 
+// ============================================================================
+// FICHES DE PAIE - Module Comptabilité
+// ============================================================================
+
+export interface TauxCotisations {
+  // Salariales
+  taux_ss_maladie_sal: number;
+  taux_ss_vieil_plaf_sal: number;
+  taux_ss_vieil_deplaf_sal: number;
+  taux_ass_chomage_sal: number;
+  taux_ret_compl_sal: number;
+  taux_csg_ded_sal: number;
+  taux_csg_non_ded_sal: number;
+  
+  // Patronales
+  taux_ss_maladie_pat: number;
+  taux_ss_vieil_plaf_pat: number;
+  taux_ss_vieil_deplaf_pat: number;
+  taux_alloc_fam_pat: number;
+  taux_at_mp_pat: number;
+  taux_ass_chomage_pat: number;
+  taux_ret_compl_pat: number;
+}
+
+export interface PlafondsSecuriteSociale {
+  pass_annuel: number;
+  pass_mensuel: number;
+  pass_deplafonne: number; // 3 PASS
+  pass_deplafonne_mensuel: number;
+}
+
+export interface RubriquePaie {
+  id: string;
+  code: string;
+  libelle: string;
+  type: 'salaire' | 'cotisation_salariale' | 'cotisation_patronale' | 'imposable' | 'net';
+  base_calcul?: 'brut' | 'plafonne' | 'deplafonne' | 'net_imposable';
+  taux?: number;
+  montant_fixe?: number;
+  ordre_affichage: number;
+  est_obligatoire: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FichePaieCalculated {
+  id: string;
+  collaborateur_id: string;
+  entreprise_id: string;
+  periode: string;
+  salaire_brut: number;
+  total_cotisations_salariales: number;
+  total_cotisations_patronales: number;
+  net_imposable: number;
+  net_a_payer: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FichePaieLigneCalculated {
+  id: string;
+  fiche_paie_id: string;
+  rubrique_paie_id: string;
+  libelle: string;
+  base_calcul: number;
+  taux?: number;
+  montant: number;
+  type: 'salaire' | 'cotisation_salariale' | 'cotisation_patronale' | 'imposable' | 'net';
+  ordre_affichage: number;
+  created_at?: string;
+}
+
 

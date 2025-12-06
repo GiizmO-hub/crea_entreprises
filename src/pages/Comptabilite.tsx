@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { getTauxCotisations, getTauxParDefaut } from '../services/cotisationsService';
+// Note: Le calcul de fiche de paie est géré directement par la fonction RPC generer_fiche_paie_complete_auto
+// qui calcule tout automatiquement selon les taux URSSAF 2025
 import {
   Calculator,
   FileText,
@@ -602,66 +604,71 @@ export default function Comptabilite() {
     }
   };
 
-  // Fonction pour charger automatiquement le salaire brut et les taux de charges
+  // Fonction pour charger automatiquement toutes les données du collaborateur
   const loadSalaireBrutEtTaux = async (collaborateurId: string) => {
     if (!selectedEntreprise || !collaborateurId) return;
 
     try {
-      // 1. Récupérer le salaire brut depuis la table salaries
+      // 1. Récupérer toutes les données du collaborateur depuis collaborateurs_entreprise
+      const { data: collabData, error: collabError } = await supabase
+        .from('collaborateurs_entreprise')
+        .select('salaire, nombre_heures_mensuelles, nombre_heures_hebdo, type_contrat, poste, convention_collective')
+        .eq('id', collaborateurId)
+        .eq('entreprise_id', selectedEntreprise)
+        .eq('actif', true)
+        .maybeSingle();
+
+      if (collabError) {
+        console.warn('⚠️ [Comptabilite] Erreur récupération collaborateur:', collabError);
+      }
+
+      // 2. Récupérer le salaire brut depuis la table salaries (si disponible)
       const { data: salaryData } = await supabase
         .from('salaries')
-        .select('salaire_brut, collaborateur_id')
+        .select('salaire_brut, date_fin_contrat, statut')
         .eq('collaborateur_id', collaborateurId)
-        .eq('actif', true)
         .order('date_debut', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      // Si pas trouvé par collaborateur_id, chercher par nom/prénom dans collaborateurs_entreprise
-      if (!salaryData) {
-        const { data: collab } = await supabase
-          .from('collaborateurs_entreprise')
-          .select('nom, prenom')
-          .eq('id', collaborateurId)
-          .maybeSingle();
-
-        if (collab) {
-          const { data: salaryByName } = await supabase
-            .from('salaries')
-            .select('salaire_brut')
-            .eq('entreprise_id', selectedEntreprise)
-            .eq('nom', collab.nom)
-            .eq('prenom', collab.prenom)
-            .eq('actif', true)
-            .order('date_debut', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (salaryByName) {
-            setFichePaieForm(prev => ({
-              ...prev,
-              salaire_brut: salaryByName.salaire_brut?.toString() || ''
-            }));
-            console.log('✅ Salaire brut récupéré depuis salaries (par nom):', salaryByName.salaire_brut);
-          }
+      // 3. Déterminer le salaire brut à utiliser
+      let salaireBrut = 0;
+      
+      // Priorité 1 : Depuis collaborateurs_entreprise.salaire
+      if (collabData?.salaire && collabData.salaire > 0) {
+        salaireBrut = parseFloat(collabData.salaire.toString());
+      }
+      // Priorité 2 : Depuis salaries.salaire_brut (si actif)
+      else if (salaryData?.salaire_brut) {
+        const today = new Date();
+        const dateFin = salaryData.date_fin_contrat ? new Date(salaryData.date_fin_contrat) : null;
+        const isActive = (!dateFin || dateFin >= today) && salaryData.statut !== 'inactif';
+        
+        if (isActive) {
+          salaireBrut = parseFloat(salaryData.salaire_brut.toString());
         }
-      } else {
+      }
+      
+      // 4. Pré-remplir le formulaire avec les données récupérées
+      if (salaireBrut > 0) {
         setFichePaieForm(prev => ({
           ...prev,
-          salaire_brut: salaryData.salaire_brut?.toString() || ''
+          salaire_brut: salaireBrut.toFixed(2),
         }));
-        console.log('✅ Salaire brut récupéré depuis salaries:', salaryData.salaire_brut);
+        
+        console.log('✅ [Comptabilite] Données collaborateur chargées:', {
+          salaire_brut: salaireBrut,
+          heures_mensuelles: collabData?.nombre_heures_mensuelles,
+          heures_hebdo: collabData?.nombre_heures_hebdo,
+          type_contrat: collabData?.type_contrat,
+          poste: collabData?.poste,
+          convention_collective: collabData?.convention_collective,
+        });
+      } else {
+        console.warn('⚠️ [Comptabilite] Aucun salaire trouvé pour ce collaborateur');
       }
-
-      // 2. Récupérer les taux de cotisations
-      const taux = await getTauxCotisations(selectedEntreprise, collaborateurId);
-      console.log('✅ Taux de cotisations récupérés:', taux);
-      
-      // Les taux seront utilisés automatiquement lors de la génération de la fiche de paie
-      // On peut les stocker dans un état si nécessaire pour les afficher
-      
     } catch (error) {
-      console.error('❌ Erreur chargement salaire brut et taux:', error);
+      console.error('❌ [Comptabilite] Erreur chargement données collaborateur:', error);
     }
   };
 
@@ -900,13 +907,19 @@ export default function Comptabilite() {
       );
       const salaireBrut = salaireBrutLigne?.montant_a_payer || salaireBrutLigne?.base || 0;
 
-      const netImposable = lignes
-        .filter(l => l.rubrique?.code === 'NET_IMPOSABLE' || l.montant_a_payer !== undefined)
-        .reduce((sum, l) => sum + (l.montant_a_payer || 0), 0);
+      // Net imposable = Salaire brut - Cotisations déductibles (SS, retraite, chômage, CSG déductible)
+      // Les cotisations déductibles excluent la CSG non déductible
+      const cotisationsDeductibles = lignes
+        .filter(l => {
+          const code = l.rubrique?.code || '';
+          // Exclure CSG non déductible (elle n'est pas déductible)
+          return l.montant_salarial && l.montant_salarial < 0 && code !== 'CSG_NON_DED';
+        })
+        .reduce((sum, l) => sum + Math.abs(l.montant_salarial || 0), 0);
+      const netImposable = salaireBrut - cotisationsDeductibles;
 
-      const netAPayer = lignes
-        .filter(l => l.rubrique?.code === 'NET_A_PAYER' || (l.montant_a_payer && l.montant_a_payer > 0))
-        .reduce((sum, l) => sum + (l.montant_a_payer || 0), 0);
+      // Net à payer = Salaire brut - TOUTES les cotisations salariales
+      const netAPayer = salaireBrut - totalCotisationsSalariales;
 
       const coutTotalEmployeur = salaireBrut + totalCotisationsPatronales;
 
@@ -917,8 +930,8 @@ export default function Comptabilite() {
           salaire_brut: salaireBrut,
           total_cotisations_salariales: totalCotisationsSalariales,
           total_cotisations_patronales: totalCotisationsPatronales,
-          net_imposable: netImposable || salaireBrut - totalCotisationsSalariales,
-          net_a_payer: netAPayer || salaireBrut - totalCotisationsSalariales,
+          net_imposable: netImposable,
+          net_a_payer: netAPayer,
           cout_total_employeur: coutTotalEmployeur,
         })
         .eq('id', fichePaieId);
@@ -929,8 +942,8 @@ export default function Comptabilite() {
         salaire_brut: salaireBrut,
         total_cotisations_salariales: totalCotisationsSalariales,
         total_cotisations_patronales: totalCotisationsPatronales,
-        net_imposable: netImposable || salaireBrut - totalCotisationsSalariales,
-        net_a_payer: netAPayer || salaireBrut - totalCotisationsSalariales,
+        net_imposable: netImposable,
+        net_a_payer: netAPayer,
         cout_total_employeur: coutTotalEmployeur,
       };
     } catch (error) {
@@ -1242,6 +1255,10 @@ export default function Comptabilite() {
           ordre_affichage: l.ordre_affichage || 0,
           groupe_affichage: l.groupe_affichage || 'autre',
         })),
+        // Inclure les heures si disponibles
+        heures_normales: ficheData.heures_normales || null,
+        heures_supp_25: ficheData.heures_supp_25 || null,
+        heures_supp_50: ficheData.heures_supp_50 || null,
       };
 
       console.log('✅ [Comptabilite] Données complètes récupérées:', ficheComplete);
@@ -1300,7 +1317,7 @@ export default function Comptabilite() {
     }
   };
 
-  // HANDLER : Générer une fiche de paie
+  // HANDLER : Générer une fiche de paie (SYSTÈME AUTOMATIQUE COMPLET)
   const handleGenererFichePaie = async () => {
     if (!selectedEntreprise) {
       alert('Veuillez sélectionner une entreprise');
@@ -1315,282 +1332,71 @@ export default function Comptabilite() {
     try {
       setLoading(true);
 
-      // Créer la fiche de paie directement (la fonction RPC utilise des colonnes qui n'existent pas)
-      const salaireBrut = parseFloat(fichePaieForm.salaire_brut) || 0;
+      // 1. Récupérer le salaire brut
+      let salaireBrut = parseFloat(fichePaieForm.salaire_brut) || 0;
       
-      // Récupérer les informations du collaborateur (sans salaire_brut car cette colonne n'existe pas)
-      const { data: collab, error: collabError } = await supabase
-        .from('collaborateurs_entreprise')
-        .select('nom, prenom, email')
-        .eq('id', fichePaieForm.collaborateur_id)
-        .maybeSingle();
-      
-      if (collabError) {
-        console.error('❌ [Comptabilite] Erreur récupération collaborateur:', collabError);
-        throw new Error(`Erreur lors de la récupération du collaborateur: ${collabError.message}`);
-      }
-      
-      if (!collab) {
-        console.error('❌ [Comptabilite] Collaborateur non trouvé:', fichePaieForm.collaborateur_id);
-        throw new Error('Collaborateur non trouvé');
-      }
-      
-      console.log('✅ [Comptabilite] Collaborateur trouvé:', collab);
-      
-      // Trouver ou créer le salary_id dans la table salaries
-      let salaryId: string | null = null;
-      
-      // Chercher un salary existant pour ce collaborateur (par collaborateur_id d'abord)
-      const { data: existingSalaryByCollabId } = await supabase
-        .from('salaries')
-        .select('id, salaire_brut')
-        .eq('collaborateur_id', fichePaieForm.collaborateur_id)
-        .eq('actif', true)
-        .order('date_debut', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      if (existingSalaryByCollabId) {
-        salaryId = existingSalaryByCollabId.id;
-        console.log('✅ [Comptabilite] Salary existant trouvé (par collaborateur_id):', salaryId);
-      } else {
-        // Chercher par nom/prénom
-        const { data: existingSalary } = await supabase
+      // Si pas de salaire dans le formulaire, récupérer depuis salaries
+      if (!salaireBrut || salaireBrut === 0) {
+        // Récupérer le dernier salaire actif pour ce collaborateur
+        // (pas de colonne 'actif', on filtre par date_fin_contrat et statut)
+        const { data: salaryData } = await supabase
           .from('salaries')
-          .select('id, salaire_brut')
-          .eq('entreprise_id', selectedEntreprise)
-          .eq('nom', collab.nom)
-          .eq('prenom', collab.prenom)
-          .eq('actif', true)
+          .select('salaire_brut, date_fin_contrat, statut')
+          .eq('collaborateur_id', fichePaieForm.collaborateur_id)
           .order('date_debut', { ascending: false })
           .limit(1)
           .maybeSingle();
         
-        if (existingSalary) {
-          salaryId = existingSalary.id;
-          console.log('✅ [Comptabilite] Salary existant trouvé (par nom):', salaryId);
-        } else {
-          // Créer un salary si il n'existe pas
-          // Le salaire brut vient du formulaire ou d'une valeur par défaut
-          const salaireBrutInitial = salaireBrut || 2000;
+        // Vérifier que le salaire est actif (pas de date de fin ou date future, statut != 'inactif')
+        if (salaryData?.salaire_brut) {
+          const today = new Date();
+          const dateFin = salaryData.date_fin_contrat ? new Date(salaryData.date_fin_contrat) : null;
+          const isActive = (!dateFin || dateFin >= today) && salaryData.statut !== 'inactif';
           
-          console.log('🔄 [Comptabilite] Création d\'un nouveau salary pour:', collab.nom, collab.prenom);
-          
-          const { data: newSalary, error: createSalaryError } = await supabase
-            .from('salaries')
-            .insert({
-              entreprise_id: selectedEntreprise,
-              collaborateur_id: fichePaieForm.collaborateur_id,
-              nom: collab.nom,
-              prenom: collab.prenom,
-              email: collab.email || `${collab.prenom.toLowerCase()}.${collab.nom.toLowerCase()}@sastest.fr`,
-              salaire_brut: salaireBrutInitial,
-              type_contrat: 'CDI',
-              statut: 'actif',
-              date_embauche: new Date().toISOString().split('T')[0],
-              date_debut: new Date().toISOString().split('T')[0],
-            })
-            .select('id, salaire_brut')
-            .single();
-          
-          if (createSalaryError || !newSalary) {
-            console.error('❌ [Comptabilite] Erreur création salary:', createSalaryError);
-            throw new Error(`Impossible de créer le salary pour ce collaborateur: ${createSalaryError?.message || 'Erreur inconnue'}`);
-          }
-          
-          salaryId = newSalary.id;
-          console.log('✅ [Comptabilite] Nouveau salary créé:', salaryId);
-        }
-      }
-      
-      // Déterminer le salaire brut final
-      let salaireBrutFinal = salaireBrut;
-      
-      // Si pas de salaire brut fourni dans le formulaire, récupérer depuis le salary
-      if (!salaireBrutFinal || salaireBrutFinal === 0) {
-        if (existingSalaryByCollabId?.salaire_brut) {
-          salaireBrutFinal = parseFloat(existingSalaryByCollabId.salaire_brut.toString()) || 0;
-        } else if (salaryId) {
-          const { data: salaryData } = await supabase
-            .from('salaries')
-            .select('salaire_brut')
-            .eq('id', salaryId)
-            .maybeSingle();
-          
-          if (salaryData?.salaire_brut) {
-            salaireBrutFinal = parseFloat(salaryData.salaire_brut.toString()) || 0;
+          if (isActive) {
+            salaireBrut = parseFloat(salaryData.salaire_brut.toString()) || 0;
           }
         }
       }
       
       // Si toujours pas de salaire, utiliser une valeur par défaut
-      if (!salaireBrutFinal || salaireBrutFinal === 0) {
-        salaireBrutFinal = 2000; // Valeur par défaut
+      if (!salaireBrut || salaireBrut === 0) {
+        salaireBrut = 2000; // Valeur par défaut
       }
       
-      console.log('💰 [Comptabilite] Salaire brut final:', salaireBrutFinal);
+      console.log('💰 [Comptabilite] Salaire brut utilisé:', salaireBrut);
 
-      // Convertir periode (YYYY-MM) en periode_debut et periode_fin
-      const periodeDate = new Date(fichePaieForm.periode + '-01');
-      const periodeDebut = periodeDate.toISOString().split('T')[0];
-      // Fin du mois
-      const periodeFin = new Date(periodeDate.getFullYear(), periodeDate.getMonth() + 1, 0).toISOString().split('T')[0];
-      
-      // Générer un numéro unique
-      const numero = `FDP-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-
-      // Calculer le net à payer (sera recalculé après la création des lignes de paie)
-      // Pour l'instant, on utilise une estimation basique
-      const cotisationsEstimees = salaireBrutFinal * 0.22; // 22% de cotisations (simplifié)
-      const salaireNetEstime = salaireBrutFinal - cotisationsEstimees;
-
-      const { data: nouvelleFiche, error: insertError } = await supabase
-        .from('fiches_paie')
-        .insert({
-          entreprise_id: selectedEntreprise,
-          collaborateur_id: fichePaieForm.collaborateur_id,
-          salary_id: salaryId,
-          periode_debut: periodeDebut,
-          periode_fin: periodeFin,
-          salaire_brut: salaireBrutFinal,
-          net_a_payer: salaireNetEstime,
-          numero: numero,
-        })
-        .select('id')
-        .single();
-
-      if (insertError || !nouvelleFiche) {
-        console.error('❌ [Comptabilite] Erreur insertion fiche de paie:', insertError);
-        throw insertError || new Error('Impossible de créer la fiche de paie');
-      }
-
-      // Récupérer les taux de cotisations depuis la convention collective
-      console.log('🔄 [Comptabilite] Récupération des taux de cotisations...');
-      const tauxCotisations = await getTauxCotisations(selectedEntreprise, fichePaieForm.collaborateur_id);
-      console.log('✅ [Comptabilite] Taux récupérés:', tauxCotisations);
-
-      // Charger les rubriques par défaut si pas encore chargées
-      if (rubriquesPaie.length === 0) {
-        await loadRubriquesPaie();
-      }
-
-      // Créer les lignes par défaut pour cette fiche de paie
-      const rubriquesParDefaut = rubriquesPaie.filter(r => r.par_defaut_active);
-      
-      if (rubriquesParDefaut.length > 0) {
-        const lignesParDefaut = rubriquesParDefaut.map((rubrique, index) => {
-          let base = salaireBrutFinal;
-          let tauxSalarial = 0;
-          let tauxPatronal = 0;
-          let montantAPayer = 0;
-
-          // Utiliser les taux récupérés depuis la convention collective
-          switch (rubrique.code) {
-            case 'SAL_BASE':
-              montantAPayer = salaireBrutFinal;
-              break;
-            case 'SS_MALADIE_SAL':
-              tauxSalarial = tauxCotisations.taux_ss_maladie_sal * 100; // Convertir en %
-              break;
-            case 'SS_VIEIL_PLAF_SAL':
-              tauxSalarial = tauxCotisations.taux_ss_vieil_plaf_sal * 100;
-              break;
-            case 'SS_VIEIL_DEPLAF_SAL':
-              tauxSalarial = tauxCotisations.taux_ss_vieil_deplaf_sal * 100;
-              break;
-            case 'ASS_CHOMAGE_SAL':
-              tauxSalarial = tauxCotisations.taux_ass_chomage_sal * 100;
-              break;
-            case 'RET_COMPL_SAL':
-              tauxSalarial = tauxCotisations.taux_ret_compl_sal * 100;
-              break;
-            case 'CSG_DED':
-              tauxSalarial = tauxCotisations.taux_csg_ded_sal * 100;
-              break;
-            case 'CSG_NON_DED':
-              tauxSalarial = tauxCotisations.taux_csg_non_ded_sal * 100;
-              break;
-            case 'SS_MALADIE_PAT':
-              tauxPatronal = tauxCotisations.taux_ss_maladie_pat * 100;
-              break;
-            case 'SS_VIEIL_PLAF_PAT':
-              tauxPatronal = tauxCotisations.taux_ss_vieil_plaf_pat * 100;
-              break;
-            case 'SS_VIEIL_DEPLAF_PAT':
-              tauxPatronal = tauxCotisations.taux_ss_vieil_deplaf_pat * 100;
-              break;
-            case 'ALLOC_FAM_PAT':
-              tauxPatronal = tauxCotisations.taux_alloc_fam_pat * 100;
-              break;
-            case 'AT_MP_PAT':
-              tauxPatronal = tauxCotisations.taux_at_mp_pat * 100;
-              break;
-            case 'ASS_CHOMAGE_PAT':
-              tauxPatronal = tauxCotisations.taux_ass_chomage_pat * 100;
-              break;
-            case 'RET_COMPL_PAT':
-              tauxPatronal = tauxCotisations.taux_ret_compl_pat * 100;
-              break;
-            case 'NET_A_PAYER':
-              // Sera calculé après toutes les cotisations
-              break;
-          }
-
-          const montantSalarial = tauxSalarial ? -(base * tauxSalarial) / 100 : 0;
-          const montantPatronal = tauxPatronal ? (base * tauxPatronal) / 100 : 0;
-
-          const ligne = {
-            fiche_paie_id: nouvelleFiche.id,
-            rubrique_id: rubrique.id,
-            libelle_affiche: rubrique.libelle,
-            base: base,
-            taux_salarial: tauxSalarial > 0 ? tauxSalarial : null,
-            montant_salarial: montantSalarial !== 0 ? montantSalarial : null,
-            taux_patronal: tauxPatronal > 0 ? tauxPatronal : null,
-            montant_patronal: montantPatronal !== 0 ? montantPatronal : null,
-            montant_a_payer: montantAPayer || null,
-            ordre_affichage: index + 1,
-            groupe_affichage: rubrique.groupe_affichage || 'autre',
-          };
-          
-          console.log(`📋 [Comptabilite] Ligne créée pour ${rubrique.libelle}:`, {
-            base: ligne.base,
-            taux_salarial: ligne.taux_salarial,
-            montant_salarial: ligne.montant_salarial,
-            taux_patronal: ligne.taux_patronal,
-            montant_patronal: ligne.montant_patronal,
-          });
-          
-          return ligne;
-        });
-
-        // Calculer le net à payer
-        const totalCotisationsSalariales = lignesParDefaut
-          .filter(l => l.montant_salarial && l.montant_salarial < 0)
-          .reduce((sum, l) => sum + Math.abs(l.montant_salarial || 0), 0);
-        
-        const ligneNetAPayer = lignesParDefaut.find(l => l.rubrique_id === rubriquesParDefaut.find(r => r.code === 'NET_A_PAYER')?.id);
-        if (ligneNetAPayer) {
-          ligneNetAPayer.montant_a_payer = salaireBrutFinal - totalCotisationsSalariales;
+      // 2. Utiliser la fonction RPC pour générer automatiquement la fiche de paie complète
+      // Cette fonction calcule TOUT automatiquement selon les taux URSSAF 2025
+      // Elle récupère aussi automatiquement les données du collaborateur si NULL
+      // Utiliser la fonction RPC qui récupère automatiquement toutes les données
+      const { data: ficheId, error: rpcError } = await supabase.rpc(
+        'generer_fiche_paie_complete_auto',
+        {
+          p_entreprise_id: selectedEntreprise,
+          p_collaborateur_id: fichePaieForm.collaborateur_id,
+          p_periode: fichePaieForm.periode,
+          p_salaire_brut: salaireBrut > 0 ? salaireBrut : null, // NULL = récupération automatique depuis collaborateur
+          p_heures_normales: null, // NULL = récupération automatique depuis collaborateur
+          p_heures_supp_25: 0,
+          p_heures_supp_50: 0,
+          p_primes: 0,
+          p_avantages_nature: 0,
         }
+      );
 
-        // Insérer toutes les lignes
-        const { error: lignesError } = await supabase
-          .from('fiches_paie_lignes')
-          .insert(lignesParDefaut);
-
-        if (lignesError) {
-          console.warn('⚠️ [Comptabilite] Erreur création lignes par défaut:', lignesError);
-          // Ne pas bloquer si les lignes ne peuvent pas être créées
-        } else {
-          console.log(`✅ [Comptabilite] ${lignesParDefaut.length} lignes par défaut créées`);
-        }
-
-        // Recalculer les totaux
-        await recalculerTotauxFichePaie(nouvelleFiche.id, lignesParDefaut as FichePaieLigne[]);
+      if (rpcError) {
+        console.error('❌ [Comptabilite] Erreur génération fiche de paie automatique:', rpcError);
+        throw new Error(`Erreur lors de la génération: ${rpcError.message}`);
       }
+
+      if (!ficheId) {
+        throw new Error('Impossible de générer la fiche de paie');
+      }
+
+      console.log('✅ [Comptabilite] Fiche de paie générée automatiquement avec succès:', ficheId);
       
-      alert('✅ Fiche de paie créée avec succès !');
+      alert('✅ Fiche de paie générée automatiquement avec succès !\n\nToutes les cotisations ont été calculées selon les taux URSSAF 2025.');
 
       setShowFichePaieModal(false);
       setFichePaieForm({
@@ -1926,9 +1732,22 @@ export default function Comptabilite() {
         )}
         
         {activeTab === 'parametres' && (
-          <div className="text-center py-12 text-gray-400">
-            <Settings className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <p>Module Paramètres Comptables - En développement</p>
+          <div className="text-center py-12">
+            <Settings className="w-16 h-16 mx-auto mb-4 text-blue-400" />
+            <h3 className="text-xl font-bold text-white mb-4">Paramètres Comptabilité</h3>
+            <p className="text-gray-400 mb-6">
+              Accédez à la page de configuration complète pour gérer les paramètres de paie, 
+              les taux de charges et les conventions collectives
+            </p>
+            <button
+              onClick={() => {
+                window.location.hash = 'param-compta';
+              }}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2 mx-auto"
+            >
+              <Settings className="w-5 h-5" />
+              Ouvrir les Paramètres
+            </button>
           </div>
         )}
       </div>
@@ -1989,16 +1808,26 @@ export default function Comptabilite() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Salaire Brut (€) - Optionnel (sera récupéré automatiquement si vide)
+                  Salaire Brut (€) - Optionnel
+                  <span className="text-xs text-gray-400 block mt-1">
+                    Sera récupéré automatiquement depuis les données du collaborateur si vide
+                  </span>
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   value={fichePaieForm.salaire_brut}
                   onChange={(e) => setFichePaieForm({ ...fichePaieForm, salaire_brut: e.target.value })}
-                  placeholder="Ex: 2500.00"
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: 2500.00 (auto-rempli si disponible)"
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+              
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm text-blue-200">
+                <p className="font-medium mb-1">ℹ️ Génération automatique</p>
+                <p className="text-xs">
+                  Toutes les cotisations seront calculées automatiquement selon les taux URSSAF 2025 et la convention collective du collaborateur.
+                </p>
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -2631,9 +2460,17 @@ export default function Comptabilite() {
                   <p className="text-sm text-gray-400 mb-1">Net à payer</p>
                   <p className="text-green-400 font-semibold text-xl">
                     {formatCurrency(
-                      fichePaieLignes
-                        .filter(l => l.montant_a_payer && l.montant_a_payer > 0)
-                        .reduce((sum, l) => sum + (l.montant_a_payer || 0), 0)
+                      currentFichePaie?.net_a_payer || 
+                      (() => {
+                        // Calculer correctement : Salaire brut - Total cotisations salariales
+                        const salaireBrut = fichePaieLignes
+                          .filter(l => l.rubrique?.sens === 'gain' && l.montant_a_payer && l.montant_a_payer > 0)
+                          .reduce((sum, l) => sum + (l.montant_a_payer || 0), 0);
+                        const totalCotisationsSalariales = fichePaieLignes
+                          .filter(l => l.montant_salarial && l.montant_salarial < 0)
+                          .reduce((sum, l) => sum + Math.abs(l.montant_salarial || 0), 0);
+                        return salaireBrut - totalCotisationsSalariales;
+                      })()
                     )}
                   </p>
                 </div>

@@ -20,12 +20,20 @@ interface FichePaieData {
   periode_fin: string;
   salaire_brut: number | string;
   net_a_payer: number | string;
+  net_imposable?: number | string;
+  total_cotisations_salariales?: number | string;
+  total_cotisations_patronales?: number | string;
+  cout_total_employeur?: number | string;
+  heures_normales?: number | string;
+  heures_supp_25?: number | string;
+  heures_supp_50?: number | string;
   collaborateur_id: string;
   entreprise_id: string;
   collaborateurs_entreprise: {
     nom: string;
     prenom: string;
     email?: string;
+    poste?: string;
   };
   entreprises: {
     nom: string;
@@ -44,390 +52,608 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+// Fonction pour formater un montant en euros
+function formatCurrency(value: number): string {
+  return `${value.toFixed(2).replace('.', ',')} €`;
+}
+
+// Fonction pour calculer les allègements de cotisations patronales (Réduction générale)
+// Basée sur la formule de la réduction générale des cotisations patronales 2025
+function calculerAllegements(salaireBrut: number, cotisationsPatronales: number): number {
+  // SMIC mensuel 2025
+  const SMIC_MENSUEL = 1826.40;
+  
+  // Seuils pour la réduction générale
+  const SEUIL_MIN = SMIC_MENSUEL * 1.6; // 2,922.24 €
+  const SEUIL_MAX = SMIC_MENSUEL * 3.5; // 6,392.40 €
+  
+  // Si le salaire brut est en dehors des seuils, pas d'allègement
+  if (salaireBrut < SEUIL_MIN || salaireBrut > SEUIL_MAX) {
+    return 0;
+  }
+  
+  // Coefficient de réduction (formule simplifiée)
+  // Coefficient = (0,3191 / 0,6) × ((1,6 × SMIC / salaire brut) - 1)
+  const coefficient = (0.3191 / 0.6) * ((1.6 * SMIC_MENSUEL / salaireBrut) - 1);
+  
+  // Limiter le coefficient entre 0 et 0,3191
+  const coefficientLimite = Math.max(0, Math.min(0.3191, coefficient));
+  
+  // Allègement = coefficient × cotisations patronales (limité aux cotisations éligibles)
+  // On applique environ 80% des cotisations patronales sont éligibles
+  const cotisationsEligibles = cotisationsPatronales * 0.80;
+  const allegement = round2(coefficientLimite * cotisationsEligibles);
+  
+  return allegement;
+}
+
 export async function generatePDFFichePaie(data: FichePaieData): Promise<void> {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  // Marges et cadre général
+  // Marges professionnelles
   const margin = 15;
-  let yPos = margin;
+  const marginTop = 20;
+  let yPos = marginTop;
 
   // Normalisation des montants
   const salaireBrut = Number(data.salaire_brut || 0);
   const netAPayer = Number(data.net_a_payer || 0);
+  const netImposable = Number(data.net_imposable || 0);
+  const totalCotisationsSalariales = Number(data.total_cotisations_salariales || 0);
+  const totalCotisationsPatronales = Number(data.total_cotisations_patronales || 0);
+  const coutTotalEmployeur = Number(data.cout_total_employeur || 0);
 
   // Si la base est invalide, on arrête proprement
   if (!salaireBrut || salaireBrut <= 0) {
     throw new Error('Salaire brut invalide pour la génération de la fiche de paie');
   }
 
-  // Utiliser les lignes depuis la base de données si disponibles, sinon calculer
-  type LigneFusionnee = {
-    libelle: string;
-    base: number;
-    tauxSal: number;
-    montantSal: number;
-    tauxPat: number;
-    montantPat: number;
-  };
+  // Couleurs professionnelles
+  const primaryColor = [59, 130, 246]; // Bleu professionnel
+  const darkGray = [31, 41, 55]; // Texte principal
+  const mediumGray = [107, 114, 128]; // Texte secondaire
+  const lightGray = [243, 244, 246]; // Fond clair
+  const borderGray = [209, 213, 219]; // Bordures
+  const successGreen = [34, 197, 94]; // Vert pour net à payer
 
-  let lignesFusionnees: LigneFusionnee[] = [];
-  let totalSalarialesCalcule = 0;
-  let totalPatronalesCalcule = 0;
-  let salaireNetAvantImpot = 0;
-  let coutTotalEmployeur = 0;
-
-  if (data.lignes && data.lignes.length > 0) {
-    // Utiliser les lignes depuis fiches_paie_lignes
-    const lignesMap = new Map<string, LigneFusionnee>();
-
-    data.lignes.forEach((ligne) => {
-      const libelle = ligne.libelle;
-      const existing = lignesMap.get(libelle);
-      
-      if (existing) {
-        // Fusionner avec la ligne existante
-        existing.tauxSal = ligne.taux_salarial || existing.tauxSal;
-        existing.montantSal = ligne.montant_salarial ? Math.abs(ligne.montant_salarial) : existing.montantSal;
-        existing.tauxPat = ligne.taux_patronal || existing.tauxPat;
-        existing.montantPat = ligne.montant_patronal || existing.montantPat;
-        existing.base = ligne.base || existing.base;
-      } else {
-        // Créer une nouvelle ligne
-        lignesMap.set(libelle, {
-          libelle,
-          base: ligne.base || salaireBrut,
-          tauxSal: ligne.taux_salarial || 0,
-          montantSal: ligne.montant_salarial ? Math.abs(ligne.montant_salarial) : 0,
-          tauxPat: ligne.taux_patronal || 0,
-          montantPat: ligne.montant_patronal || 0,
-        });
-      }
-    });
-
-    lignesFusionnees = Array.from(lignesMap.values())
-      .sort((a, b) => {
-        // Trier par ordre logique : salariales d'abord, puis patronales
-        if (a.montantSal !== 0 && b.montantSal === 0) return -1;
-        if (a.montantSal === 0 && b.montantSal !== 0) return 1;
-        return 0;
-      });
-
-    totalSalarialesCalcule = round2(
-      lignesFusionnees.reduce((sum, l) => sum + l.montantSal, 0)
-    );
-    totalPatronalesCalcule = round2(
-      lignesFusionnees.reduce((sum, l) => sum + l.montantPat, 0)
-    );
-    salaireNetAvantImpot = round2(salaireBrut - totalSalarialesCalcule);
-    coutTotalEmployeur = round2(salaireBrut + totalPatronalesCalcule);
-  } else {
-    // Fallback : calculer les lignes comme avant (pour compatibilité)
-    const totalSalariales = Math.max(salaireBrut - netAPayer, 0);
-    const lignesSalarialesBase = [
-      { libelle: 'Sécurité sociale - Maladie, maternité, invalidité, décès', poids: 4 },
-      { libelle: 'Sécurité sociale - Vieillesse (plafonnée)', poids: 7 },
-      { libelle: 'Sécurité sociale - Vieillesse (déplafonnée)', poids: 1 },
-      { libelle: 'Assurance chômage', poids: 3 },
-      { libelle: 'Retraite complémentaire', poids: 4 },
-      { libelle: 'CSG/CRDS déductible', poids: 6 },
-      { libelle: 'CSG/CRDS non déductible', poids: 3 },
-    ];
-
-    const totalPoidsSal = lignesSalarialesBase.reduce((sum, l) => sum + l.poids, 0);
-    const lignesSalariales = lignesSalarialesBase.map((l) => {
-      const montant = totalPoidsSal > 0 ? (totalSalariales * l.poids) / totalPoidsSal : 0;
-      const taux = salaireBrut > 0 ? (montant / salaireBrut) * 100 : 0;
-      return { ...l, base: salaireBrut, taux: round2(taux), montant: round2(montant) };
-    });
-
-    totalSalarialesCalcule = round2(
-      lignesSalariales.reduce((sum, l) => sum + l.montant, 0)
-    );
-
-    const totalPatronales = round2(salaireBrut * 0.42);
-    const lignesPatronalesBase = [
-      { libelle: 'Sécurité sociale - Maladie, maternité, invalidité, décès', poids: 6 },
-      { libelle: 'Sécurité sociale - Vieillesse (plafonnée)', poids: 8 },
-      { libelle: 'Sécurité sociale - Vieillesse (déplafonnée)', poids: 2 },
-      { libelle: 'Allocations familiales', poids: 5 },
-      { libelle: 'Accidents du travail / maladies professionnelles', poids: 3 },
-      { libelle: 'Assurance chômage', poids: 4 },
-      { libelle: 'Retraite complémentaire', poids: 6 },
-      { libelle: 'Autres contributions (formation, etc.)', poids: 2 },
-    ];
-
-    const totalPoidsPat = lignesPatronalesBase.reduce((sum, l) => sum + l.poids, 0);
-    const lignesPatronales = lignesPatronalesBase.map((l) => {
-      const montant = totalPoidsPat > 0 ? (totalPatronales * l.poids) / totalPoidsPat : 0;
-      const taux = salaireBrut > 0 ? (montant / salaireBrut) * 100 : 0;
-      return { ...l, base: salaireBrut, taux: round2(taux), montant: round2(montant) };
-    });
-
-    totalPatronalesCalcule = round2(
-      lignesPatronales.reduce((sum, l) => sum + l.montant, 0)
-    );
-
-    const lignesMap = new Map<string, LigneFusionnee>();
-    lignesSalariales.forEach((l) => {
-      lignesMap.set(l.libelle, {
-        libelle: l.libelle,
-        base: l.base,
-        tauxSal: l.taux,
-        montantSal: l.montant,
-        tauxPat: 0,
-        montantPat: 0,
-      });
-    });
-    lignesPatronales.forEach((l) => {
-      const existing = lignesMap.get(l.libelle);
-      if (existing) {
-        existing.tauxPat = l.taux;
-        existing.montantPat = l.montant;
-      } else {
-        lignesMap.set(l.libelle, {
-          libelle: l.libelle,
-          base: l.base,
-          tauxSal: 0,
-          montantSal: 0,
-          tauxPat: l.taux,
-          montantPat: l.montant,
-        });
-      }
-    });
-
-    lignesFusionnees = Array.from(lignesMap.values());
-    salaireNetAvantImpot = round2(salaireBrut - totalSalarialesCalcule);
-    coutTotalEmployeur = round2(salaireBrut + totalPatronalesCalcule);
-  }
-
-  // Couleurs
-  const primaryColor = [59, 130, 246]; // Blue-500
-  const textColor = [31, 41, 55]; // Gray-800
-  const lightGray = [156, 163, 175]; // Gray-400
-
-  // Cadre général de la fiche
-  doc.setDrawColor(lightGray[0], lightGray[1], lightGray[2]);
-  doc.setLineWidth(0.4);
-  doc.rect(margin - 5, margin - 10, pageWidth - (margin - 5) * 2, pageHeight - (margin - 5) * 2, 'S');
-
-  // En-tête simple (sans bandeau coloré)
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.text('FICHE DE PAIE', pageWidth / 2, margin, { align: 'center' });
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EN-TÊTE PROFESSIONNEL
+  // ═══════════════════════════════════════════════════════════════════════════
   
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Bulletin N° ${data.numero}`, pageWidth / 2, margin + 7, { align: 'center' });
-
-  yPos = margin + 14;
-
-  // Bloc informations entreprise + salarié encadré
-  const infoBlockTop = yPos;
-  const infoBlockHeight = 36;
-  doc.setDrawColor(lightGray[0], lightGray[1], lightGray[2]);
-  doc.rect(margin, infoBlockTop, pageWidth - 2 * margin, infoBlockHeight, 'S');
-
-  // Séparation verticale milieu
-  const middleX = pageWidth / 2;
-  doc.line(middleX, infoBlockTop, middleX, infoBlockTop + infoBlockHeight);
-
-  // Informations entreprise (gauche)
-  doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-  doc.setFontSize(14);
+  // Titre principal centré (sans bandeau bleu)
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+  doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text('Employeur', margin + 3, yPos + 6);
+  doc.text('FICHE DE PAIE', pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 12;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLOC INFORMATIONS EMPLOYEUR / SALARIÉ (TABLEAU PROPRE)
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  const infoBlockTop = yPos;
+  const infoBlockWidth = pageWidth - 2 * margin;
+  const infoBlockHeight = 45;
+  const middleX = pageWidth / 2;
+  
+  // Fond blanc avec bordure
+  doc.setFillColor(255, 255, 255);
+  doc.rect(margin, infoBlockTop, infoBlockWidth, infoBlockHeight, 'F');
+  
+  // Bordure extérieure
+  doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
+  doc.setLineWidth(0.5);
+  doc.rect(margin, infoBlockTop, infoBlockWidth, infoBlockHeight, 'S');
+  
+  // Ligne de séparation verticale (colonne)
+  doc.setLineWidth(0.3);
+  doc.line(middleX, infoBlockTop, middleX, infoBlockTop + infoBlockHeight);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // EMPLOYEUR (Colonne gauche)
+  // ───────────────────────────────────────────────────────────────────────────
+  
+  const infoColWidth = (infoBlockWidth - 0.3) / 2; // Moins l'épaisseur de la ligne
+  let xEmployeur = margin + 8;
+  let yEmployeur = infoBlockTop + 10;
+  
+  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('EMPLOYEUR', xEmployeur, yEmployeur);
+  
+  yEmployeur += 7;
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
   doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  const entrepriseNom = data.entreprises.nom || 'Entreprise';
+  doc.text(entrepriseNom, xEmployeur, yEmployeur, { maxWidth: infoColWidth - 16 });
+  
+  yEmployeur += 5;
   doc.setFont('helvetica', 'normal');
-  doc.text(data.entreprises.nom || 'Entreprise', margin + 3, yPos);
-  yPos += 5;
+  doc.setFontSize(9);
   
   if (data.entreprises.adresse) {
-    doc.text(data.entreprises.adresse, margin + 3, yPos);
-    yPos += 5;
+    doc.text(data.entreprises.adresse, xEmployeur, yEmployeur, { maxWidth: infoColWidth - 16 });
+    yEmployeur += 4.5;
   }
   
   if (data.entreprises.code_postal && data.entreprises.ville) {
-    doc.text(`${data.entreprises.code_postal} ${data.entreprises.ville}`, margin + 3, yPos);
-    yPos += 5;
+    doc.text(`${data.entreprises.code_postal} ${data.entreprises.ville}`, xEmployeur, yEmployeur, { maxWidth: infoColWidth - 16 });
+    yEmployeur += 4.5;
   }
   
   if (data.entreprises.siret) {
-    doc.text(`SIRET: ${data.entreprises.siret}`, margin + 3, yPos);
-    yPos += 5;
+    doc.setTextColor(mediumGray[0], mediumGray[1], mediumGray[2]);
+    doc.setFontSize(8);
+    doc.text(`SIRET : ${data.entreprises.siret}`, xEmployeur, yEmployeur, { maxWidth: infoColWidth - 16 });
   }
 
-  // Informations salarié (droite)
-  yPos = infoBlockTop + 8;
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Salarié', pageWidth - margin - 3, yPos, { align: 'right' });
+  // ───────────────────────────────────────────────────────────────────────────
+  // SALARIÉ (Colonne droite)
+  // ───────────────────────────────────────────────────────────────────────────
   
-  yPos += 8;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  const salarieNom = `${data.collaborateurs_entreprise.prenom} ${data.collaborateurs_entreprise.nom}`;
-  doc.text(salarieNom, pageWidth - margin - 3, yPos, { align: 'right' });
-  yPos += 5;
+  let xSalarie = middleX + 8;
+  let ySalarie = infoBlockTop + 10;
   
-  if (data.collaborateurs_entreprise.email) {
-    doc.text(data.collaborateurs_entreprise.email, pageWidth - margin - 3, yPos, { align: 'right' });
-    yPos += 5;
-  }
-
-  yPos = infoBlockTop + infoBlockHeight + 8;
-
-  // Période
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Période', margin, yPos);
-  
-  const periodeDebut = new Date(data.periode_debut).toLocaleDateString('fr-FR', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-  const periodeFin = new Date(data.periode_fin).toLocaleDateString('fr-FR', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Du ${periodeDebut} au ${periodeFin}`, margin + 30, yPos);
-  yPos += 15;
-
-  // Bloc Salaire brut
-  doc.setFillColor(240, 240, 240);
-  doc.rect(margin, yPos, pageWidth - 2 * margin, 12, 'F');
+  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('Rémunération', margin + 6, yPos + 8);
-  yPos += 18;
-
-  doc.setFont('helvetica', 'normal');
-  doc.text('Salaire brut', margin + 6, yPos);
-  doc.text(`${salaireBrut.toFixed(2)} €`, pageWidth - margin - 5, yPos, { align: 'right' });
-  yPos += 10;
-
-  // Tableau unique des charges : inspiré d'un bulletin standard
-  doc.setFillColor(240, 240, 240);
-  doc.rect(margin, yPos, pageWidth - 2 * margin, 12, 'F');
+  doc.text('SALARIÉ', xSalarie, ySalarie);
+  
+  ySalarie += 7;
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('Éléments de paie / Cotisations sociales', margin + 6, yPos + 8);
-  yPos += 16;
-
-  doc.setFontSize(8.5);
-  // Colonnes : Éléments de paie | Base | Taux | À déduire | Charges patronales
-  const tableStartX = margin + 3;                  // Rubrique très proche du cadre gauche
-  const colBaseX = tableStartX + 55;               // Base
-  const colTauxX = tableStartX + 83;               // Taux (salarié)
-  const colADeduireX = tableStartX + 113;          // À déduire (part salarié)
-  const colChargesPatX = pageWidth - margin - 6;   // Charges patronales (part employeur)
-
-  doc.text('Éléments de paie', tableStartX, yPos);
-  doc.text('Base', colBaseX, yPos, { align: 'right' });
-  doc.text('Taux', colTauxX, yPos, { align: 'right' });
-  doc.text('À déduire', colADeduireX, yPos, { align: 'right' });
-  doc.text('Charges patronales', colChargesPatX, yPos, { align: 'right' });
-  yPos += 5;
-
+  const salarieNom = `${data.collaborateurs_entreprise.prenom || ''} ${data.collaborateurs_entreprise.nom || ''}`.trim();
+  doc.text(salarieNom, xSalarie, ySalarie, { maxWidth: infoColWidth - 16 });
+  
+  ySalarie += 5;
   doc.setFont('helvetica', 'normal');
-  lignesFusionnees.forEach((l) => {
-    // Éléments de paie
-    doc.text(l.libelle, tableStartX, yPos);
-    // Base toujours le salaire brut (affiché une seule fois par ligne)
-    doc.text(`${salaireBrut.toFixed(2)} €`, colBaseX, yPos, { align: 'right' });
-    // Taux salarié (si existant)
-    if (l.tauxSal > 0) {
-      doc.text(`${l.tauxSal.toFixed(2)} %`, colTauxX, yPos, { align: 'right' });
-      doc.text(`-${l.montantSal.toFixed(2)} €`, colADeduireX, yPos, { align: 'right' });
-    }
-    // Charges patronales
-    if (l.tauxPat > 0 || l.montantPat !== 0) {
-      doc.text(`${l.montantPat.toFixed(2)} €`, colChargesPatX, yPos, { align: 'right' });
-    }
-    yPos += 4.5;
+  doc.setFontSize(9);
+  
+  if (data.collaborateurs_entreprise.poste) {
+    doc.text(data.collaborateurs_entreprise.poste, xSalarie, ySalarie, { maxWidth: infoColWidth - 16 });
+    ySalarie += 4.5;
+  }
+  
+  if (data.collaborateurs_entreprise.email) {
+    doc.setTextColor(mediumGray[0], mediumGray[1], mediumGray[2]);
+    doc.setFontSize(8);
+    doc.text(data.collaborateurs_entreprise.email, xSalarie, ySalarie, { maxWidth: infoColWidth - 16 });
+  }
+
+  yPos = infoBlockTop + infoBlockHeight + 12;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PÉRIODE DE PAIE
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // Format simple : "Décembre 2025"
+  const periodeDate = new Date(data.periode_debut);
+  const periodeMois = periodeDate.toLocaleDateString('fr-FR', { 
+    month: 'long',
+    year: 'numeric'
+  });
+  const periodeFormatee = periodeMois.charAt(0).toUpperCase() + periodeMois.slice(1);
+  
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text(periodeFormatee, pageWidth / 2, yPos, { align: 'center' });
+  
+  yPos += 10;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TABLEAU UNIQUE (Rémunération + Cotisations) - Structure identique au modèle
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Type pour les lignes du tableau (structure identique au modèle)
+  type LigneTableau = {
+    libelle: string;
+    base?: number;
+    taux?: number;
+    aDeduire?: number;
+    aPayer?: number;
+    chargesPatBase?: number;
+    chargesPatTaux?: number;
+    chargesPatMontant?: number;
+    isSection?: boolean; // Pour les titres de section (Santé, Retraite, etc.)
+    isTotal?: boolean; // Pour les lignes de totaux
+  };
+
+  // Préparer toutes les lignes du tableau dans l'ordre EXACT du modèle
+  let toutesLignes: LigneTableau[] = [];
+  
+  const heuresNormales = Number(data.heures_normales || 0);
+  const heuresSupp25 = Number(data.heures_supp_25 || 0);
+  const heuresSupp50 = Number(data.heures_supp_50 || 0);
+  
+  // Calculer le taux horaire de base
+  const tauxHoraireBase = heuresNormales > 0 ? salaireBrut / heuresNormales : 0;
+  
+  // ========================================
+  // SECTION 1 : SALAIRE DE BASE
+  // ========================================
+  if (heuresNormales > 0) {
+    toutesLignes.push({
+      libelle: 'Salaire de base',
+      base: round2(heuresNormales),
+      taux: round2(tauxHoraireBase),
+      aPayer: salaireBrut
+    });
+  }
+  
+  // ========================================
+  // SECTION 2 : SALAIRE BRUT (total)
+  // ========================================
+  toutesLignes.push({
+    libelle: 'Salaire brut',
+    aPayer: salaireBrut,
+    isTotal: true
   });
 
-  // Totaux en bas du tableau
-  yPos += 2;
-  doc.setDrawColor(lightGray[0], lightGray[1], lightGray[2]);
-  doc.line(margin, yPos, pageWidth - margin, yPos);
-  yPos += 5;
+  // ========================================
+  // SECTION 3 : COTISATIONS (organisées par catégories)
+  // ========================================
+  let totalSalarialesCalcule = totalCotisationsSalariales || 0;
+  let totalPatronalesCalcule = totalCotisationsPatronales || 0;
 
-  doc.setFont('helvetica', 'bold');
-  doc.text('Total part salarié', tableStartX, yPos);
-  doc.text(`-${totalSalarialesCalcule.toFixed(2)} €`, colADeduireX, yPos, { align: 'right' });
-  yPos += 5;
-  doc.text('Total part employeur', tableStartX, yPos);
-  doc.text(`${totalPatronalesCalcule.toFixed(2)} €`, colChargesPatX, yPos, { align: 'right' });
-  yPos += 5;
+  // Organiser les cotisations par catégories comme dans le modèle
+  const cotisationsParCategorie: Record<string, Array<{
+    libelle: string;
+    base: number;
+    tauxSal?: number;
+    montantSal: number;
+    tauxPat?: number;
+    montantPat: number;
+  }>> = {};
 
-  doc.setFontSize(9.5);
-  doc.text('Salaire net avant impôt', tableStartX, yPos);
-  doc.text(`${salaireNetAvantImpot.toFixed(2)} €`, colADeduireX, yPos, { align: 'right' });
-  yPos += 5;
-  doc.text('Net à payer', tableStartX, yPos);
-  doc.text(`${netAPayer.toFixed(2)} €`, colADeduireX, yPos, { align: 'right' });
-  yPos += 5;
-  doc.text('Coût total employeur', tableStartX, yPos);
-  doc.text(`${coutTotalEmployeur.toFixed(2)} €`, colChargesPatX, yPos, { align: 'right' });
-  yPos += 12;
+  if (data.lignes && data.lignes.length > 0) {
+    data.lignes.forEach((ligne) => {
+      const base = ligne.base || salaireBrut;
+      const montantSal = ligne.montant_salarial ? Math.abs(ligne.montant_salarial) : 0;
+      const montantPat = ligne.montant_patronal || 0;
+      
+      // Déterminer la catégorie selon le libellé
+      let categorie = 'Autres';
+      const libelleLower = ligne.libelle.toLowerCase();
+      
+      if (libelleLower.includes('santé') || libelleLower.includes('maladie') || libelleLower.includes('maternité') || libelleLower.includes('invalidité') || libelleLower.includes('accident')) {
+        categorie = 'Santé';
+      } else if (libelleLower.includes('retraite') || libelleLower.includes('vieillesse') || libelleLower.includes('complémentaire')) {
+        categorie = 'Retraite';
+      } else if (libelleLower.includes('famille') || libelleLower.includes('allocations familiales')) {
+        categorie = 'Famille';
+      } else if (libelleLower.includes('chômage') || libelleLower.includes('chomage')) {
+        categorie = 'Assurance chômage';
+      } else if (libelleLower.includes('csg') || libelleLower.includes('crds')) {
+        categorie = 'CSG/CRDS';
+      } else if (libelleLower.includes('exonération') || libelleLower.includes('exoneration')) {
+        categorie = 'Exonérations';
+      }
+      
+      if (!cotisationsParCategorie[categorie]) {
+        cotisationsParCategorie[categorie] = [];
+      }
+      
+      cotisationsParCategorie[categorie].push({
+        libelle: ligne.libelle,
+        base,
+        tauxSal: ligne.taux_salarial || undefined,
+        montantSal,
+        tauxPat: ligne.taux_patronal || undefined,
+        montantPat
+      });
+    });
 
-  // Bloc Congés payés (vision simple et indicative)
-  doc.setFillColor(240, 240, 240);
-  doc.rect(margin, yPos, pageWidth - 2 * margin, 12, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.text('Droits à congés payés (indicatif)', margin + 6, yPos + 8);
-  yPos += 16;
+    // Ajouter les cotisations dans l'ordre du modèle
+    const ordreCategories = ['Santé', 'Retraite', 'Famille', 'Assurance chômage', 'Autres', 'CSG/CRDS', 'Exonérations'];
+    
+    ordreCategories.forEach((categorie) => {
+      if (cotisationsParCategorie[categorie] && cotisationsParCategorie[categorie].length > 0) {
+        // Ajouter un titre de section si nécessaire (pour les catégories principales)
+        if (['Santé', 'Retraite', 'Famille', 'Assurance chômage'].includes(categorie)) {
+          toutesLignes.push({
+            libelle: categorie,
+            isSection: true
+          });
+        }
+        
+        // Ajouter les lignes de cette catégorie
+        cotisationsParCategorie[categorie].forEach((cot) => {
+          toutesLignes.push({
+            libelle: cot.libelle,
+            base: cot.base > 0 ? cot.base : undefined,
+            taux: cot.tauxSal || cot.tauxPat || undefined,
+            aDeduire: cot.montantSal > 0 ? cot.montantSal : undefined,
+            // Toujours inclure les charges patronales si elles existent (même si montantPat = 0 ou négatif)
+            chargesPatBase: (cot.tauxPat !== undefined || cot.montantPat !== 0) ? cot.base : undefined,
+            chargesPatTaux: cot.tauxPat || undefined,
+            chargesPatMontant: cot.montantPat !== 0 ? cot.montantPat : undefined,
+          });
+        });
+        
+        // Après CSG/CRDS, ajouter les lignes de récapitulatif
+        if (categorie === 'CSG/CRDS') {
+          // Calculer le net imposable (salaire brut - cotisations déductibles)
+          const csgNonDedSal = toutesLignes
+            .filter(l => l.libelle.toLowerCase().includes('csg') && l.libelle.toLowerCase().includes('non déductible'))
+            .reduce((sum, l) => sum + (l.aDeduire || 0), 0);
+          const cotisationsDeductibles = totalSalarialesCalcule - csgNonDedSal;
+          
+          // Total part salariale
+          toutesLignes.push({
+            libelle: 'Total part salariale',
+            base: salaireBrut,
+            aDeduire: totalSalarialesCalcule,
+            isTotal: true
+          });
+          
+          // Total part employeur
+          toutesLignes.push({
+            libelle: 'Total part employeur',
+            base: salaireBrut,
+            chargesPatMontant: totalPatronalesCalcule,
+            isTotal: true
+          });
+          
+          // Net imposable
+          toutesLignes.push({
+            libelle: 'Net imposable',
+            base: salaireBrut,
+            isTotal: true
+          });
+          
+          // Net à payer
+          toutesLignes.push({
+            libelle: 'Net à payer',
+            base: salaireBrut,
+            isTotal: true
+          });
+          
+          // Coût total employeur
+          const coutTotalCalcule = round2(salaireBrut + totalPatronalesCalcule);
+          toutesLignes.push({
+            libelle: 'Coût total employeur',
+            base: salaireBrut,
+            chargesPatMontant: coutTotalCalcule,
+            isTotal: true
+          });
+        }
+      }
+    });
 
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  const congesCol1 = margin + 6;
-  const congesCol2 = congesCol1 + 60;
-  const congesCol3 = congesCol2 + 60;
+    // Supprimer les lignes de récapitulatif qui apparaissent AVANT CSG/CRDS
+    const lignesRecap = ['Total part salariale', 'Total part employeur', 'Net imposable', 'Net à payer', 'Coût total employeur'];
+    
+    // Trouver l'index de la première ligne CSG/CRDS
+    let indexPremiereCSG = -1;
+    for (let i = 0; i < toutesLignes.length; i++) {
+      const libelleLower = toutesLignes[i].libelle.toLowerCase();
+      if (libelleLower.includes('csg') || libelleLower.includes('crds')) {
+        indexPremiereCSG = i;
+        break;
+      }
+    }
+    
+    // Si on a trouvé CSG/CRDS, supprimer les lignes de récapitulatif qui sont avant
+    if (indexPremiereCSG > 0) {
+      toutesLignes = toutesLignes.filter((ligne, index) => {
+        // Si c'est une ligne de récapitulatif ET qu'elle est avant CSG/CRDS, on la supprime
+        if (lignesRecap.includes(ligne.libelle) && index < indexPremiereCSG) {
+          return false;
+        }
+        return true;
+      });
+    }
 
-  doc.text('Congés acquis', congesCol1, yPos);
-  doc.text('Congés pris', congesCol2, yPos);
-  doc.text('Solde', congesCol3, yPos);
-  yPos += 6;
+    // Calculer les totaux si nécessaire
+    if (totalSalarialesCalcule === 0) {
+      totalSalarialesCalcule = round2(
+        toutesLignes.reduce((sum, l) => sum + (l.aDeduire || 0), 0)
+      );
+    }
+    if (totalPatronalesCalcule === 0) {
+      totalPatronalesCalcule = round2(
+        toutesLignes.reduce((sum, l) => sum + (l.chargesPatMontant || 0), 0)
+      );
+    }
+  }
 
-  doc.setFont('helvetica', 'normal');
-  // Hypothèse simple : 2,5 jours acquis sur la période, rien de pris (à adapter plus tard avec les vraies données)
-  const congesAcquis = 2.5;
-  const congesPris = 0;
-  const congesSolde = congesAcquis - congesPris;
-  doc.text(`${congesAcquis.toFixed(2)} j`, congesCol1, yPos);
-  doc.text(`${congesPris.toFixed(2)} j`, congesCol2, yPos);
-  doc.text(`${congesSolde.toFixed(2)} j`, congesCol3, yPos);
-  yPos += 14;
+  // ========================================
+  // SECTION 5 : TOTAL DES COTISATIONS
+  // ========================================
+  toutesLignes.push({
+    libelle: 'Total des cotisations et contributions',
+    aDeduire: totalSalarialesCalcule,
+    chargesPatMontant: totalPatronalesCalcule,
+    isTotal: true
+  });
 
-  // Mentions légales
+  // En-tête du tableau avec colonnes (structure identique au modèle)
+  const headerHeight = 10; // Hauteur augmentée de l'en-tête (8 → 10)
+  
+  // Largeurs des colonnes (resserrées mais lisibles)
+  const colLibelleWidth = 55; // "Eléments de paie" (réduit de 65 à 55)
+  const colBaseWidth = 20; // Base (réduit de 24 à 20)
+  const colTauxWidth = 18; // Taux (réduit de 20 à 18)
+  const colDeduireWidth = 20; // "A déduire" (réduit de 24 à 20)
+  const colPayerWidth = 20; // "A payer" (réduit de 24 à 20)
+  const colChargesPatWidth = 30; // "Charges patronales" (agrandie de 24 à 30)
+  
+  // Largeur totale du tableau
+  const tableWidth = colLibelleWidth + colBaseWidth + colTauxWidth + colDeduireWidth + colPayerWidth + colChargesPatWidth;
+  
+  // Centrer le tableau au milieu de la page
+  const tableStartX = (pageWidth - tableWidth) / 2;
+  
+  // Positions X des colonnes
+  const colLibelleX = tableStartX;
+  const colBaseX = colLibelleX + colLibelleWidth;
+  const colTauxX = colBaseX + colBaseWidth;
+  const colDeduireX = colTauxX + colTauxWidth;
+  const colPayerX = colDeduireX + colDeduireWidth;
+  const colChargesPatX = colPayerX + colPayerWidth;
+  
+  // Fond de l'en-tête
+  doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
+  doc.rect(tableStartX, yPos, tableWidth, headerHeight, 'F');
+  
+  // Bordures du tableau
+  doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
+  doc.setLineWidth(0.5);
+  doc.rect(tableStartX, yPos, tableWidth, headerHeight, 'S');
+  
+  // Lignes verticales entre les colonnes principales
+  doc.setLineWidth(0.3);
+  doc.line(colBaseX, yPos, colBaseX, yPos + headerHeight);
+  doc.line(colTauxX, yPos, colTauxX, yPos + headerHeight);
+  doc.line(colDeduireX, yPos, colDeduireX, yPos + headerHeight);
+  doc.line(colPayerX, yPos, colPayerX, yPos + headerHeight);
+  doc.line(colChargesPatX, yPos, colChargesPatX, yPos + headerHeight);
+  
+  // Texte des en-têtes principaux (ajusté pour la hauteur augmentée)
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
-  doc.text(
-    'Bulletin établi à titre indicatif. Les taux et montants de cotisations peuvent varier selon la convention collective, les accords d\'entreprise et la législation en vigueur.',
-    margin,
-    pageHeight - 32,
-    { maxWidth: pageWidth - 2 * margin }
-  );
-  doc.text(
-    'Ce document ne se substitue pas à un bulletin de paie officiel mais reprend la structure légale principale (rémunération, cotisations, congés, net à payer, coût employeur).',
-    margin,
-    pageHeight - 24,
-    { maxWidth: pageWidth - 2 * margin }
-  );
-  doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')}`, margin, pageHeight - 14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+  
+  // Centrer verticalement dans l'en-tête plus haut (headerHeight = 10, donc centre à 5)
+  const headerTextY = yPos + 5;
+  
+  doc.text('Eléments de paie', colLibelleX + colLibelleWidth / 2, headerTextY, { align: 'center', maxWidth: colLibelleWidth - 2 });
+  doc.text('Base', colBaseX + colBaseWidth / 2, headerTextY, { align: 'center' });
+  doc.text('Taux', colTauxX + colTauxWidth / 2, headerTextY, { align: 'center' });
+  doc.text('A déduire', colDeduireX + colDeduireWidth / 2, headerTextY, { align: 'center', maxWidth: colDeduireWidth - 2 });
+  doc.text('A payer', colPayerX + colPayerWidth / 2, headerTextY, { align: 'center' });
+  doc.text('Charges patronales', colChargesPatX + colChargesPatWidth / 2, headerTextY, { align: 'center', maxWidth: colChargesPatWidth - 2 });
+  
+  yPos += headerHeight;
 
-  // Télécharger le PDF
+  // Afficher toutes les lignes du tableau (taille de police légèrement réduite pour les colonnes plus fines)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+  
+  toutesLignes.forEach((ligne, index) => {
+    // Vérifier si on dépasse la page
+    if (yPos > pageHeight - 50) {
+      doc.addPage();
+      yPos = marginTop;
+    }
+    
+    const rowHeight = 5;
+    
+    // Fond pour les lignes de récapitulatif uniquement (bleu clair) - après CSG/CRDS
+    const lignesRecap = ['Total part salariale', 'Total part employeur', 'Net imposable', 'Net à payer', 'Coût total employeur'];
+    if (lignesRecap.includes(ligne.libelle)) {
+      doc.setFillColor(230, 240, 255); // Bleu très clair
+      doc.rect(tableStartX, yPos - 2, tableWidth, rowHeight, 'F');
+    } else {
+      // Fond alterné pour meilleure lisibilité (sans bordures horizontales)
+      if (index % 2 === 0) {
+        doc.setFillColor(250, 250, 250);
+        doc.rect(tableStartX, yPos - 2, tableWidth, rowHeight, 'F');
+      }
+    }
+    
+    // Lignes verticales entre les colonnes uniquement (pas de bordures horizontales)
+    doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
+    doc.setLineWidth(0.3);
+    doc.line(colBaseX, yPos - 2, colBaseX, yPos - 2 + rowHeight);
+    doc.line(colTauxX, yPos - 2, colTauxX, yPos - 2 + rowHeight);
+    doc.line(colDeduireX, yPos - 2, colDeduireX, yPos - 2 + rowHeight);
+    doc.line(colPayerX, yPos - 2, colPayerX, yPos - 2 + rowHeight);
+    doc.line(colChargesPatX, yPos - 2, colChargesPatX, yPos - 2 + rowHeight);
+    
+    // Style pour les lignes de totaux et sections
+    if (ligne.isTotal || ligne.isSection) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(ligne.isSection ? 9 : 9);
+      if (ligne.isSection) {
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      }
+    }
+    
+    // Libellé (tronqué si trop long)
+    const libelleMaxWidth = colLibelleWidth - 4;
+    let libelle = ligne.libelle;
+    if (doc.getTextWidth(libelle) > libelleMaxWidth) {
+      libelle = doc.splitTextToSize(libelle, libelleMaxWidth)[0];
+    }
+    doc.text(libelle, colLibelleX + 2, yPos + 1);
+    
+    // Base
+    if (ligne.base !== undefined && ligne.base > 0) {
+      doc.text(formatCurrency(ligne.base), colBaseX + colBaseWidth / 2, yPos + 1, { align: 'center' });
+    }
+    
+    // Taux (format réduit pour colonne plus fine)
+    if (ligne.taux !== undefined && ligne.taux > 0) {
+      // Utiliser 3 décimales au lieu de 4 pour économiser l'espace
+      doc.text(`${ligne.taux.toFixed(3)}`, colTauxX + colTauxWidth / 2, yPos + 1, { align: 'center' });
+    }
+    
+    // A déduire
+    if (ligne.aDeduire !== undefined && ligne.aDeduire > 0) {
+      doc.setTextColor(200, 0, 0); // Rouge pour les déductions
+      doc.text(formatCurrency(ligne.aDeduire), colDeduireX + colDeduireWidth / 2, yPos + 1, { align: 'center' });
+      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    }
+    
+    // A payer
+    if (ligne.aPayer !== undefined && ligne.aPayer > 0) {
+      doc.text(formatCurrency(ligne.aPayer), colPayerX + colPayerWidth / 2, yPos + 1, { align: 'center' });
+    }
+    
+    // Charges patronales (afficher le montant si présent)
+    if (ligne.chargesPatMontant !== undefined && ligne.chargesPatMontant !== 0) {
+      doc.text(formatCurrency(ligne.chargesPatMontant), colChargesPatX + colChargesPatWidth / 2, yPos + 1, { align: 'center' });
+    }
+    
+    // Réinitialiser le style
+    if (ligne.isTotal || ligne.isSection) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    }
+    
+    yPos += rowHeight;
+  });
+
+  yPos += 3;
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MENTIONS LÉGALES
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(mediumGray[0], mediumGray[1], mediumGray[2]);
+  
+  const mentionsY = pageHeight - 20;
+  doc.text(
+    'Document conforme à la réglementation française. Les taux de cotisations sont calculés selon les barèmes URSSAF en vigueur.',
+    margin,
+    mentionsY,
+    { maxWidth: pageWidth - 2 * margin, align: 'justify' }
+  );
+  
+  doc.text(
+    `Document généré le ${new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} - Crea+Entreprises`,
+    margin,
+    pageHeight - 12,
+    { maxWidth: pageWidth - 2 * margin, align: 'center' }
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TÉLÉCHARGEMENT
+  // ═══════════════════════════════════════════════════════════════════════════
+  
   const fileName = `Fiche_Paie_${data.numero}_${data.collaborateurs_entreprise.nom}_${data.collaborateurs_entreprise.prenom}.pdf`;
   doc.save(fileName);
 }
-

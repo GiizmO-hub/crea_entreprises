@@ -21,6 +21,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
+import { BorealBackground } from './BorealBackground';
 
 interface LayoutProps {
   children: ReactNode;
@@ -276,7 +277,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900">
+    <BorealBackground>
       {/* ✅ Overlay pour mobile */}
       {sidebarOpen && (
         <div
@@ -291,11 +292,11 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } ${
           sidebarOpen ? 'w-64' : 'w-20'
-        } fixed left-0 top-0 h-screen bg-white/10 backdrop-blur-lg border-r border-white/10 transition-all duration-300 z-50`}
+        } fixed left-0 top-0 h-screen bg-[#1a2332]/80 backdrop-blur-xl border-r border-cyan-500/20 transition-all duration-300 z-50`}
       >
         <div className="flex flex-col h-full">
           {/* Header Sidebar */}
-          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+          <div className="p-4 border-b border-cyan-500/20 flex items-center justify-between">
             {sidebarOpen && (
               <h1 className="text-xl font-bold text-white truncate">Crea+Entreprises</h1>
             )}
@@ -370,10 +371,10 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                     }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                       isActive
-                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                        ? 'bg-gradient-to-r from-cyan-600/80 to-blue-600/80 text-white shadow-lg shadow-cyan-500/20'
                         : isAdminItem && isSuperAdmin
                         ? 'text-yellow-300 hover:bg-yellow-500/10 hover:text-yellow-200 border border-yellow-500/30'
-                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                        : 'text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-200'
                     }`}
                     title={sidebarOpen ? '' : item.label}
                   >
@@ -392,7 +393,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           </nav>
 
           {/* Footer Sidebar */}
-          <div className="p-4 border-t border-white/10 space-y-2">
+          <div className="p-4 border-t border-cyan-500/20 space-y-2">
             {/* Notifications */}
             {sidebarOpen && (
               <div className="mb-2 flex justify-center">
@@ -458,7 +459,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       >
         {children}
       </main>
-    </div>
+    </BorealBackground>
   );
 }
 

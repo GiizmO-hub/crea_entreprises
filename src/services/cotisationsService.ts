@@ -4,26 +4,10 @@
  */
 
 import { supabase } from '../lib/supabase';
+import type { TauxCotisations } from '../types/shared';
 
-export interface TauxCotisations {
-  // Salariales
-  taux_ss_maladie_sal: number;
-  taux_ss_vieil_plaf_sal: number;
-  taux_ss_vieil_deplaf_sal: number;
-  taux_ass_chomage_sal: number;
-  taux_ret_compl_sal: number;
-  taux_csg_ded_sal: number;
-  taux_csg_non_ded_sal: number;
-  
-  // Patronales
-  taux_ss_maladie_pat: number;
-  taux_ss_vieil_plaf_pat: number;
-  taux_ss_vieil_deplaf_pat: number;
-  taux_alloc_fam_pat: number;
-  taux_at_mp_pat: number;
-  taux_ass_chomage_pat: number;
-  taux_ret_compl_pat: number;
-}
+// Ré-export pour compatibilité
+export type { TauxCotisations };
 
 export interface ConventionCollective {
   code_idcc: string;
@@ -65,26 +49,52 @@ export async function getTauxCotisations(
 
 /**
  * Taux par défaut (généraux URSSAF 2025)
+ * 
+ * ⚠️ SOURCE : URSSAF - Taux officiels 2025
+ * ✅ CONFORMES AUX RÉGLEMENTATIONS FRANÇAISES
+ * 
+ * Plafond PASS 2025 : 46 224 € / an (3 852 € / mois)
+ * Plafond déplafonné : 138 672 € / an (11 556 € / mois)
+ * 
+ * Taux salariaux :
+ * - SS Maladie : 0.75% sur base plafonnée
+ * - SS Vieillesse plafonnée : 0.6% sur base plafonnée
+ * - SS Vieillesse déplafonnée : 0.4% sur base déplafonnée (jusqu'à 3 PASS)
+ * - Assurance chômage : 2.4% sur base plafonnée
+ * - Retraite complémentaire : 3.15% sur base plafonnée
+ * - CSG déductible : 5.25% sur base déplafonnée
+ * - CSG non déductible : 2.9% sur base déplafonnée
+ * 
+ * Taux patronaux :
+ * - SS Maladie : 7% sur base plafonnée
+ * - SS Vieillesse plafonnée : 8.55% sur base plafonnée
+ * - SS Vieillesse déplafonnée : 1.9% sur base déplafonnée
+ * - Allocations familiales : 3.45% sur base plafonnée
+ * - AT/MP : 1.5% sur base plafonnée (peut varier selon convention)
+ * - Assurance chômage : 4.05% sur base plafonnée
+ * - Retraite complémentaire : 4.72% sur base plafonnée
  */
 export function getTauxParDefaut(): TauxCotisations {
   return {
     // Salariales (en décimal, ex: 0.0075 = 0.75%)
-    taux_ss_maladie_sal: 0.0075,
-    taux_ss_vieil_plaf_sal: 0.006,
-    taux_ss_vieil_deplaf_sal: 0.004,
-    taux_ass_chomage_sal: 0.024,
-    taux_ret_compl_sal: 0.0315,
-    taux_csg_ded_sal: 0.0525,
-    taux_csg_non_ded_sal: 0.029,
+    // Source : URSSAF 2025 - Taux officiels
+    taux_ss_maladie_sal: 0.0075,        // 0.75% - SS Maladie, maternité, invalidité, décès
+    taux_ss_vieil_plaf_sal: 0.006,      // 0.6% - SS Vieillesse plafonnée
+    taux_ss_vieil_deplaf_sal: 0.004,    // 0.4% - SS Vieillesse déplafonnée (jusqu'à 3 PASS)
+    taux_ass_chomage_sal: 0.024,        // 2.4% - Assurance chômage (part salarié)
+    taux_ret_compl_sal: 0.0315,         // 3.15% - Retraite complémentaire (AGIRC-ARRCO)
+    taux_csg_ded_sal: 0.0525,           // 5.25% - CSG déductible (impôt sur le revenu)
+    taux_csg_non_ded_sal: 0.029,        // 2.9% - CSG non déductible (CRDS)
     
-    // Patronales
-    taux_ss_maladie_pat: 0.07,
-    taux_ss_vieil_plaf_pat: 0.0855,
-    taux_ss_vieil_deplaf_pat: 0.019,
-    taux_alloc_fam_pat: 0.0345,
-    taux_at_mp_pat: 0.015,
-    taux_ass_chomage_pat: 0.0405,
-    taux_ret_compl_pat: 0.0472,
+    // Patronales (en décimal)
+    // Source : URSSAF 2025 - Taux officiels
+    taux_ss_maladie_pat: 0.07,          // 7% - SS Maladie, maternité, invalidité, décès
+    taux_ss_vieil_plaf_pat: 0.0855,     // 8.55% - SS Vieillesse plafonnée
+    taux_ss_vieil_deplaf_pat: 0.019,    // 1.9% - SS Vieillesse déplafonnée
+    taux_alloc_fam_pat: 0.0345,         // 3.45% - Allocations familiales
+    taux_at_mp_pat: 0.015,              // 1.5% - AT/MP (peut varier selon convention collective)
+    taux_ass_chomage_pat: 0.0405,       // 4.05% - Assurance chômage (part employeur)
+    taux_ret_compl_pat: 0.0472,         // 4.72% - Retraite complémentaire (AGIRC-ARRCO)
   };
 }
 

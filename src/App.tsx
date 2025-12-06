@@ -25,6 +25,7 @@ const Parametres = lazy(() => import('./pages/Parametres'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Finance = lazy(() => import('./pages/Finance'));
 const Comptabilite = lazy(() => import('./pages/Comptabilite'));
+const ParametresCompta = lazy(() => import('./pages/ParametresCompta'));
 
 // Composant de chargement pour les pages lazy-loaded
 const PageLoader = () => (
@@ -109,6 +110,7 @@ function getPageFromHash(): string {
     'comptabilité-avancée': 'comptabilite',
     'fiches-paie': 'comptabilite',
     'bilans-comptables': 'comptabilite',
+    'param-compta': 'param-compta',
     
     // Modules finance
     'finance': 'finance',
@@ -247,6 +249,12 @@ function AppContent() {
         return (
           <Suspense fallback={<PageLoader />}>
             <Comptabilite />
+          </Suspense>
+        );
+      case 'param-compta':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <ParametresCompta />
           </Suspense>
         );
       case 'finance':
