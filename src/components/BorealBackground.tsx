@@ -1,34 +1,28 @@
-import { useState, useEffect } from 'react';
-
-interface Star {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  delay: number;
-  duration: number;
-  opacity: number;
-}
+import { useEffect, useRef } from 'react';
 
 export function BorealBackground({ children }: { children: React.ReactNode }) {
-  const generateStars = (): Star[] => {
-    const stars: Star[] = [];
-    // Nombre optimal d'étoiles pour performance et visibilité
-    for (let i = 0; i < 150; i++) {
-      stars.push({
-        id: i,
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        size: Math.random() * 8 + 5, // Étoiles grandes et visibles (5-13px)
-        delay: Math.random() * 4,
-        duration: Math.random() * 2 + 1.5,
-        opacity: Math.random() * 0.2 + 0.9,
-      });
-    }
-    return stars;
-  };
+  const starsRef = useRef<HTMLDivElement>(null);
 
-  const [stars] = useState<Star[]>(() => generateStars());
+  useEffect(() => {
+    // Créer les étoiles avec CSS pur pour meilleures performances
+    if (starsRef.current) {
+      const starsContainer = starsRef.current;
+      starsContainer.innerHTML = '';
+      
+      // Créer 80 étoiles visibles avec CSS
+      for (let i = 0; i < 80; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        star.style.left = `${Math.random() * 100}%`;
+        star.style.top = `${Math.random() * 100}%`;
+        star.style.width = `${Math.random() * 4 + 3}px`;
+        star.style.height = star.style.width;
+        star.style.animationDelay = `${Math.random() * 4}s`;
+        star.style.animationDuration = `${Math.random() * 2 + 2}s`;
+        starsContainer.appendChild(star);
+      }
+    }
+  }, []);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0a0e27]">
@@ -36,39 +30,16 @@ export function BorealBackground({ children }: { children: React.ReactNode }) {
       <div className="fixed inset-0 -z-10">
         <div className="absolute inset-0 bg-gradient-to-br from-[#0a0e27] via-[#1a1f3a] to-[#0f1629]"></div>
         
-        {/* Étoiles qui scintillent - TRÈS VISIBLES */}
-        <div className="absolute inset-0" style={{ zIndex: 1, pointerEvents: 'none' }}>
-          {stars.map((star) => {
-            const glowSize1 = star.size * 10;
-            const glowSize2 = star.size * 20;
-            const glowSize3 = star.size * 30;
-            return (
-              <div
-                key={star.id}
-                className="absolute rounded-full"
-                style={{
-                  left: `${star.x}%`,
-                  top: `${star.y}%`,
-                  width: `${star.size}px`,
-                  height: `${star.size}px`,
-                  backgroundColor: '#ffffff',
-                  boxShadow: `0 0 ${glowSize1}px rgba(255, 255, 255, 1), 0 0 ${glowSize2}px rgba(103, 232, 249, 1), 0 0 ${glowSize3}px rgba(103, 232, 249, 0.7)`,
-                  animation: `twinkle ${star.duration}s ease-in-out infinite`,
-                  animationDelay: `${star.delay}s`,
-                  opacity: star.opacity,
-                  filter: 'brightness(1.8)',
-                  transform: 'translate(-50%, -50%)',
-                  willChange: 'transform, opacity, filter',
-                }}
-              />
-            );
-          })}
-        </div>
+        {/* Étoiles qui scintillent - CSS pur pour performance */}
+        <div 
+          ref={starsRef}
+          className="absolute inset-0"
+          style={{ zIndex: 1, pointerEvents: 'none' }}
+        />
 
         {/* Effet de lumière boréale subtile */}
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
-        <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '4s' }}></div>
       </div>
 
       {/* Contenu */}
@@ -76,32 +47,32 @@ export function BorealBackground({ children }: { children: React.ReactNode }) {
         {children}
       </div>
 
-      {/* Styles CSS pour les animations */}
+      {/* Styles CSS pour les animations - optimisés */}
       <style>{`
+        .star {
+          position: absolute;
+          border-radius: 50%;
+          background: #ffffff;
+          box-shadow: 
+            0 0 10px rgba(255, 255, 255, 1),
+            0 0 20px rgba(103, 232, 249, 1),
+            0 0 30px rgba(103, 232, 249, 0.8);
+          animation: twinkle 3s ease-in-out infinite;
+          will-change: transform, opacity;
+          transform: translate(-50%, -50%);
+        }
+
         @keyframes twinkle {
           0%, 100% {
-            opacity: 0.9;
+            opacity: 0.8;
             transform: translate(-50%, -50%) scale(1);
-            filter: brightness(1.8);
-          }
-          25% {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(2);
-            filter: brightness(2.5);
           }
           50% {
-            opacity: 0.95;
-            transform: translate(-50%, -50%) scale(1.5);
-            filter: brightness(2);
-          }
-          75% {
             opacity: 1;
             transform: translate(-50%, -50%) scale(1.8);
-            filter: brightness(2.3);
           }
         }
       `}</style>
     </div>
   );
 }
-
